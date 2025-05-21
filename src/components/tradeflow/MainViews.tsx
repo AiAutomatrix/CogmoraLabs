@@ -36,9 +36,12 @@ const MainViews: React.FC = () => {
           height: 100%; 
           margin: 0; 
           padding: 0; 
-          overflow: hidden; 
+          overflow: hidden; /* Heatmap itself usually doesn't need body scrollbars */
           background-color: transparent; 
           box-sizing: border-box;
+        }
+         *, *::before, *::after {
+          box-sizing: inherit;
         }
         .tradingview-widget-container, .tradingview-widget-container__widget {
           width: 100%;
@@ -104,14 +107,17 @@ const MainViews: React.FC = () => {
           height: 100%; 
           margin: 0; 
           padding: 0; 
-          overflow: hidden; 
+          overflow: auto; /* Allow body to scroll if widget overflows */
           background-color: transparent; 
           box-sizing: border-box; 
+        }
+        *, *::before, *::after {
+          box-sizing: inherit;
         }
         .tradingview-widget-container, .tradingview-widget-container__widget {
           width: 100%;
           height: 100%;
-          overflow: hidden; /* This ensures the widget content respects the container size */
+          overflow: hidden; /* Widget content itself should be clipped by this container */
           box-sizing: border-box; 
         }
         .tradingview-widget-container {
@@ -133,20 +139,20 @@ const MainViews: React.FC = () => {
         }
         /* Custom scrollbar styles for Crypto Screener */
         ::-webkit-scrollbar {
-          width: 12px; /* Thickness of vertical scrollbar */
-          height: 12px; /* Thickness of horizontal scrollbar */
+          width: 24px; /* Thickness of vertical scrollbar */
+          height: 24px; /* Thickness of horizontal scrollbar */
         }
         ::-webkit-scrollbar-track {
-          background: #2d3748; /* Corresponds to a dark theme, adjust as needed */
+          background: #2d3748; 
           border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb {
-          background-color: #4a5568; /* Adjust to your accent color or a contrasting dark theme color */
+          background-color: #4a5568; 
           border-radius: 10px;
-          border: 3px solid #2d3748; /* Creates padding around thumb */
+          border: 6px solid #2d3748; /* Creates padding around thumb */
         }
         ::-webkit-scrollbar-thumb:hover {
-          background-color: #718096; /* Lighter on hover */
+          background-color: #718096; 
         }
       </style>
     </head>
@@ -189,14 +195,17 @@ const MainViews: React.FC = () => {
           height: 100%; 
           margin: 0; 
           padding: 0; 
-          overflow: hidden; 
+          overflow: auto; /* Allow body to scroll if widget overflows */
           background-color: transparent; 
           box-sizing: border-box; 
+        }
+         *, *::before, *::after {
+          box-sizing: inherit;
         }
         .tradingview-widget-container, .tradingview-widget-container__widget {
           width: 100%;
           height: 100%;
-          overflow: hidden; /* This ensures the widget content respects the container size */
+          overflow: hidden; /* Widget content itself should be clipped by this container */
           box-sizing: border-box; 
         }
         .tradingview-widget-container {
@@ -218,20 +227,20 @@ const MainViews: React.FC = () => {
         }
         /* Custom scrollbar styles for Options Screener */
         ::-webkit-scrollbar {
-          width: 12px; /* Thickness of vertical scrollbar */
-          height: 12px; /* Thickness of horizontal scrollbar */
+          width: 24px; /* Thickness of vertical scrollbar */
+          height: 24px; /* Thickness of horizontal scrollbar */
         }
         ::-webkit-scrollbar-track {
-          background: #2d3748; /* Corresponds to a dark theme, adjust as needed */
+          background: #2d3748; 
           border-radius: 10px;
         }
         ::-webkit-scrollbar-thumb {
-          background-color: #4a5568; /* Adjust to your accent color or a contrasting dark theme color */
+          background-color: #4a5568; 
           border-radius: 10px;
-          border: 3px solid #2d3748; /* Creates padding around thumb */
+          border: 6px solid #2d3748; /* Creates padding around thumb */
         }
         ::-webkit-scrollbar-thumb:hover {
-          background-color: #718096; /* Lighter on hover */
+          background-color: #718096; 
         }
       </style>
     </head>
