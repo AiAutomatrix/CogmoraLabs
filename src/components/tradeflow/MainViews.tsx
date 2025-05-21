@@ -9,7 +9,7 @@ import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full"; // Changed from h-[calc(100vh-250px)]
+  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full"; 
 
   const heatmapConfigObject = {
     dataSource: "Crypto",
@@ -41,13 +41,20 @@ const MainViews: React.FC = () => {
         .tradingview-widget-container {
           width: 100%;
           height: 100%;
+          position: relative; /* Ensure copyright is positioned relative to this */
+          overflow: hidden; /* Clip any overflow */
+        }
+        .tradingview-widget-container__widget {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Ensure widget content itself is clipped */
         }
       </style>
     </head>
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
-        <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0;">
+        <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0; box-sizing: border-box;">
             <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color: #828282; text-decoration: none;">
                 <span class="blue-text">Track all markets on TradingView</span>
             </a>
@@ -89,13 +96,20 @@ const MainViews: React.FC = () => {
          .tradingview-widget-container {
           width: 100%;
           height: 100%;
+          position: relative; /* Ensure copyright is positioned relative to this */
+          overflow: hidden; /* Clip any overflow */
+        }
+        .tradingview-widget-container__widget {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Ensure widget content itself is clipped */
         }
       </style>
     </head>
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
-         <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0;">
+         <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0; box-sizing: border-box;">
             <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color: #828282; text-decoration: none;">
                 <span class="blue-text">Track all markets on TradingView</span>
             </a>
@@ -137,13 +151,20 @@ const MainViews: React.FC = () => {
          .tradingview-widget-container {
           width: 100%;
           height: 100%;
+          position: relative; /* Ensure copyright is positioned relative to this */
+          overflow: hidden; /* Clip any overflow */
+        }
+        .tradingview-widget-container__widget {
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Ensure widget content itself is clipped */
         }
       </style>
     </head>
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
-         <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0;">
+         <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0; box-sizing: border-box;">
             <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color: #828282; text-decoration: none;">
                 <span class="blue-text">Track all markets on TradingView</span>
             </a>
@@ -208,4 +229,3 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
-
