@@ -2,14 +2,14 @@
 'use client';
 import type React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react'; // Added Settings2 as an example, can be ListFilter too
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
 
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "h-[calc(100vh-250px)] min-h-[500px] w-full";
+  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full"; // Changed from h-[calc(100vh-250px)]
 
   const heatmapConfigObject = {
     dataSource: "Crypto",
@@ -68,7 +68,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    hasTransparentBackground: true, 
+    hasTransparentBackground: true,
   };
 
   const cryptoScreenerSrcDoc = `
@@ -112,7 +112,7 @@ const MainViews: React.FC = () => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", // General stock screener; options are typically derived from stocks
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -208,3 +208,4 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
+
