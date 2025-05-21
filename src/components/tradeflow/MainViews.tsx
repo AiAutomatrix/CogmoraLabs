@@ -67,10 +67,12 @@ const MainViews: React.FC = () => {
   const screenerConfigObject = {
     width: "100%",
     height: "100%",
-    defaultScreen: "crypto_mcap",
-    theme: "dark",
+    defaultColumn: "overview",
+    screener_type: "crypto_mkt", // Changed from defaultScreen
+    displayCurrency: "USD",
+    colorTheme: "dark", // Key changed from theme to colorTheme
     locale: "en",
-    hasTransparentBackground: true, // Widget's own background transparency
+    hasTransparentBackground: true, 
   };
 
   const screenerSrcDoc = `
@@ -153,3 +155,4 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
+
