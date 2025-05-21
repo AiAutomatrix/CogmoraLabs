@@ -7,12 +7,12 @@ import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 }
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
-import { useMemo } from 'react'; // Import useMemo
+import { useMemo } from 'react'; 
 
 const MainViews: React.FC = () => {
   const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full"; 
 
-  const heatmapConfigObject = useMemo(() => ({ // Memoize config
+  const heatmapConfigObject = useMemo(() => ({ 
     dataSource: "Crypto",
     blockSize: "market_cap_calc",
     blockColor: "change",
@@ -81,7 +81,7 @@ const MainViews: React.FC = () => {
     </html>
   `, [heatmapConfigObject]);
 
-  const cryptoScreenerConfigObject = useMemo(() => ({ // Memoize config
+  const cryptoScreenerConfigObject = useMemo(() => ({ 
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
@@ -106,13 +106,13 @@ const MainViews: React.FC = () => {
           padding: 0; 
           overflow: hidden; 
           background-color: transparent; 
-          box-sizing: border-box; /* Added */
+          box-sizing: border-box; 
         }
         .tradingview-widget-container, .tradingview-widget-container__widget {
           width: 100%;
           height: 100%;
-          overflow: hidden;
-          box-sizing: border-box; /* Added */
+          overflow: hidden; /* This ensures the widget content respects the container size */
+          box-sizing: border-box; 
         }
         .tradingview-widget-container {
           position: relative; 
@@ -130,6 +130,23 @@ const MainViews: React.FC = () => {
         .tradingview-widget-copyright a {
             color: #828282;
             text-decoration: none;
+        }
+        /* Custom scrollbar styles for Crypto Screener */
+        ::-webkit-scrollbar {
+          width: 12px; /* Thickness of vertical scrollbar */
+          height: 12px; /* Thickness of horizontal scrollbar */
+        }
+        ::-webkit-scrollbar-track {
+          background: #2d3748; /* Corresponds to a dark theme, adjust as needed */
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background-color: #4a5568; /* Adjust to your accent color or a contrasting dark theme color */
+          border-radius: 10px;
+          border: 3px solid #2d3748; /* Creates padding around thumb */
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background-color: #718096; /* Lighter on hover */
         }
       </style>
     </head>
@@ -149,7 +166,7 @@ const MainViews: React.FC = () => {
     </html>
   `, [cryptoScreenerConfigObject]);
 
-  const optionsScreenerConfigObject = useMemo(() => ({ // Memoize config
+  const optionsScreenerConfigObject = useMemo(() => ({ 
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
@@ -174,13 +191,13 @@ const MainViews: React.FC = () => {
           padding: 0; 
           overflow: hidden; 
           background-color: transparent; 
-          box-sizing: border-box; /* Added */
+          box-sizing: border-box; 
         }
         .tradingview-widget-container, .tradingview-widget-container__widget {
           width: 100%;
           height: 100%;
-          overflow: hidden;
-          box-sizing: border-box; /* Added */
+          overflow: hidden; /* This ensures the widget content respects the container size */
+          box-sizing: border-box; 
         }
         .tradingview-widget-container {
           position: relative; 
@@ -198,6 +215,23 @@ const MainViews: React.FC = () => {
         .tradingview-widget-copyright a {
             color: #828282;
             text-decoration: none;
+        }
+        /* Custom scrollbar styles for Options Screener */
+        ::-webkit-scrollbar {
+          width: 12px; /* Thickness of vertical scrollbar */
+          height: 12px; /* Thickness of horizontal scrollbar */
+        }
+        ::-webkit-scrollbar-track {
+          background: #2d3748; /* Corresponds to a dark theme, adjust as needed */
+          border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background-color: #4a5568; /* Adjust to your accent color or a contrasting dark theme color */
+          border-radius: 10px;
+          border: 3px solid #2d3748; /* Creates padding around thumb */
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background-color: #718096; /* Lighter on hover */
         }
       </style>
     </head>
