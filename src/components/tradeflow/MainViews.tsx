@@ -19,7 +19,7 @@ const MainViews: React.FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true,
+    hasTransparentBackground: true, // Ensure this is true
     width: "100%",
     height: "100%"
   }), []);
@@ -43,21 +43,25 @@ const MainViews: React.FC = () => {
          *, *::before, *::after {
           box-sizing: inherit;
         }
-        .tradingview-widget-container, .tradingview-widget-container__widget {
+        .tradingview-widget-container {
+          width: 100%;
+          height: 100%;
+          position: relative; 
+          box-sizing: border-box;
+        }
+        .tradingview-widget-container__widget {
           width: 100%;
           height: 100%;
           overflow: hidden;
           box-sizing: border-box;
-        }
-        .tradingview-widget-container {
-          position: relative; 
         }
         .tradingview-widget-copyright {
             width: 100%; 
             text-align: center; 
             font-size: 12px; 
             position: absolute; 
-            bottom: 0; 
+            bottom: 0;
+            left: 0; 
             padding: 2px 0; 
             box-sizing: border-box;
             color: #828282; 
@@ -84,15 +88,75 @@ const MainViews: React.FC = () => {
     </html>
   `, [heatmapConfigObject]);
 
+  const screenerBaseStyle = `
+    html, body { 
+      width: 100%; 
+      height: 100%; 
+      margin: 0; 
+      padding: 0; 
+      overflow: auto; /* Allow body to scroll if widget overflows */
+      background-color: transparent; 
+      box-sizing: border-box; 
+    }
+    *, *::before, *::after {
+      box-sizing: inherit;
+    }
+    .tradingview-widget-container {
+      width: 100%;
+      height: 100%;
+      position: relative; /* For positioning copyright */
+      padding-bottom: 20px; /* Space for copyright footer */
+      box-sizing: border-box;
+    }
+    .tradingview-widget-container__widget {
+      width: 100%;
+      height: 100%; /* This will now be 100% of the padded parent */
+      overflow: hidden; /* Widget content should be clipped or scroll internally; iframe body handles main scroll */
+      box-sizing: border-box; 
+    }
+    .tradingview-widget-copyright {
+        width: 100%; 
+        text-align: center; 
+        font-size: 12px; 
+        position: absolute; 
+        bottom: 0; 
+        left: 0;
+        padding: 2px 0; 
+        box-sizing: border-box;
+        color: #828282;
+    }
+    .tradingview-widget-copyright a {
+        color: #828282;
+        text-decoration: none;
+    }
+    /* Custom scrollbar styles */
+    ::-webkit-scrollbar {
+      width: 24px; /* Thickness of vertical scrollbar */
+      height: 24px; /* Thickness of horizontal scrollbar */
+    }
+    ::-webkit-scrollbar-track {
+      background: #2d3748; 
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: #4a5568; 
+      border-radius: 10px;
+      border: 6px solid #2d3748; /* Creates padding around thumb */
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: #718096; 
+    }
+  `;
+
   const cryptoScreenerConfigObject = useMemo(() => ({ 
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
     screener_type: "crypto_mkt",
     displayCurrency: "USD",
-    colorTheme: "dark",
+    colorTheme: "dark", // Screener uses colorTheme
     locale: "en",
-    hasTransparentBackground: true,
+    hasTransparentBackground: true, // Ensure this is true
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -101,60 +165,7 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        html, body { 
-          width: 100%; 
-          height: 100%; 
-          margin: 0; 
-          padding: 0; 
-          overflow: auto; /* Allow body to scroll if widget overflows */
-          background-color: transparent; 
-          box-sizing: border-box; 
-        }
-        *, *::before, *::after {
-          box-sizing: inherit;
-        }
-        .tradingview-widget-container, .tradingview-widget-container__widget {
-          width: 100%;
-          height: 100%;
-          overflow: hidden; /* Widget content itself should be clipped by this container */
-          box-sizing: border-box; 
-        }
-        .tradingview-widget-container {
-          position: relative; 
-        }
-         .tradingview-widget-copyright {
-            width: 100%; 
-            text-align: center; 
-            font-size: 12px; 
-            position: absolute; 
-            bottom: 0; 
-            padding: 2px 0; 
-            box-sizing: border-box;
-            color: #828282;
-        }
-        .tradingview-widget-copyright a {
-            color: #828282;
-            text-decoration: none;
-        }
-        /* Custom scrollbar styles for Crypto Screener */
-        ::-webkit-scrollbar {
-          width: 24px; /* Thickness of vertical scrollbar */
-          height: 24px; /* Thickness of horizontal scrollbar */
-        }
-        ::-webkit-scrollbar-track {
-          background: #2d3748; 
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background-color: #4a5568; 
-          border-radius: 10px;
-          border: 6px solid #2d3748; /* Creates padding around thumb */
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background-color: #718096; 
-        }
-      </style>
+      <style>${screenerBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -170,17 +181,17 @@ const MainViews: React.FC = () => {
       </div>
     </body>
     </html>
-  `, [cryptoScreenerConfigObject]);
+  `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
   const optionsScreenerConfigObject = useMemo(() => ({ 
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", 
+    screener_type: "stock", // For general stocks/options
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    hasTransparentBackground: true,
+    hasTransparentBackground: true, // Ensure this is true
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -189,60 +200,7 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        html, body { 
-          width: 100%; 
-          height: 100%; 
-          margin: 0; 
-          padding: 0; 
-          overflow: auto; /* Allow body to scroll if widget overflows */
-          background-color: transparent; 
-          box-sizing: border-box; 
-        }
-         *, *::before, *::after {
-          box-sizing: inherit;
-        }
-        .tradingview-widget-container, .tradingview-widget-container__widget {
-          width: 100%;
-          height: 100%;
-          overflow: hidden; /* Widget content itself should be clipped by this container */
-          box-sizing: border-box; 
-        }
-        .tradingview-widget-container {
-          position: relative; 
-        }
-         .tradingview-widget-copyright {
-            width: 100%; 
-            text-align: center; 
-            font-size: 12px; 
-            position: absolute; 
-            bottom: 0; 
-            padding: 2px 0; 
-            box-sizing: border-box;
-            color: #828282;
-        }
-        .tradingview-widget-copyright a {
-            color: #828282;
-            text-decoration: none;
-        }
-        /* Custom scrollbar styles for Options Screener */
-        ::-webkit-scrollbar {
-          width: 24px; /* Thickness of vertical scrollbar */
-          height: 24px; /* Thickness of horizontal scrollbar */
-        }
-        ::-webkit-scrollbar-track {
-          background: #2d3748; 
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-          background-color: #4a5568; 
-          border-radius: 10px;
-          border: 6px solid #2d3748; /* Creates padding around thumb */
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background-color: #718096; 
-        }
-      </style>
+      <style>${screenerBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -258,7 +216,7 @@ const MainViews: React.FC = () => {
       </div>
     </body>
     </html>
-  `, [optionsScreenerConfigObject]);
+  `, [optionsScreenerConfigObject, screenerBaseStyle]);
 
 
   return (
@@ -312,4 +270,3 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
-
