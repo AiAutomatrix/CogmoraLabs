@@ -12,124 +12,30 @@ import { useMemo } from 'react';
 const MainViews: React.FC = () => {
   const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full"; 
 
-  const heatmapConfigObject = useMemo(() => ({ 
-    dataSource: "Crypto",
-    blockSize: "market_cap_calc",
-    blockColor: "change",
-    locale: "en",
-    symbolUrl: "",
-    colorTheme: "dark",
-    hasTransparentBackground: true, // Ensure this is true
-    width: "100%",
-    height: "100%"
-  }), []);
-
-  const heatmapSrcDoc = useMemo(() => `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        html, body { 
-          width: 100%; 
-          height: 100%; 
-          margin: 0; 
-          padding: 0; 
-          overflow: hidden; /* Heatmap itself usually doesn't need body scrollbars */
-          background-color: transparent; 
-          box-sizing: border-box;
-        }
-         *, *::before, *::after {
-          box-sizing: inherit;
-        }
-        .tradingview-widget-container {
-          width: 100%;
-          height: 100%;
-          position: relative; 
-          box-sizing: border-box;
-        }
-        .tradingview-widget-container__widget {
-          width: 100%;
-          height: 100%;
-          overflow: hidden;
-          box-sizing: border-box;
-        }
-        .tradingview-widget-copyright {
-            width: 100%; 
-            text-align: center; 
-            font-size: 12px; 
-            position: absolute; 
-            bottom: 0;
-            left: 0; 
-            padding: 2px 0; 
-            box-sizing: border-box;
-            color: #828282; 
-        }
-        .tradingview-widget-copyright a {
-            color: #828282;
-            text-decoration: none;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="tradingview-widget-container">
-        <div class="tradingview-widget-container__widget"></div>
-        <div class="tradingview-widget-copyright">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-                <span class="blue-text">Track all markets on TradingView</span>
-            </a>
-        </div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
-        ${JSON.stringify(heatmapConfigObject)}
-        </script>
-      </div>
-    </body>
-    </html>
-  `, [heatmapConfigObject]);
-
-  const screenerBaseStyle = `
+  // Base styles for iframe content (heatmap and screeners)
+  const tvWidgetBaseStyle = `
     html, body { 
       width: 100%; 
       height: 100%; 
       margin: 0; 
       padding: 0; 
-      overflow: auto; /* Allow body to scroll if widget overflows */
+      overflow: hidden; /* Let the widget manage its own scroll or fit */
       background-color: transparent; 
-      box-sizing: border-box; 
+      box-sizing: border-box; /* Apply border-box to html and body */
     }
     *, *::before, *::after {
-      box-sizing: inherit;
+      box-sizing: inherit; /* Inherit box-sizing from parent (body) */
     }
-    .tradingview-widget-container {
+    .tradingview-widget-container { /* The main container we create in the body */
       width: 100%;
       height: 100%;
-      position: relative; /* For positioning copyright */
-      padding-bottom: 20px; /* Space for copyright footer */
-      box-sizing: border-box;
+      position: relative; /* Needed if script adds absolutely positioned children like its own copyright */
     }
-    .tradingview-widget-container__widget {
+    .tradingview-widget-container__widget { /* The div the TV script targets */
       width: 100%;
-      height: 100%; /* This will now be 100% of the padded parent */
-      overflow: hidden; /* Widget content should be clipped or scroll internally; iframe body handles main scroll */
-      box-sizing: border-box; 
+      height: 100%;
     }
-    .tradingview-widget-copyright {
-        width: 100%; 
-        text-align: center; 
-        font-size: 12px; 
-        position: absolute; 
-        bottom: 0; 
-        left: 0;
-        padding: 2px 0; 
-        box-sizing: border-box;
-        color: #828282;
-    }
-    .tradingview-widget-copyright a {
-        color: #828282;
-        text-decoration: none;
-    }
-    /* Custom scrollbar styles */
+    /* Custom scrollbar styles (will apply if widget internals use standard scrollable regions) */
     ::-webkit-scrollbar {
       width: 24px; /* Thickness of vertical scrollbar */
       height: 24px; /* Thickness of horizontal scrollbar */
@@ -148,15 +54,47 @@ const MainViews: React.FC = () => {
     }
   `;
 
+  const heatmapConfigObject = useMemo(() => ({ 
+    dataSource: "Crypto",
+    blockSize: "market_cap_calc",
+    blockColor: "change",
+    locale: "en",
+    symbolUrl: "",
+    colorTheme: "dark",
+    hasTransparentBackground: true,
+    width: "100%",
+    height: "100%"
+  }), []);
+
+  const heatmapSrcDoc = useMemo(() => `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>${tvWidgetBaseStyle}</style>
+    </head>
+    <body>
+      <div class="tradingview-widget-container">
+        <div class="tradingview-widget-container__widget"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
+        ${JSON.stringify(heatmapConfigObject)}
+        </script>
+      </div>
+    </body>
+    </html>
+  `, [heatmapConfigObject, tvWidgetBaseStyle]);
+
+
   const cryptoScreenerConfigObject = useMemo(() => ({ 
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
     screener_type: "crypto_mkt",
     displayCurrency: "USD",
-    colorTheme: "dark", // Screener uses colorTheme
+    colorTheme: "dark", 
     locale: "en",
-    hasTransparentBackground: true, // Ensure this is true
+    hasTransparentBackground: true,
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -165,33 +103,28 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${screenerBaseStyle}</style>
+      <style>${tvWidgetBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
-         <div class="tradingview-widget-copyright">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-                <span class="blue-text">Track all markets on TradingView</span>
-            </a>
-        </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
         ${JSON.stringify(cryptoScreenerConfigObject)}
         </script>
       </div>
     </body>
     </html>
-  `, [cryptoScreenerConfigObject, screenerBaseStyle]);
+  `, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
 
   const optionsScreenerConfigObject = useMemo(() => ({ 
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", // For general stocks/options
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    hasTransparentBackground: true, // Ensure this is true
+    hasTransparentBackground: true, 
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -200,23 +133,18 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${screenerBaseStyle}</style>
+      <style>${tvWidgetBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
-         <div class="tradingview-widget-copyright">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank">
-                <span class="blue-text">Track all markets on TradingView</span>
-            </a>
-        </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
         ${JSON.stringify(optionsScreenerConfigObject)}
         </script>
       </div>
     </body>
     </html>
-  `, [optionsScreenerConfigObject, screenerBaseStyle]);
+  `, [optionsScreenerConfigObject, tvWidgetBaseStyle]);
 
 
   return (
@@ -270,3 +198,4 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
+
