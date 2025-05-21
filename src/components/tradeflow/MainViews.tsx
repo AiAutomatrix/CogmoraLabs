@@ -7,20 +7,20 @@ import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 }
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
-import { useMemo } from 'react'; 
+import { useMemo } from 'react';
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full"; 
+  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full";
 
-  // Base styles for iframe content (heatmap and screeners)
+  // Consistent base styles for all TradingView iframe embed widgets
   const tvWidgetBaseStyle = `
-    html, body { 
-      width: 100%; 
-      height: 100%; 
-      margin: 0; 
-      padding: 0; 
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
       overflow: hidden; /* Let the widget manage its own scroll or fit */
-      background-color: transparent; 
+      background-color: transparent;
       box-sizing: border-box; /* Apply border-box to html and body */
     }
     *, *::before, *::after {
@@ -41,27 +41,27 @@ const MainViews: React.FC = () => {
       height: 24px; /* Thickness of horizontal scrollbar */
     }
     ::-webkit-scrollbar-track {
-      background: #2d3748; 
+      background: #2d3748; /* A dark track color */
       border-radius: 10px;
     }
     ::-webkit-scrollbar-thumb {
-      background-color: #4a5568; 
+      background-color: #4a5568; /* A contrasting thumb color */
       border-radius: 10px;
       border: 6px solid #2d3748; /* Creates padding around thumb */
     }
     ::-webkit-scrollbar-thumb:hover {
-      background-color: #718096; 
+      background-color: #718096; /* Thumb color on hover */
     }
   `;
 
-  const heatmapConfigObject = useMemo(() => ({ 
+  const heatmapConfigObject = useMemo(() => ({
     dataSource: "Crypto",
     blockSize: "market_cap_calc",
     blockColor: "change",
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true,
+    hasTransparentBackground: true, // Heatmap might use this specific prop
     width: "100%",
     height: "100%"
   }), []);
@@ -85,46 +85,15 @@ const MainViews: React.FC = () => {
     </html>
   `, [heatmapConfigObject, tvWidgetBaseStyle]);
 
-
-  const cryptoScreenerConfigObject = useMemo(() => ({ 
+  const optionsScreenerConfigObject = useMemo(() => ({
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "crypto_mkt",
-    displayCurrency: "USD",
-    colorTheme: "dark", 
-    locale: "en",
-    hasTransparentBackground: true,
-  }), []);
-
-  const cryptoScreenerSrcDoc = useMemo(() => `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${tvWidgetBaseStyle}</style>
-    </head>
-    <body>
-      <div class="tradingview-widget-container">
-        <div class="tradingview-widget-container__widget"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
-        ${JSON.stringify(cryptoScreenerConfigObject)}
-        </script>
-      </div>
-    </body>
-    </html>
-  `, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
-
-  const optionsScreenerConfigObject = useMemo(() => ({ 
-    width: "100%",
-    height: "100%",
-    defaultColumn: "overview",
-    screener_type: "stock", 
+    screener_type: "stock", // General stock screener
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    hasTransparentBackground: true, 
+    isTransparent: true, // Common transparency prop for screeners
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -145,6 +114,36 @@ const MainViews: React.FC = () => {
     </body>
     </html>
   `, [optionsScreenerConfigObject, tvWidgetBaseStyle]);
+
+  const cryptoScreenerConfigObject = useMemo(() => ({
+    width: "100%",
+    height: "100%",
+    defaultColumn: "overview",
+    screener_type: "crypto_mkt",
+    displayCurrency: "USD",
+    colorTheme: "dark",
+    locale: "en",
+    isTransparent: true, // Common transparency prop for screeners
+  }), []);
+
+  const cryptoScreenerSrcDoc = useMemo(() => `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>${tvWidgetBaseStyle}</style>
+    </head>
+    <body>
+      <div class="tradingview-widget-container">
+        <div class="tradingview-widget-container__widget"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
+        ${JSON.stringify(cryptoScreenerConfigObject)}
+        </script>
+      </div>
+    </body>
+    </html>
+  `, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
 
 
   return (
@@ -198,4 +197,3 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
-
