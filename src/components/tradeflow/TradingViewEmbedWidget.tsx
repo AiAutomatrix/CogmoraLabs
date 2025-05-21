@@ -14,21 +14,19 @@ const TradingViewEmbedWidgetComponent: React.FC<TradingViewEmbedWidgetProps> = (
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const currentContainer = containerRef.current; // Capture ref value
+    const currentContainer = containerRef.current; 
     if (!currentContainer) return;
 
-    // Always set loading to true when the effect runs (either mount or config change)
     setIsLoading(true);
     
-    // Clear previous content before adding new script
-    // This is important if the effect re-runs due to config changes.
-    currentContainer.innerHTML = '';
+    currentContainer.innerHTML = ''; // Clear previous content
 
     const scriptElement = document.createElement('script');
     scriptElement.src = scriptSrc;
     scriptElement.type = 'text/javascript';
     scriptElement.async = true;
-    scriptElement.innerHTML = JSON.stringify(config);
+    // Use script.text to set the content that the external script will read as its configuration
+    scriptElement.text = JSON.stringify(config); 
     
     scriptElement.onload = () => setIsLoading(false);
     scriptElement.onerror = () => {
@@ -39,8 +37,7 @@ const TradingViewEmbedWidgetComponent: React.FC<TradingViewEmbedWidgetProps> = (
     currentContainer.appendChild(scriptElement);
 
     return () => {
-      // When component unmounts or dependencies change, clear the container.
-      // This should remove the script and anything it rendered inside.
+      // Cleanup script and its potential DOM modifications
       if (currentContainer) {
         try {
           currentContainer.innerHTML = '';
@@ -48,10 +45,8 @@ const TradingViewEmbedWidgetComponent: React.FC<TradingViewEmbedWidgetProps> = (
           // console.warn("Error clearing innerHTML during embed widget cleanup:", e);
         }
       }
-      // No need to setIsLoading(true) here in cleanup if component is unmounting.
-      // If dependencies change, setIsLoading(true) at the start of the effect handles it.
     };
-  }, [scriptSrc, config]); // Effect dependencies
+  }, [scriptSrc, config]); // Effect dependencies include config
 
   return (
     <div className={`tradingview-widget-container ${containerClass}`} ref={containerRef}>
