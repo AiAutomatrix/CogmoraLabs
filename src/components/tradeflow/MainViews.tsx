@@ -1,39 +1,116 @@
 
 'use client';
 import type React from 'react';
-import { useMemo } from 'react'; // Import useMemo
+// Removed useMemo as configs are now part of srcDoc for iframes
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter } from 'lucide-react';
 
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
-import { TradingViewEmbedWidget } from './TradingViewEmbedWidget';
+// TradingViewEmbedWidget is no longer used in this file
 
 const MainViews: React.FC = () => {
-  // Memoize configuration objects
-  const heatmapConfig = useMemo(() => ({
+  const WIDGET_CONTAINER_CLASS = "h-[calc(100vh-250px)] min-h-[500px] w-full";
+
+  const heatmapConfigObject = {
     dataSource: "Crypto",
     blockSize: "market_cap_calc",
     blockColor: "change",
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true,
+    hasTransparentBackground: true, // Widget's own background transparency
     width: "100%",
     height: "100%"
-  }), []);
+  };
 
-  const screenerConfig = useMemo(() => ({
+  const heatmapSrcDoc = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        html, body { 
+          width: 100%; 
+          height: 100%; 
+          margin: 0; 
+          padding: 0; 
+          overflow: hidden; 
+          background-color: transparent; /* Allows parent background to show if iframe is transparent */
+        }
+        .tradingview-widget-container {
+          width: 100%;
+          height: 100%;
+        }
+      </style>
+    </head>
+    <body>
+      <!-- TradingView Widget BEGIN -->
+      <div class="tradingview-widget-container">
+        <div class="tradingview-widget-container__widget"></div>
+        <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0;">
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color: #828282; text-decoration: none;">
+                <span class="blue-text">Track all markets on TradingView</span>
+            </a>
+        </div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
+        ${JSON.stringify(heatmapConfigObject)}
+        </script>
+      </div>
+      <!-- TradingView Widget END -->
+    </body>
+    </html>
+  `;
+
+  const screenerConfigObject = {
     width: "100%",
     height: "100%",
     defaultScreen: "crypto_mcap",
     theme: "dark",
     locale: "en",
-    hasTransparentBackground: true,
-  }), []);
+    hasTransparentBackground: true, // Widget's own background transparency
+  };
 
-  const WIDGET_CONTAINER_CLASS = "h-[calc(100vh-250px)] min-h-[500px] w-full";
+  const screenerSrcDoc = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        html, body { 
+          width: 100%; 
+          height: 100%; 
+          margin: 0; 
+          padding: 0; 
+          overflow: hidden; 
+          background-color: transparent; 
+        }
+         .tradingview-widget-container {
+          width: 100%;
+          height: 100%;
+        }
+      </style>
+    </head>
+    <body>
+      <!-- TradingView Widget BEGIN -->
+      <div class="tradingview-widget-container">
+        <div class="tradingview-widget-container__widget"></div>
+         <div class="tradingview-widget-copyright" style="width: 100%; text-align: center; font-size: 12px; position: absolute; bottom: 0; padding: 2px 0;">
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank" style="color: #828282; text-decoration: none;">
+                <span class="blue-text">Track all markets on TradingView</span>
+            </a>
+        </div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
+        ${JSON.stringify(screenerConfigObject)}
+        </script>
+      </div>
+      <!-- TradingView Widget END -->
+    </body>
+    </html>
+  `;
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
@@ -54,17 +131,21 @@ const MainViews: React.FC = () => {
         <TradingViewChartWidget symbol="BINANCE:BTCUSDT" containerClass={WIDGET_CONTAINER_CLASS} />
       </TabsContent>
       <TabsContent value="heatmap" className="flex-grow overflow-hidden">
-        <TradingViewEmbedWidget
-          scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js"
-          config={heatmapConfig} // Use memoized config
-          containerClass={WIDGET_CONTAINER_CLASS}
+        <iframe
+          srcDoc={heatmapSrcDoc}
+          title="TradingView Crypto Heatmap"
+          className={WIDGET_CONTAINER_CLASS}
+          style={{ border: 'none' }}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
       <TabsContent value="screener" className="flex-grow overflow-hidden">
-         <TradingViewEmbedWidget
-            scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-screener.js"
-            config={screenerConfig} // Use memoized config
-            containerClass={WIDGET_CONTAINER_CLASS}
+         <iframe
+            srcDoc={screenerSrcDoc}
+            title="TradingView Crypto Screener"
+            className={WIDGET_CONTAINER_CLASS}
+            style={{ border: 'none' }}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
       </TabsContent>
     </Tabs>
