@@ -14,29 +14,21 @@ const TradingViewEmbedWidgetComponent: React.FC<TradingViewEmbedWidgetProps> = (
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const currentContainer = containerRef.current; // Capture ref value
+    if (!currentContainer) return;
 
-    const container = containerRef.current;
-    let scriptElement: HTMLScriptElement | null = null;
-
-    // Set loading to true when we start (re)creating the widget
+    // Always set loading to true when the effect runs (either mount or config change)
     setIsLoading(true);
-
-    // Clear previous content (including old script and widget elements)
-    while (container.firstChild) {
-      try {
-        container.removeChild(container.firstChild);
-      } catch (e) {
-        // console.warn("Error removing child during embed widget cleanup (before new script):", e);
-        break; // Avoid infinite loop on persistent error
-      }
-    }
     
-    scriptElement = document.createElement('script');
+    // Clear previous content before adding new script
+    // This is important if the effect re-runs due to config changes.
+    currentContainer.innerHTML = '';
+
+    const scriptElement = document.createElement('script');
     scriptElement.src = scriptSrc;
     scriptElement.type = 'text/javascript';
     scriptElement.async = true;
-    scriptElement.innerHTML = JSON.stringify(config); // Config is embedded in the script's content for these types of widgets
+    scriptElement.innerHTML = JSON.stringify(config);
     
     scriptElement.onload = () => setIsLoading(false);
     scriptElement.onerror = () => {
@@ -44,27 +36,22 @@ const TradingViewEmbedWidgetComponent: React.FC<TradingViewEmbedWidgetProps> = (
       console.error(`Failed to load TradingView widget script: ${scriptSrc}`);
     };
     
-    container.appendChild(scriptElement);
+    currentContainer.appendChild(scriptElement);
 
-    // Cleanup function for when the component unmounts or dependencies (scriptSrc, config) change
     return () => {
-      // The script itself and its generated content are children of `container`.
-      // Clearing all children of `container` should suffice.
-      if (container) { 
-        while (container.firstChild) {
-          try {
-            container.removeChild(container.firstChild);
-          } catch (e) {
-            // console.warn("Error removing child during embed widget cleanup (effect return):", e);
-            break; // Avoid infinite loop
-          }
+      // When component unmounts or dependencies change, clear the container.
+      // This should remove the script and anything it rendered inside.
+      if (currentContainer) {
+        try {
+          currentContainer.innerHTML = '';
+        } catch (e) {
+          // console.warn("Error clearing innerHTML during embed widget cleanup:", e);
         }
       }
-      // If unmounting or re-rendering due to prop change, reset loading state
-      // This helps ensure skeleton shows correctly if widget is recreated quickly
-      setIsLoading(true); 
+      // No need to setIsLoading(true) here in cleanup if component is unmounting.
+      // If dependencies change, setIsLoading(true) at the start of the effect handles it.
     };
-  }, [scriptSrc, config]); // Re-run if scriptSrc or config changes
+  }, [scriptSrc, config]); // Effect dependencies
 
   return (
     <div className={`tradingview-widget-container ${containerClass}`} ref={containerRef}>

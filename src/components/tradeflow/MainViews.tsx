@@ -1,6 +1,7 @@
 
 'use client';
 import type React from 'react';
+import { useMemo } from 'react'; // Import useMemo
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter } from 'lucide-react';
 
@@ -10,28 +11,29 @@ import { TradingViewChartWidget } from './TradingViewChartWidget';
 import { TradingViewEmbedWidget } from './TradingViewEmbedWidget';
 
 const MainViews: React.FC = () => {
-  const heatmapConfig = {
+  // Memoize configuration objects
+  const heatmapConfig = useMemo(() => ({
     dataSource: "Crypto",
     blockSize: "market_cap_calc",
     blockColor: "change",
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true, // Set to true for better integration
+    hasTransparentBackground: true,
     width: "100%",
-    height: "100%" // This will be controlled by parent container
-  };
+    height: "100%"
+  }), []);
 
-  const screenerConfig = {
+  const screenerConfig = useMemo(() => ({
     width: "100%",
-    height: "100%", // This will be controlled by parent container
+    height: "100%",
     defaultScreen: "crypto_mcap",
     theme: "dark",
     locale: "en",
     hasTransparentBackground: true,
-  };
+  }), []);
 
-  const WIDGET_CONTAINER_CLASS = "h-[calc(100vh-250px)] min-h-[500px] w-full"; // Adjusted height
+  const WIDGET_CONTAINER_CLASS = "h-[calc(100vh-250px)] min-h-[500px] w-full";
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
@@ -52,16 +54,16 @@ const MainViews: React.FC = () => {
         <TradingViewChartWidget symbol="BINANCE:BTCUSDT" containerClass={WIDGET_CONTAINER_CLASS} />
       </TabsContent>
       <TabsContent value="heatmap" className="flex-grow overflow-hidden">
-        <TradingViewEmbedWidget 
+        <TradingViewEmbedWidget
           scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js"
-          config={heatmapConfig}
+          config={heatmapConfig} // Use memoized config
           containerClass={WIDGET_CONTAINER_CLASS}
         />
       </TabsContent>
       <TabsContent value="screener" className="flex-grow overflow-hidden">
          <TradingViewEmbedWidget
             scriptSrc="https://s3.tradingview.com/external-embedding/embed-widget-screener.js"
-            config={screenerConfig}
+            config={screenerConfig} // Use memoized config
             containerClass={WIDGET_CONTAINER_CLASS}
           />
       </TabsContent>
