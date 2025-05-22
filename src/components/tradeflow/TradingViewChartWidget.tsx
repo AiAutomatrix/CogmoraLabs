@@ -41,7 +41,6 @@ const TradingViewChartWidgetComponent: React.FC<TradingViewChartWidgetProps> = (
     }
 
     // Ensure the target DOM element is completely empty before creating a new widget.
-    // This is crucial for remounts to ensure the TradingView library initializes into a clean state.
     while (chartHostElement.firstChild) {
       chartHostElement.removeChild(chartHostElement.firstChild);
     }
@@ -59,31 +58,34 @@ const TradingViewChartWidgetComponent: React.FC<TradingViewChartWidgetProps> = (
         locale: "en",
         enable_publishing: false,
         allow_symbol_change: true,
-        container_id: containerId, // Unique ID for each instance
+        container_id: containerId,
         autosize: true,
       });
       widgetInstanceRef.current = createdWidget;
     } catch (e) {
       console.error("Error creating TradingView widget:", e);
-      widgetInstanceRef.current = null; // Ensure ref is null if creation failed
+      widgetInstanceRef.current = null;
     }
 
     return () => {
-      // This cleanup function is called when the component unmounts or before the effect re-runs.
-      // It refers to 'widgetInstanceRef.current' which holds the widget created by this effect run.
       const instanceToRemove = widgetInstanceRef.current;
+      // Check if the host element for the widget still exists in the DOM.
+      // React might have already unmounted and removed it.
+      const currentChartHostElement = document.getElementById(containerId);
+
       if (instanceToRemove && typeof instanceToRemove.remove === 'function') {
-        try {
-          instanceToRemove.remove();
-        } catch (error) {
-          console.error("Error removing TradingView widget during cleanup:", error);
+        // Only attempt to remove if the container element is still part of the document
+        if (currentChartHostElement && document.body.contains(currentChartHostElement)) {
+          try {
+            instanceToRemove.remove();
+          } catch (error) {
+            console.error("Error removing TradingView widget during cleanup:", error);
+          }
         }
       }
-      // Set the ref to null to indicate the widget is gone.
-      // This helps the skeleton logic for the next mount.
       widgetInstanceRef.current = null;
     };
-  }, [isScriptLoaded, symbol, containerId, width, height]); // containerId changes on remount, triggering the effect
+  }, [isScriptLoaded, symbol, containerId, width, height]);
 
   return (
     <>
