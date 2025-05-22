@@ -78,7 +78,13 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${tvWidgetBaseStyle}</style>
+      <style>
+        ${tvWidgetBaseStyle}
+        /* Heatmap specific styles if any, otherwise tvWidgetBaseStyle applies */
+        html, body {
+             overflow: hidden; /* Heatmap typically doesn't need its own scrollbars */
+        }
+      </style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -91,39 +97,61 @@ const MainViews: React.FC = () => {
     </html>
   `, [heatmapConfigObject, tvWidgetBaseStyle]);
 
+
+  const screenerBaseStyle = `
+    ${tvWidgetBaseStyle} /* Inherit base styles */
+    html, body {
+      overflow: auto !important; /* Ensure iframe content can scroll */
+    }
+    /* Thicker scrollbars for screeners */
+    ::-webkit-scrollbar {
+      width: 24px !important;
+      height: 24px !important;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1e222d; /* Slightly different track for screeners if needed */
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background-color: #363a45; /* Thumb color for screeners */
+      border-radius: 10px;
+      border: 6px solid #1e222d; /* Creates padding around thumb */
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: #4f535d; /* Lighter thumb on hover */
+    }
+    .tradingview-widget-container { /* Ensure container has space for footer */
+        padding-bottom: 20px; /* Space for copyright footer, adjust as needed */
+        position: relative;
+        height: 100%;
+        box-sizing: border-box;
+    }
+    .tradingview-widget-container__widget { /* Widget should fill the container */
+        height: 100% !important;
+        width: 100% !important;
+        overflow: hidden; /* Widget itself should not overflow this div */
+    }
+  `;
+
+
   const optionsScreenerConfigObject = useMemo(() => ({
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock",
+    screener_type: "stock", // For options/stock
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
     isTransparent: true,
   }), []);
 
-  const optionsScreenerSrcDoc = useMemo(() => {
-    // Specific styles for screeners, including thicker scrollbars and ensuring scrollability
-    const screenerSpecificStyle = `
-      ${tvWidgetBaseStyle}
-      html, body {
-        overflow: auto !important; /* Ensure iframe content can scroll */
-      }
-      ::-webkit-scrollbar {
-        width: 24px !important; /* Thicker scrollbar */
-        height: 24px !important; /* Thicker scrollbar */
-      }
-      ::-webkit-scrollbar-thumb {
-        border: 6px solid #2d3748 !important; /* Adjust border for thicker scrollbar */
-      }
-    `;
-    return `
+  const optionsScreenerSrcDoc = useMemo(() => `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${screenerSpecificStyle}</style>
+      <style>${screenerBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -134,42 +162,26 @@ const MainViews: React.FC = () => {
       </div>
     </body>
     </html>
-  `;
-  }, [optionsScreenerConfigObject, tvWidgetBaseStyle]);
+  `, [optionsScreenerConfigObject, screenerBaseStyle]);
 
   const cryptoScreenerConfigObject = useMemo(() => ({
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "crypto_mkt",
+    screener_type: "crypto_mkt", // For crypto
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
     isTransparent: true,
   }), []);
 
-  const cryptoScreenerSrcDoc = useMemo(() => {
-    // Specific styles for screeners, including thicker scrollbars and ensuring scrollability
-    const screenerSpecificStyle = `
-      ${tvWidgetBaseStyle}
-      html, body {
-        overflow: auto !important; /* Ensure iframe content can scroll */
-      }
-      ::-webkit-scrollbar {
-        width: 24px !important; /* Thicker scrollbar */
-        height: 24px !important; /* Thicker scrollbar */
-      }
-      ::-webkit-scrollbar-thumb {
-        border: 6px solid #2d3748 !important; /* Adjust border for thicker scrollbar */
-      }
-    `;
-    return `
+  const cryptoScreenerSrcDoc = useMemo(() => `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${screenerSpecificStyle}</style>
+      <style>${screenerBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -180,8 +192,7 @@ const MainViews: React.FC = () => {
       </div>
     </body>
     </html>
-  `;
-  }, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
+  `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
@@ -202,7 +213,7 @@ const MainViews: React.FC = () => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
+      <TabsContent value="chart" className="flex-grow overflow-hidden" forceMount>
         <TradingViewChartWidget 
           symbol="BINANCE:BTCUSDT" 
           containerClass={WIDGET_CONTAINER_CLASS} 
@@ -220,26 +231,26 @@ const MainViews: React.FC = () => {
       </TabsContent>
 
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto">
+        <div className="h-full w-full overflow-auto"> {/* Ensure this div can scroll if iframe content is too large */}
           <iframe
             srcDoc={optionsScreenerSrcDoc}
             title="TradingView Options/Stock Screener"
             className={WIDGET_CONTAINER_CLASS}
-            style={{ border: 'none', minHeight: '500px' }}
+            style={{ border: 'none', minHeight: '500px' }} // minHeight helps visibility
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
         </div>
       </TabsContent>
 
       <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto">
-          <iframe
-            srcDoc={cryptoScreenerSrcDoc}
-            title="TradingView Crypto Screener"
-            className={WIDGET_CONTAINER_CLASS}
-            style={{ border: 'none', minHeight: '500px' }}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
+         <div className="h-full w-full overflow-auto"> {/* Ensure this div can scroll if iframe content is too large */}
+            <iframe
+              srcDoc={cryptoScreenerSrcDoc}
+              title="TradingView Crypto Screener"
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }} // minHeight helps visibility
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
         </div>
       </TabsContent>
     </Tabs>
