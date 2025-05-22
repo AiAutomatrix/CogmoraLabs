@@ -19,6 +19,7 @@ const MainViews: React.FC = () => {
       padding: 0;
       background-color: transparent;
       box-sizing: border-box;
+      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
     }
     
     *, *::before, *::after {
@@ -29,13 +30,14 @@ const MainViews: React.FC = () => {
       width: 100%;
       height: 100%;
       min-height: 500px; /* Ensure a minimum height for visibility */
-      position: relative;
+      position: relative; /* For potential absolutely positioned children like copyright */
     }
     
     .tradingview-widget-container__widget {
       width: 100% !important;
       height: 100% !important;
       min-height: 500px; /* Ensure a minimum height for visibility */
+      overflow: hidden; /* Prevent widget itself from overflowing this div */
     }
     
     /* Default scrollbar style for heatmap - can be overridden for screeners */
@@ -81,8 +83,9 @@ const MainViews: React.FC = () => {
       <style>
         ${tvWidgetBaseStyle}
         /* Heatmap specific styles if any, otherwise tvWidgetBaseStyle applies */
+        /* Ensure heatmap body has overflow hidden explicitly */
         html, body {
-             overflow: hidden; /* Heatmap typically doesn't need its own scrollbars */
+             overflow: hidden !important; 
         }
       </style>
     </head>
@@ -131,6 +134,26 @@ const MainViews: React.FC = () => {
         width: 100% !important;
         overflow: hidden; /* Widget itself should not overflow this div */
     }
+    .tradingview-widget-copyright {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      text-align: center;
+      padding: 2px 0;
+      font-size: 11px;
+      color: #9db2bd; /* Or a color that fits your dark theme */
+      background-color: rgba(30, 34, 45, 0.8); /* Semi-transparent background */
+      box-sizing: border-box;
+      z-index: 10; /* Ensure it's above the widget content */
+    }
+    .tradingview-widget-copyright a {
+      color: #9db2bd;
+      text-decoration: none;
+    }
+    .tradingview-widget-copyright a:hover {
+      text-decoration: underline;
+    }
   `;
 
 
@@ -156,6 +179,9 @@ const MainViews: React.FC = () => {
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
+         <div class="tradingview-widget-copyright">
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a>
+        </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
           ${JSON.stringify(optionsScreenerConfigObject)}
         </script>
@@ -186,6 +212,9 @@ const MainViews: React.FC = () => {
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
+        <div class="tradingview-widget-copyright">
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a>
+        </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
           ${JSON.stringify(cryptoScreenerConfigObject)}
         </script>
@@ -213,7 +242,7 @@ const MainViews: React.FC = () => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden" forceMount>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         <TradingViewChartWidget 
           symbol="BINANCE:BTCUSDT" 
           containerClass={WIDGET_CONTAINER_CLASS} 
