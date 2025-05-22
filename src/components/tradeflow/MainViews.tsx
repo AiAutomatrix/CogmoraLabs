@@ -7,76 +7,73 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
-// TradingViewChartWidget is no longer used for the main chart in this component
 
 const MainViews: React.FC = () => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
-  const tvWidgetBaseStyle = `
+  const tvWidgetBaseStyle = useMemo(() => `
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: transparent;
+      background-color: #222222; /* Match app's dark background */
       box-sizing: border-box;
       overflow: hidden; /* Prevent scrollbars on html/body of iframe */
     }
-    
-    *, *::before, *::after {
-      box-sizing: inherit;
-    }
-    
-    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener */
+    *, *::before, *::after { box-sizing: inherit; }
+    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
       width: 100%;
       height: 100%;
       position: relative;
     }
-    
     .tradingview-widget-container__widget { /* Used by embed scripts */
       width: 100% !important;
       height: 100% !important;
       overflow: hidden;
     }
-    
     /* Default scrollbar style for heatmap - can be overridden for screeners */
-    ::-webkit-scrollbar {
-      width: 12px; /* Default for heatmap */
-      height: 12px; /* Default for heatmap */
+    ::-webkit-scrollbar { width: 12px; height: 12px; }
+    ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
+    ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
+    ::-webkit-scrollbar-thumb:hover { background-color: #718096; }
+    .tradingview-widget-copyright {
+      position:absolute; bottom:0; left:0; right:0; text-align:center; padding:2px 0; font-size:11px; color:#9db2bd; background-color:rgba(34,34,34,0.8); box-sizing:border-box; z-index:10;
     }
-    
-    ::-webkit-scrollbar-track {
-      background: #2d3748; /* A dark track color */
-      border-radius: 12px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-      background-color: #4a5568; /* A medium dark thumb color */
-      border-radius: 12px;
-      border: 3px solid #2d3748; /* Creates padding around thumb */
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-      background-color: #718096; /* Lighter thumb on hover */
-    }
-  `;
+    .tradingview-widget-copyright a { color:#9db2bd; text-decoration: none; }
+    .tradingview-widget-copyright a:hover { text-decoration: underline; }
+  `, []);
 
-  // Configuration for the Advanced Real-Time Chart
+  // Configuration for the Advanced Real-Time Chart (based on user's working example)
   const chartConfigObject = useMemo(() => ({
+    container_id: "technical-analysis-chart-demo", // From user's example
     width: "100%",
-    height: "97%", // Adjusted based on user's working example
-    symbol: "BINANCE:BTCUSDT",
-    interval: "D",
-    timezone: "Etc/UTC",
+    height: "97%", // From user's example
+    autosize: true, // From user's example
+    symbol: "BINANCE:BTCUSDT", // Default, was KUCOIN:BTCUSDT in example
+    interval: "180", // '3H', from user's example
+    timezone: "exchange", // From user's example
     theme: "dark",
     style: "1",
-    locale: "en",
-    enable_publishing: false,
+    withdateranges: true, // From user's example
+    hide_side_toolbar: true, // From user's example
     allow_symbol_change: true,
-    // save_image: false, // Optional, from user example
-    // withdateranges: true, // Optional, from user example
-    // hide_side_toolbar: true, // Optional, from user example
-    container_id: "tradeflow_adv_chart_container"
+    save_image: false,
+    studies: [ // From user's example
+        "StochasticRSI@tv-basicstudies",
+        "MASimple@tv-basicstudies"
+    ],
+    show_popup_button: true, // From user's example
+    popup_width: "1000", // From user's example
+    popup_height: "650", // From user's example
+    support_host: "https://www.tradingview.com", // From user's example
+    locale: "en",
+    enable_publishing: false, // Kept from previous TradeFlow setup
+    // Details below are for the ADVANCED chart type, less relevant for basic widget embed
+    // toolbar_bg: "#f1f3f6", 
+    // details: true,
+    // hotlist: true,
+    // calendar: true,
   }), []);
 
   const chartSrcDoc = useMemo(() => `
@@ -85,27 +82,19 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        ${tvWidgetBaseStyle}
-        /* Ensure the chart's direct container fills the iframe body */
-        /* Body is already 100%x100% via tvWidgetBaseStyle */
-      </style>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js" onload="initAdvancedChartWidget()"></script>
-      <script type="text/javascript">
-        function initAdvancedChartWidget() {
-          if (typeof TradingView !== 'undefined' && typeof TradingView.widget === 'function') {
-            new TradingView.widget(${JSON.stringify(chartConfigObject)});
-          } else {
-            console.error('TradingView library (tv.js) not loaded or widget function not available.');
-          }
-        }
-      </script>
+      <style>${tvWidgetBaseStyle}</style>
     </head>
     <body>
-      <div id="${chartConfigObject.container_id}" style="width:100%; height:100%;"></div>
-      <div class="tradingview-widget-copyright" style="position:absolute; bottom:0; left:0; right:0; text-align:center; padding:2px 0; font-size:11px; color:#9db2bd; background-color:rgba(30,34,45,0.8); box-sizing:border-box; z-index:10;">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span style="color:#9db2bd;">Track all markets on TradingView</span></a>
+      <div class="tradingview-widget-container">
+        <div id="${chartConfigObject.container_id}" style="width:100%; height:100%;"></div>
+        <div class="tradingview-widget-copyright">
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
+        </div>
       </div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+        new TradingView.widget(${JSON.stringify(chartConfigObject)});
+      </script>
     </body>
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
@@ -117,7 +106,7 @@ const MainViews: React.FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true,
+    hasTransparentBackground: true, // Match iframe body bg
     width: "100%",
     height: "100%"
   }), []);
@@ -128,13 +117,14 @@ const MainViews: React.FC = () => {
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>
-        ${tvWidgetBaseStyle}
-      </style>
+      <style>${tvWidgetBaseStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
+         <div class="tradingview-widget-copyright">
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
+        </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
           ${JSON.stringify(heatmapConfigObject)}
         </script>
@@ -143,59 +133,18 @@ const MainViews: React.FC = () => {
     </html>
   `, [heatmapConfigObject, tvWidgetBaseStyle]);
 
-
-  const screenerBaseStyle = `
+  const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
     html, body {
       overflow: auto !important; /* Allow scrolling for screeners */
     }
-    ::-webkit-scrollbar {
-      width: 24px !important; /* Thicker scrollbars */
-      height: 24px !important; /* Thicker scrollbars */
-    }
-    ::-webkit-scrollbar-track {
-      background: #1e222d; 
-      border-radius: 10px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background-color: #363a45; 
-      border-radius: 10px;
-      border: 6px solid #1e222d; /* Creates padding around thumb */
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background-color: #4f535d; 
-    }
-    .tradingview-widget-container { 
-        padding-bottom: 20px; 
-        height: 100%; 
-        box-sizing: border-box; 
-    }
-    .tradingview-widget-container__widget { 
-        height: 100% !important; 
-        width: 100% !important;
-        overflow: hidden; 
-    }
-    .tradingview-widget-copyright {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      text-align: center;
-      padding: 2px 0;
-      font-size: 11px;
-      color: #9db2bd; 
-      background-color: rgba(30, 34, 45, 0.8); 
-      box-sizing: border-box;
-      z-index: 10;
-    }
-    .tradingview-widget-copyright a {
-      color: #9db2bd;
-      text-decoration: none;
-    }
-    .tradingview-widget-copyright a:hover {
-      text-decoration: underline;
-    }
-  `;
+    ::-webkit-scrollbar { width: 24px !important; height: 24px !important; }
+    ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background-color: #363a45; border-radius: 10px; border: 6px solid #1e222d; }
+    ::-webkit-scrollbar-thumb:hover { background-color: #4f535d; }
+    .tradingview-widget-container { padding-bottom: 20px; height: 100%; box-sizing: border-box; }
+    .tradingview-widget-container__widget { height: 100% !important; width: 100% !important; overflow: hidden; }
+  `, [tvWidgetBaseStyle]);
 
   const optionsScreenerConfigObject = useMemo(() => ({
     width: "100%",
@@ -205,7 +154,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true,
+    isTransparent: true, // Match iframe body bg
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -238,7 +187,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true,
+    isTransparent: true, // Match iframe body bg
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -262,7 +211,6 @@ const MainViews: React.FC = () => {
     </body>
     </html>
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
-
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
@@ -335,6 +283,3 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
-    
-
-    
