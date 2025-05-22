@@ -63,7 +63,8 @@ const MainViews: React.FC = () => {
 
   // Configuration for the Advanced Real-Time Chart
   const chartConfigObject = useMemo(() => ({
-    autosize: true,
+    width: "100%",
+    height: "97%", // Adjusted based on user's working example
     symbol: "BINANCE:BTCUSDT",
     interval: "D",
     timezone: "Etc/UTC",
@@ -72,7 +73,10 @@ const MainViews: React.FC = () => {
     locale: "en",
     enable_publishing: false,
     allow_symbol_change: true,
-    container_id: "tradeflow_adv_chart_container" // Unique ID for the chart's host div
+    // save_image: false, // Optional, from user example
+    // withdateranges: true, // Optional, from user example
+    // hide_side_toolbar: true, // Optional, from user example
+    container_id: "tradeflow_adv_chart_container"
   }), []);
 
   const chartSrcDoc = useMemo(() => `
@@ -113,7 +117,7 @@ const MainViews: React.FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true, // Use this for transparency
+    hasTransparentBackground: true,
     width: "100%",
     height: "100%"
   }), []);
@@ -126,7 +130,6 @@ const MainViews: React.FC = () => {
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
         ${tvWidgetBaseStyle}
-        /* Specific styles for heatmap if needed, though base should cover it */
       </style>
     </head>
     <body>
@@ -163,17 +166,15 @@ const MainViews: React.FC = () => {
       background-color: #4f535d; 
     }
     .tradingview-widget-container { 
-        /* Add padding at the bottom to ensure copyright is not overlapping content, if widget adds its own */
         padding-bottom: 20px; 
-        height: 100%; /* Ensure container takes full height */
-        box-sizing: border-box; /* Important for height calculation with padding */
+        height: 100%; 
+        box-sizing: border-box; 
     }
     .tradingview-widget-container__widget { 
-        height: 100% !important; /* Ensure widget content also respects this */
+        height: 100% !important; 
         width: 100% !important;
-        overflow: hidden; /* Let the body handle scrolling */
+        overflow: hidden; 
     }
-    /* Explicitly style the copyright div if needed, though the script usually handles this */
     .tradingview-widget-copyright {
       position: absolute;
       bottom: 0;
@@ -185,7 +186,7 @@ const MainViews: React.FC = () => {
       color: #9db2bd; 
       background-color: rgba(30, 34, 45, 0.8); 
       box-sizing: border-box;
-      z-index: 10; /* Ensure it's above widget content if overlapping */
+      z-index: 10;
     }
     .tradingview-widget-copyright a {
       color: #9db2bd;
@@ -200,11 +201,11 @@ const MainViews: React.FC = () => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", // For general stocks/options
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true, // Use this for transparency
+    isTransparent: true,
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -219,7 +220,7 @@ const MainViews: React.FC = () => {
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
          <div class="tradingview-widget-copyright">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a>
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
         </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
           ${JSON.stringify(optionsScreenerConfigObject)}
@@ -237,7 +238,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true, // Use this for transparency
+    isTransparent: true,
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -252,7 +253,7 @@ const MainViews: React.FC = () => {
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
         <div class="tradingview-widget-copyright">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span class="blue-text">Track all markets on TradingView</span></a>
+            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
         </div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
           ${JSON.stringify(cryptoScreenerConfigObject)}
@@ -284,7 +285,7 @@ const MainViews: React.FC = () => {
 
       <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
-          key="adv-chart-iframe" /* Adding a key to help React with re-rendering if needed */
+          key="adv-chart-iframe"
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
           className={WIDGET_CONTAINER_CLASS}
@@ -305,28 +306,26 @@ const MainViews: React.FC = () => {
       </TabsContent>
 
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        {/* Ensure this div allows its child iframe to correctly calculate its 100% height if WIDGET_CONTAINER_CLASS relies on flex context */}
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
-              className={WIDGET_CONTAINER_CLASS} // This class should ensure the iframe itself has proper dimensions
-              style={{ border: 'none', minHeight: '500px' }} // minHeight is a fallback
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
       <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         {/* Ensure this div allows its child iframe to correctly calculate its 100% height */}
          <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
-              className={WIDGET_CONTAINER_CLASS} // This class should ensure the iframe itself has proper dimensions
-              style={{ border: 'none', minHeight: '500px' }} // minHeight is a fallback
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
@@ -336,5 +335,6 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
+    
 
     
