@@ -1,56 +1,61 @@
-
 'use client';
+
 import type React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
-
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
 import { useMemo } from 'react';
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full";
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
-  // Consistent base styles for all TradingView iframe embed widgets
   const tvWidgetBaseStyle = `
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
-      overflow: hidden; /* Let the widget manage its own scroll or fit */
       background-color: transparent;
-      box-sizing: border-box; /* Apply border-box to html and body */
+      box-sizing: border-box;
     }
+    
     *, *::before, *::after {
-      box-sizing: inherit; /* Inherit box-sizing from parent (body) */
+      box-sizing: inherit;
     }
-    .tradingview-widget-container { /* The main container we create in the body */
+    
+    .tradingview-widget-container {
       width: 100%;
       height: 100%;
-      position: relative; /* Needed if script adds absolutely positioned children like its own copyright */
+      min-height: 500px;
+      position: relative;
     }
-    .tradingview-widget-container__widget { /* The div the TV script targets */
-      width: 100%;
-      height: 100%;
+    
+    .tradingview-widget-container__widget {
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 500px;
     }
-    /* Custom scrollbar styles (will apply if widget internals use standard scrollable regions) */
+    
     ::-webkit-scrollbar {
-      width: 24px; /* Thickness of vertical scrollbar */
-      height: 24px; /* Thickness of horizontal scrollbar */
+      width: 12px;
+      height: 12px;
     }
+    
     ::-webkit-scrollbar-track {
-      background: #2d3748; /* A dark track color */
-      border-radius: 10px;
+      background: #2d3748;
+      border-radius: 12px;
     }
+    
     ::-webkit-scrollbar-thumb {
-      background-color: #4a5568; /* A contrasting thumb color */
-      border-radius: 10px;
-      border: 6px solid #2d3748; /* Creates padding around thumb */
+      background-color: #4a5568;
+      border-radius: 12px;
+      border: 3px solid #2d3748;
     }
+    
     ::-webkit-scrollbar-thumb:hover {
-      background-color: #718096; /* Thumb color on hover */
+      background-color: #718096;
     }
   `;
 
@@ -61,7 +66,7 @@ const MainViews: React.FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true, // Heatmap might use this specific prop
+    hasTransparentBackground: true,
     width: "100%",
     height: "100%"
   }), []);
@@ -78,7 +83,7 @@ const MainViews: React.FC = () => {
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
-        ${JSON.stringify(heatmapConfigObject)}
+          ${JSON.stringify(heatmapConfigObject)}
         </script>
       </div>
     </body>
@@ -89,11 +94,11 @@ const MainViews: React.FC = () => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", // General stock screener
+    screener_type: "stock",
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true, // Common transparency prop for screeners
+    isTransparent: true,
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -108,7 +113,7 @@ const MainViews: React.FC = () => {
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
-        ${JSON.stringify(optionsScreenerConfigObject)}
+          ${JSON.stringify(optionsScreenerConfigObject)}
         </script>
       </div>
     </body>
@@ -123,7 +128,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true, // Common transparency prop for screeners
+    isTransparent: true,
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -138,13 +143,12 @@ const MainViews: React.FC = () => {
       <div class="tradingview-widget-container">
         <div class="tradingview-widget-container__widget"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-screener.js" async>
-        ${JSON.stringify(cryptoScreenerConfigObject)}
+          ${JSON.stringify(cryptoScreenerConfigObject)}
         </script>
       </div>
     </body>
     </html>
   `, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
-
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
@@ -156,15 +160,22 @@ const MainViews: React.FC = () => {
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
       </TabsList>
+
       <TabsContent value="blog" className="flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
+
       <TabsContent value="dashboard" className="flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
+
       <TabsContent value="chart" className="flex-grow overflow-hidden">
-        <TradingViewChartWidget symbol="BINANCE:BTCUSDT" containerClass={WIDGET_CONTAINER_CLASS} />
+        <TradingViewChartWidget 
+          symbol="BINANCE:BTCUSDT" 
+          containerClass={WIDGET_CONTAINER_CLASS} 
+        />
       </TabsContent>
+
       <TabsContent value="heatmap" className="flex-grow overflow-hidden">
         <iframe
           srcDoc={heatmapSrcDoc}
@@ -174,23 +185,29 @@ const MainViews: React.FC = () => {
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
+
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-         <iframe
+        <div className="h-full w-full overflow-auto">
+          <iframe
             srcDoc={optionsScreenerSrcDoc}
             title="TradingView Options/Stock Screener"
             className={WIDGET_CONTAINER_CLASS}
-            style={{ border: 'none' }}
+            style={{ border: 'none', minHeight: '500px' }}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
+        </div>
       </TabsContent>
+
       <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         <iframe
+        <div className="h-full w-full overflow-auto">
+          <iframe
             srcDoc={cryptoScreenerSrcDoc}
             title="TradingView Crypto Screener"
             className={WIDGET_CONTAINER_CLASS}
-            style={{ border: 'none' }}
+            style={{ border: 'none', minHeight: '500px' }}
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
           />
+        </div>
       </TabsContent>
     </Tabs>
   );
