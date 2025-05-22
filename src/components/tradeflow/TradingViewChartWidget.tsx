@@ -30,56 +30,25 @@ const TradingViewChartWidgetComponent: React.FC<TradingViewChartWidgetProps> = (
   const widgetInstanceRef = useRef<any>(null);
 
   useEffect(() => {
-    // This effect handles widget creation, updates, and cleanup.
-
     if (!isScriptLoaded || typeof window.TradingView === 'undefined') {
-      // Script not loaded yet, or TradingView object not available.
-      return;
+      return; // Script not ready or TradingView object not available
     }
 
-    const chartContainer = document.getElementById(containerId);
-    if (!chartContainer) {
+    const chartHostElement = document.getElementById(containerId);
+    if (!chartHostElement) {
       console.warn(`TradingViewChartWidget: Container with id ${containerId} not found.`);
       return;
     }
 
-    // If an old widget instance exists, remove it first.
-    // This ensures that if props (like symbol) change, the old widget is cleaned up before creating a new one.
-    if (widgetInstanceRef.current && typeof widgetInstanceRef.current.remove === 'function') {
-      try {
-        widgetInstanceRef.current.remove();
-      } catch (e) {
-        console.error("Error removing previous TradingView widget instance:", e);
-      }
-      widgetInstanceRef.current = null; // Clear the ref after removing
-    } else if (widgetInstanceRef.current) {
-      // Fallback if remove() is not available or instance is unexpected
-      console.warn("TradingView widget instance found but no remove() method. Clearing container manually.");
-      while (chartContainer.firstChild) {
-        try {
-          chartContainer.removeChild(chartContainer.firstChild);
-        } catch (e) {
-          // console.warn("Error during manual DOM cleanup fallback:", e);
-          break; 
-        }
-      }
-      widgetInstanceRef.current = null;
-    } else {
-      // If no widgetInstanceRef.current, but chartContainer might have stale content (e.g., from HMR)
-      // This is a defensive clear.
-      while (chartContainer.firstChild) {
-        try {
-          chartContainer.removeChild(chartContainer.firstChild);
-        } catch (e) {
-          // console.warn("Error during initial manual DOM cleanup:", e);
-          break;
-        }
-      }
+    // Ensure the target DOM element is completely empty before creating a new widget.
+    // This is crucial for remounts to ensure the TradingView library initializes into a clean state.
+    while (chartHostElement.firstChild) {
+      chartHostElement.removeChild(chartHostElement.firstChild);
     }
     
-    // Create the new widget
+    let createdWidget: any = null;
     try {
-      widgetInstanceRef.current = new window.TradingView.widget({
+      createdWidget = new window.TradingView.widget({
         width: width,
         height: height,
         symbol: symbol,
@@ -90,27 +59,31 @@ const TradingViewChartWidgetComponent: React.FC<TradingViewChartWidgetProps> = (
         locale: "en",
         enable_publishing: false,
         allow_symbol_change: true,
-        container_id: containerId,
+        container_id: containerId, // Unique ID for each instance
         autosize: true,
       });
+      widgetInstanceRef.current = createdWidget;
     } catch (e) {
       console.error("Error creating TradingView widget:", e);
       widgetInstanceRef.current = null; // Ensure ref is null if creation failed
     }
 
-    // Cleanup function: This will be called when the component unmounts,
-    // or BEFORE the effect runs again due to dependency changes.
     return () => {
-      if (widgetInstanceRef.current && typeof widgetInstanceRef.current.remove === 'function') {
+      // This cleanup function is called when the component unmounts or before the effect re-runs.
+      // It refers to 'widgetInstanceRef.current' which holds the widget created by this effect run.
+      const instanceToRemove = widgetInstanceRef.current;
+      if (instanceToRemove && typeof instanceToRemove.remove === 'function') {
         try {
-          widgetInstanceRef.current.remove();
-        } catch (e) {
-          // console.warn("Error removing TradingView widget during effect cleanup:", e);
+          instanceToRemove.remove();
+        } catch (error) {
+          console.error("Error removing TradingView widget during cleanup:", error);
         }
-        widgetInstanceRef.current = null;
       }
+      // Set the ref to null to indicate the widget is gone.
+      // This helps the skeleton logic for the next mount.
+      widgetInstanceRef.current = null;
     };
-  }, [isScriptLoaded, symbol, containerId, width, height]); // Dependencies that require widget re-creation
+  }, [isScriptLoaded, symbol, containerId, width, height]); // containerId changes on remount, triggering the effect
 
   return (
     <>
@@ -125,7 +98,6 @@ const TradingViewChartWidgetComponent: React.FC<TradingViewChartWidgetProps> = (
         }}
       />
       <div className={`tradingview-widget-container relative ${containerClass}`}>
-        {/* Show skeleton if script not loaded OR (script loaded but widget instance not yet created/ready) */}
         {(!isScriptLoaded || (isScriptLoaded && !widgetInstanceRef.current)) && (
              <Skeleton className="absolute inset-0 w-full h-full z-0" />
         )}
