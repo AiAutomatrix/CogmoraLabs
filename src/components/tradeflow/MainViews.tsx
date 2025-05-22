@@ -7,9 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
+// TradingViewChartWidget is no longer used for the main chart but kept for potential other uses.
+// import { TradingViewChartWidget } from './TradingViewChartWidget';
+
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]"; // Removed max-h and overflow-auto for iframes
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -19,18 +22,18 @@ const MainViews: React.FC = () => {
       padding: 0;
       background-color: #222222; /* Match app's dark background */
       box-sizing: border-box;
-      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
+      overflow: hidden; /* Prevent scrollbars on html/body of iframe, widget should manage its own */
     }
     *, *::before, *::after { box-sizing: inherit; }
     .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
       width: 100%;
       height: 100%;
-      position: relative;
+      position: relative; /* Important for copyright positioning if script adds it absolutely */
     }
     .tradingview-widget-container__widget { /* Used by embed scripts */
-      width: 100% !important;
+      width: 100% !important; /* Ensure widget fills container */
       height: 100% !important;
-      overflow: hidden;
+      overflow: hidden; /* Widget itself should not overflow this div */
     }
     /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar { width: 12px; height: 12px; }
@@ -69,11 +72,6 @@ const MainViews: React.FC = () => {
     support_host: "https://www.tradingview.com", // From user's example
     locale: "en",
     enable_publishing: false, // Kept from previous TradeFlow setup
-    // Details below are for the ADVANCED chart type, less relevant for basic widget embed
-    // toolbar_bg: "#f1f3f6", 
-    // details: true,
-    // hotlist: true,
-    // calendar: true,
   }), []);
 
   const chartSrcDoc = useMemo(() => `
@@ -106,7 +104,7 @@ const MainViews: React.FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: true, // Match iframe body bg
+    hasTransparentBackground: true, 
     width: "100%",
     height: "100%"
   }), []);
@@ -142,7 +140,7 @@ const MainViews: React.FC = () => {
     ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
     ::-webkit-scrollbar-thumb { background-color: #363a45; border-radius: 10px; border: 6px solid #1e222d; }
     ::-webkit-scrollbar-thumb:hover { background-color: #4f535d; }
-    .tradingview-widget-container { padding-bottom: 20px; height: 100%; box-sizing: border-box; }
+    .tradingview-widget-container { padding-bottom: 20px; height: 100%; box-sizing: border-box; } /* Added padding for copyright */
     .tradingview-widget-container__widget { height: 100% !important; width: 100% !important; overflow: hidden; }
   `, [tvWidgetBaseStyle]);
 
@@ -154,7 +152,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true, // Match iframe body bg
+    isTransparent: true, 
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -187,7 +185,7 @@ const MainViews: React.FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: true, // Match iframe body bg
+    isTransparent: true, 
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -260,7 +258,7 @@ const MainViews: React.FC = () => {
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }} 
+              style={{ border: 'none' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
@@ -273,7 +271,7 @@ const MainViews: React.FC = () => {
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              style={{ border: 'none'}}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
@@ -283,3 +281,4 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
+
