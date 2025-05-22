@@ -1,12 +1,12 @@
 'use client';
 
-import type React from 'react';
+import React, { useMemo } from 'react';
+import type { FC } from 'react'; // Keep type FC for clarity if preferred, though React.FC works with the above import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
 import BlogContent from './BlogContent';
 import DashboardContent from './DashboardContent';
 import { TradingViewChartWidget } from './TradingViewChartWidget';
-import { useMemo } from 'react';
 
 const MainViews: React.FC = () => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
@@ -28,34 +28,35 @@ const MainViews: React.FC = () => {
     .tradingview-widget-container {
       width: 100%;
       height: 100%;
-      min-height: 500px;
+      min-height: 500px; /* Ensure a minimum height for visibility */
       position: relative;
     }
     
     .tradingview-widget-container__widget {
       width: 100% !important;
       height: 100% !important;
-      min-height: 500px;
+      min-height: 500px; /* Ensure a minimum height for visibility */
     }
     
+    /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar {
       width: 12px;
       height: 12px;
     }
     
     ::-webkit-scrollbar-track {
-      background: #2d3748;
+      background: #2d3748; /* A dark track color */
       border-radius: 12px;
     }
     
     ::-webkit-scrollbar-thumb {
-      background-color: #4a5568;
+      background-color: #4a5568; /* A medium dark thumb color */
       border-radius: 12px;
-      border: 3px solid #2d3748;
+      border: 3px solid #2d3748; /* Creates padding around thumb */
     }
     
     ::-webkit-scrollbar-thumb:hover {
-      background-color: #718096;
+      background-color: #718096; /* Lighter thumb on hover */
     }
   `;
 
@@ -101,13 +102,28 @@ const MainViews: React.FC = () => {
     isTransparent: true,
   }), []);
 
-  const optionsScreenerSrcDoc = useMemo(() => `
+  const optionsScreenerSrcDoc = useMemo(() => {
+    // Specific styles for screeners, including thicker scrollbars and ensuring scrollability
+    const screenerSpecificStyle = `
+      ${tvWidgetBaseStyle}
+      html, body {
+        overflow: auto !important; /* Ensure iframe content can scroll */
+      }
+      ::-webkit-scrollbar {
+        width: 24px !important; /* Thicker scrollbar */
+        height: 24px !important; /* Thicker scrollbar */
+      }
+      ::-webkit-scrollbar-thumb {
+        border: 6px solid #2d3748 !important; /* Adjust border for thicker scrollbar */
+      }
+    `;
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${tvWidgetBaseStyle}</style>
+      <style>${screenerSpecificStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -118,7 +134,8 @@ const MainViews: React.FC = () => {
       </div>
     </body>
     </html>
-  `, [optionsScreenerConfigObject, tvWidgetBaseStyle]);
+  `;
+  }, [optionsScreenerConfigObject, tvWidgetBaseStyle]);
 
   const cryptoScreenerConfigObject = useMemo(() => ({
     width: "100%",
@@ -131,13 +148,28 @@ const MainViews: React.FC = () => {
     isTransparent: true,
   }), []);
 
-  const cryptoScreenerSrcDoc = useMemo(() => `
+  const cryptoScreenerSrcDoc = useMemo(() => {
+    // Specific styles for screeners, including thicker scrollbars and ensuring scrollability
+    const screenerSpecificStyle = `
+      ${tvWidgetBaseStyle}
+      html, body {
+        overflow: auto !important; /* Ensure iframe content can scroll */
+      }
+      ::-webkit-scrollbar {
+        width: 24px !important; /* Thicker scrollbar */
+        height: 24px !important; /* Thicker scrollbar */
+      }
+      ::-webkit-scrollbar-thumb {
+        border: 6px solid #2d3748 !important; /* Adjust border for thicker scrollbar */
+      }
+    `;
+    return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${tvWidgetBaseStyle}</style>
+      <style>${screenerSpecificStyle}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
@@ -148,7 +180,8 @@ const MainViews: React.FC = () => {
       </div>
     </body>
     </html>
-  `, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
+  `;
+  }, [cryptoScreenerConfigObject, tvWidgetBaseStyle]);
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
