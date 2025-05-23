@@ -27,7 +27,7 @@ const MiniWidgets: React.FC = () => {
       </TabsList>
 
       <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden">
-        <div className="px-2 pb-2 border-b border-border"> {/* Changed p-2 to px-2 pb-2 */}
+        <div className="p-2 border-b border-border"> {/* Changed to p-2 for consistent padding */}
             <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Tech Widget" />
@@ -44,12 +44,12 @@ const MiniWidgets: React.FC = () => {
         </div>
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden">
+      <TabsContent value="ai_chat" className="mt-0 flex-grow flex flex-col overflow-hidden"> {/* Added flex flex-col for consistency */}
         <AiWebchat />
       </TabsContent>
 
       <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden">
-        <div className="px-2 pb-2 border-b border-border"> {/* Changed p-2 to px-2 pb-2 */}
+        <div className="p-2 border-b border-border"> {/* Changed to p-2 for consistent padding */}
             <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Tracker View" />
