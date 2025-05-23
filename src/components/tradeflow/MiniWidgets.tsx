@@ -1,9 +1,8 @@
 
 'use client';
-import React, { useState } from 'react';
+import type React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins, Combine } from 'lucide-react'; // Added Combine for Overview
 
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
 import AiWebchat from './mini-widgets/AiWebchat';
@@ -11,40 +10,25 @@ import TradeTracker from './mini-widgets/TradeTracker';
 import TradingViewTechAnalysisWidget from './mini-widgets/TradingViewTechAnalysisWidget';
 import KucoinTradePanel from './mini-widgets/KucoinTradePanel';
 
-type TechWidgetSelection = 'overview' | 'technical_analysis';
-type TrackerViewSelection = 'trade_log' | 'kucoin_panel';
-
 const MiniWidgets: React.FC = () => {
-  const [selectedTechWidget, setSelectedTechWidget] = useState<TechWidgetSelection>('overview');
-  const [selectedTrackerView, setSelectedTrackerView] = useState<TrackerViewSelection>('trade_log');
-
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="tech_widget"><Cpu className="mr-2" />Tech</TabsTrigger>
-        <TabsTrigger value="ai_chat"><MessageCircle className="mr-2" />AI Chat</TabsTrigger>
-        <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-5">
+        <TabsTrigger value="tech_overview"><Combine className="mr-1 h-4 w-4 sm:mr-2" />Overview</TabsTrigger>
+        <TabsTrigger value="tech_analysis"><TrendingUp className="mr-1 h-4 w-4 sm:mr-2" />Analysis</TabsTrigger>
+        <TabsTrigger value="ai_chat"><MessageCircle className="mr-1 h-4 w-4 sm:mr-2" />AI Chat</TabsTrigger>
+        <TabsTrigger value="trade_log"><ClipboardList className="mr-1 h-4 w-4 sm:mr-2" />Log</TabsTrigger>
+        <TabsTrigger value="kucoin_panel"><Coins className="mr-1 h-4 w-4 sm:mr-2" />Kucoin</TabsTrigger>
       </TabsList>
 
-      {/* Tech Tab Content */}
-      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pt-0 pb-2">
-        <Select 
-          value={selectedTechWidget} 
-          onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}
-          className="mb-2"
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Tech Widget" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="overview"><Settings className="mr-2 h-4 w-4 inline-block" />Tech Overview</SelectItem>
-            <SelectItem value="technical_analysis"><TrendingUp className="mr-2 h-4 w-4 inline-block" />Technical Analysis</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex-grow overflow-hidden min-h-0">
-            {selectedTechWidget === 'overview' && <TechWidgetContent />}
-            {selectedTechWidget === 'technical_analysis' && <TradingViewTechAnalysisWidget />}
-        </div>
+      {/* Tech Overview Tab Content */}
+      <TabsContent value="tech_overview" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <TechWidgetContent />
+      </TabsContent>
+
+      {/* Technical Analysis Tab Content */}
+      <TabsContent value="tech_analysis" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <TradingViewTechAnalysisWidget />
       </TabsContent>
 
       {/* AI Chat Tab Content */}
@@ -52,25 +36,14 @@ const MiniWidgets: React.FC = () => {
         <AiWebchat />
       </TabsContent>
 
-      {/* Tracker Tab Content */}
-      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pt-0 pb-2">
-        <Select 
-          value={selectedTrackerView} 
-          onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}
-          className="mb-2"
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Tracker View" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="trade_log"><ClipboardList className="mr-2 h-4 w-4 inline-block" />Trade Log</SelectItem>
-            <SelectItem value="kucoin_panel"><Coins className="mr-2 h-4 w-4 inline-block" />Kucoin Trade Panel</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex-grow overflow-hidden min-h-0">
-            {selectedTrackerView === 'trade_log' && <TradeTracker />}
-            {selectedTrackerView === 'kucoin_panel' && <KucoinTradePanel />}
-        </div>
+      {/* Trade Log Tab Content */}
+      <TabsContent value="trade_log" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <TradeTracker />
+      </TabsContent>
+
+      {/* Kucoin Panel Tab Content */}
+      <TabsContent value="kucoin_panel" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <KucoinTradePanel />
       </TabsContent>
     </Tabs>
   );
