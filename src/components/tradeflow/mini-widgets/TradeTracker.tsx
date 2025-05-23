@@ -94,11 +94,11 @@ const TradeTracker: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Reduced top padding */}
+      <CardHeader className="px-3 pt-1 pb-2 border-b">
         <CardTitle>Trade Tracker</CardTitle>
         <CardDescription className="text-xs">Log and monitor your cryptocurrency trades.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-3 p-3 overflow-y-auto min-h-0">
+      <CardContent className="flex-grow flex flex-col gap-3 min-h-0 p-3 overflow-y-auto">
         <Form {...formHook}>
           <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
             <FormField

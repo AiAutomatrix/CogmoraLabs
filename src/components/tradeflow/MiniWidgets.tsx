@@ -1,6 +1,6 @@
 
 'use client';
-import React from 'react'; // Changed from import type
+import React from 'react'; // Corrected import
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Combine, MessageCircle, ClipboardList, TrendingUp, Coins } from 'lucide-react';

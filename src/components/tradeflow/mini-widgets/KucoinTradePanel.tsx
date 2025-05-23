@@ -60,17 +60,16 @@ const KucoinTradePanel: React.FC = () => {
       ),
     });
     console.log("Kucoin Trade Data:", data);
-    // formHook.reset(); 
   };
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Reduced top padding */}
+      <CardHeader className="px-3 pt-1 pb-2 border-b">
         <CardTitle className="flex items-center"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle>
         <CardDescription className="text-xs">Place spot & futures orders (simulated).</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col p-3 overflow-y-auto min-h-0">
-        <ScrollArea className="flex-grow min-h-0"> 
+      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
+        <ScrollArea className="h-full p-3"> 
           <Form {...formHook}>
             <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField

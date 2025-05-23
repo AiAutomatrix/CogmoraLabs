@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useState, useRef, useEffect } from 'react'; // Corrected import
+import React, { useState, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import { marketAnalysisQuery, type MarketAnalysisQueryInput } from '@/ai/flows/market-analysis-query';
 import { Button } from '@/components/ui/button';
@@ -49,14 +49,11 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
     }
     
     const symbolToSubmit = cryptocurrencyInput.toUpperCase();
-    // Call the callback to update the symbol in the parent component
-    // Convert to EXCHANGE:SYMBOL format if not already
     if (symbolToSubmit.includes(':')) {
         onSymbolSubmit(symbolToSubmit);
     } else {
-        onSymbolSubmit(`BINANCE:${symbolToSubmit}`); // Default to BINANCE or make it configurable
+        onSymbolSubmit(`BINANCE:${symbolToSubmit}`);
     }
-
 
     const newUserMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -65,7 +62,6 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
       timestamp: new Date(),
     };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
-    // setUserQuery(''); // Optionally clear query
     setIsLoading(true);
 
     try {
@@ -106,8 +102,8 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
         <CardTitle>AI Market Analysis</CardTitle>
         <CardDescription className="text-xs">Symbol entered updates main chart & tech widget.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0 p-0">
-        <ScrollArea className="flex-grow p-3 min-h-0"> {/* Added p-3 here for messages */}
+      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
+        <ScrollArea className="flex-grow p-3 min-h-0">
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div
@@ -131,7 +127,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             </div>
           ))}
            {isLoading && (
-            <div className="flex justify-start gap-2 mb-3 p-3"> {/* Ensure loading also respects padding */}
+            <div className="flex justify-start gap-2 mb-3"> {/* Loading indicator already within ScrollArea's padding */}
               <Bot className="h-6 w-6 text-primary flex-shrink-0" />
               <div className="p-3 rounded-lg bg-secondary text-secondary-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -139,12 +135,12 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             </div>
           )}
         </ScrollArea>
-        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t"> {/* Added p-3 here for form */}
+        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t">
           <Input
             type="text"
             placeholder="Cryptocurrency (e.g., LTCUSDT)"
             value={cryptocurrencyInput}
-            onChange={(e) => setCryptocurrencyInput(e.target.value)} // Removed .toUpperCase() for now, handle in submit
+            onChange={(e) => setCryptocurrencyInput(e.target.value)}
             disabled={isLoading}
             aria-label="Cryptocurrency Symbol"
           />
