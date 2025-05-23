@@ -1,7 +1,7 @@
 
 'use client';
 
-import type React from 'react';
+import React from 'react'; // Corrected React import
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -64,12 +64,12 @@ const KucoinTradePanel: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b">
-        <CardTitle className="flex items-center"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle>
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Minimal padding */}
+        <CardTitle className="flex items-center text-lg"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle> {/* Slightly smaller title */}
         <CardDescription className="text-xs">Place spot & futures orders (simulated).</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="h-full p-3"> 
+      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden"> {/* No padding, min-h-0 */}
+        <ScrollArea className="flex-grow p-3 min-h-0">  {/* Padding for form, min-h-0 */}
           <Form {...formHook}>
             <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField
@@ -79,7 +79,7 @@ const KucoinTradePanel: React.FC = () => {
                   <FormItem>
                     <FormLabel>Symbol (e.g., BTC/USDT)</FormLabel>
                     <FormControl>
-                      <Input placeholder="BTC/USDT" {...field} onChange={e => field.onChange(e.target.value.toUpperCase())} />
+                      <Input placeholder="BTC/USDT" {...field} onChange={e => field.onChange(e.target.value.toUpperCase())} className="h-9" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -95,7 +95,7 @@ const KucoinTradePanel: React.FC = () => {
                       <FormLabel>Trade Type</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-9">
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                         </FormControl>
@@ -116,7 +116,7 @@ const KucoinTradePanel: React.FC = () => {
                       <FormLabel>Order Type</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-9">
                             <SelectValue placeholder="Select order type" />
                           </SelectTrigger>
                         </FormControl>
@@ -139,7 +139,7 @@ const KucoinTradePanel: React.FC = () => {
                     <FormLabel>Side</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-9">
                           <SelectValue placeholder="Select side" />
                         </SelectTrigger>
                       </FormControl>
@@ -161,7 +161,7 @@ const KucoinTradePanel: React.FC = () => {
                     <FormItem>
                       <FormLabel>Price</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="Enter price for limit order" {...field} step="any" />
+                        <Input type="number" placeholder="Enter price for limit order" {...field} step="any" className="h-9" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -176,7 +176,7 @@ const KucoinTradePanel: React.FC = () => {
                   <FormItem>
                     <FormLabel>Amount (e.g. in BTC or USDT)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="Enter amount" {...field} step="any"/>
+                      <Input type="number" placeholder="Enter amount" {...field} step="any" className="h-9"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -191,7 +191,7 @@ const KucoinTradePanel: React.FC = () => {
                     <FormItem>
                       <FormLabel>Leverage (1x-100x)</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="e.g., 10" {...field} min="1" max="100" step="1"/>
+                        <Input type="number" placeholder="e.g., 10" {...field} min="1" max="100" step="1" className="h-9"/>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -199,7 +199,7 @@ const KucoinTradePanel: React.FC = () => {
                 />
               )}
               
-              <Button type="submit" className="w-full" disabled={formHook.formState.isSubmitting}>
+              <Button type="submit" className="w-full h-9" disabled={formHook.formState.isSubmitting}>
                 {formHook.formState.isSubmitting ? "Placing Order..." : "Place Order"}
               </Button>
             </form>

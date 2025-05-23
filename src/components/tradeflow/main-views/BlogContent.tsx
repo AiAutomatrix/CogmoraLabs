@@ -1,10 +1,11 @@
+
 import type React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 
 const BlogContent: React.FC = () => {
   return (
-    <Card className="h-full overflow-auto">
+    <Card className="h-full overflow-auto"> {/* Ensure card itself can scroll if content exceeds */}
       <CardHeader>
         <CardTitle>Blog</CardTitle>
       </CardHeader>

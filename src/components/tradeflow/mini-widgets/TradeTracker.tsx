@@ -1,7 +1,6 @@
 
 'use client';
-import type React from 'react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; // Corrected React import
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TradeSchema, type Trade } from '@/types';
@@ -94,11 +93,11 @@ const TradeTracker: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b">
-        <CardTitle>Trade Tracker</CardTitle>
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Minimal padding */}
+        <CardTitle className="text-lg">Trade Log</CardTitle> {/* Slightly smaller title */}
         <CardDescription className="text-xs">Log and monitor your cryptocurrency trades.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-3 min-h-0 p-3 overflow-y-auto">
+      <CardContent className="flex-grow flex flex-col gap-3 min-h-0 p-3 overflow-y-auto"> {/* Padding here, min-h-0 */}
         <Form {...formHook}>
           <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
             <FormField
@@ -108,7 +107,7 @@ const TradeTracker: React.FC = () => {
                 <FormItem>
                   <FormLabel>Symbol (e.g. BTCUSDT)</FormLabel>
                   <FormControl>
-                    <Input placeholder="BTCUSDT" {...field} />
+                    <Input placeholder="BTCUSDT" {...field} className="h-9" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -122,7 +121,7 @@ const TradeTracker: React.FC = () => {
                   <FormItem>
                     <FormLabel>Entry</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="50000" {...field} step="any" />
+                      <Input type="number" placeholder="50000" {...field} step="any" className="h-9" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -135,7 +134,7 @@ const TradeTracker: React.FC = () => {
                   <FormItem>
                     <FormLabel>Target</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="55000" {...field} step="any"/>
+                      <Input type="number" placeholder="55000" {...field} step="any" className="h-9"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -148,7 +147,7 @@ const TradeTracker: React.FC = () => {
                   <FormItem>
                     <FormLabel>Stop Loss</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="48000" {...field} step="any"/>
+                      <Input type="number" placeholder="48000" {...field} step="any" className="h-9"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -156,12 +155,12 @@ const TradeTracker: React.FC = () => {
               />
             </div>
             <div className="flex gap-2">
-                <Button type="submit" className="w-full">
+                <Button type="submit" className="w-full h-9">
                   {isEditing ? <Edit3 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                   {isEditing ? 'Update Trade' : 'Add Trade'}
                 </Button>
                 {isEditing && (
-                    <Button type="button" variant="outline" onClick={handleCancelEdit} className="w-full">
+                    <Button type="button" variant="outline" onClick={handleCancelEdit} className="w-full h-9">
                         Cancel Edit
                     </Button>
                 )}

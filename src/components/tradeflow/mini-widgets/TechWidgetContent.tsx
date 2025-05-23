@@ -8,11 +8,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 const TechWidgetContent: React.FC = () => {
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b">
-        <CardTitle>Tech Overview</CardTitle>
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Minimal padding */}
+        <CardTitle className="text-lg">Tech Overview</CardTitle> {/* Slightly smaller title */}
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="h-full p-3">
+      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden"> {/* No padding, min-h-0 */}
+        <ScrollArea className="flex-grow p-3 min-h-0"> {/* Padding for content, min-h-0 */}
           <p className="text-muted-foreground text-sm mb-3">System status and technical indicators relevant to trading operations.</p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -22,7 +22,7 @@ const TechWidgetContent: React.FC = () => {
                       <Wifi className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
-                      <div className="text-2xl font-bold">15ms</div>
+                      <div className="text-lg font-bold">15ms</div> {/* Slightly smaller */}
                       <p className="text-xs text-muted-foreground">Exchange: Binance</p>
                   </CardContent>
               </Card>
@@ -32,7 +32,7 @@ const TechWidgetContent: React.FC = () => {
                       <Cpu className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent className="p-3 pt-0">
-                      <div className="text-2xl font-bold">35%</div>
+                      <div className="text-lg font-bold">35%</div> {/* Slightly smaller */}
                       <p className="text-xs text-muted-foreground">Strategy Engine</p>
                   </CardContent>
               </Card>

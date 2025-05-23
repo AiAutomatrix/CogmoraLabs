@@ -11,12 +11,6 @@ export default function HomePage() {
 
   const handleSymbolChange = (newSymbol: string) => {
     if (newSymbol && newSymbol.trim() !== '') {
-      // Assuming newSymbol might come from user input like "LTCUSDT"
-      // We might need to prepend "BINANCE:" or similar if not already formatted
-      // For now, let's assume the AiWebchat sends it in a usable format or we adapt it there.
-      // A common format for TradingView symbols is EXCHANGE:PAIR (e.g., BINANCE:BTCUSDT)
-      // For simplicity, let's ensure it's uppercase and trim.
-      // If the symbol from AI chat doesn't include an exchange, we might default to BINANCE.
       let formattedSymbol = newSymbol.toUpperCase().trim();
       if (!formattedSymbol.includes(':')) {
         formattedSymbol = `BINANCE:${formattedSymbol}`;
@@ -34,11 +28,12 @@ export default function HomePage() {
       </header>
 
       <main className="flex-grow container mx-auto p-4 flex flex-col">
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 h-full">
-          <section className="lg:col-span-2 h-full flex flex-col">
+        {/* This div is the direct child of main, it needs to grow */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 flex-grow"> {/* Changed h-full to flex-grow */}
+          <section className="lg:col-span-2 h-full flex flex-col"> {/* h-full is correct here as grid child */}
             <MainViews currentSymbol={activeSymbol} />
           </section>
-          <aside className="lg:col-span-1 h-full flex flex-col">
+          <aside className="lg:col-span-1 h-full flex flex-col"> {/* h-full is correct here as grid child */}
             <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
           </aside>
         </div>

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useMemo } from 'react'; // Corrected import
+import React, { useMemo } from 'react';
 import type { FC } from 'react';
 
 interface TradingViewTechAnalysisWidgetProps {
@@ -12,14 +12,14 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
   const widgetConfig = useMemo(() => ({
     interval: "30m",
     width: "100%",
-    isTransparent: false,
+    isTransparent: false, // Keep false if you want TradingView's dark theme to manage bg
     height: "100%",
-    symbol: symbol, // Use dynamic symbol from props
+    symbol: symbol, 
     showIntervalTabs: false,
     displayMode: "multiple",
     locale: "en",
     colorTheme: "dark"
-  }), [symbol]); // Add symbol to dependency array
+  }), [symbol]); 
 
   const srcDocContent = useMemo(() => `
     <!DOCTYPE html>
@@ -35,7 +35,7 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
           margin: 0;
           padding: 0;
           overflow: hidden;
-          background-color: #222222; /* Match app's dark background */
+          background-color: #222222; /* Or transparent if isTransparent:true in widgetConfig */
           box-sizing: border-box;
         }
         *, *::before, *::after { box-sizing: inherit; }
@@ -61,11 +61,13 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
   `, [widgetConfig]);
 
   return (
+    // This component is designed to be a direct child of a TabsContent that is already flex-grow.
+    // The iframe itself will fill the space given by TabsContent.
     <iframe
-      key={symbol} // Add key to force iframe reload on symbol change
+      key={symbol} 
       srcDoc={srcDocContent}
       title="TradingView Technical Analysis Widget"
-      className="w-full h-full"
+      className="w-full h-full" // Ensures iframe fills its parent (TabsContent)
       style={{ border: 'none' }}
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     />

@@ -21,10 +21,12 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
   const [cryptocurrencyInput, setCryptocurrencyInput] = useState<string>('BTCUSDT');
   const [userQuery, setUserQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null); // Keep for potential direct manipulation if needed
   const { toast } = useToast();
 
   const scrollToBottom = () => {
+    // Simplified: Radix ScrollArea usually handles this well if content changes.
+    // If specific scrolling is needed, this can be enhanced.
     if (scrollAreaRef.current) {
       const scrollViewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
       if (scrollViewport) {
@@ -49,19 +51,18 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
     }
     
     const symbolToSubmit = cryptocurrencyInput.toUpperCase();
-    if (symbolToSubmit.includes(':')) {
-        onSymbolSubmit(symbolToSubmit);
-    } else {
-        onSymbolSubmit(`BINANCE:${symbolToSubmit}`);
-    }
+    // Standardize symbol for TradingView if needed (e.g., BINANCE:BTCUSDT)
+    const formattedSymbol = symbolToSubmit.includes(':') ? symbolToSubmit : `BINANCE:${symbolToSubmit}`;
+    onSymbolSubmit(formattedSymbol); // Pass the potentially formatted symbol up
 
     const newUserMessage: ChatMessage = {
       id: crypto.randomUUID(),
       sender: 'user',
-      text: `Analysis for ${symbolToSubmit}: ${userQuery}`,
+      text: `Analysis for ${symbolToSubmit}: ${userQuery}`, // Show user what they typed
       timestamp: new Date(),
     };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
+    // setUserQuery(''); // Keep query for now, or clear as preferred
     setIsLoading(true);
 
     try {
@@ -98,12 +99,12 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b">
-        <CardTitle>AI Market Analysis</CardTitle>
-        <CardDescription className="text-xs">Symbol entered updates main chart & tech widget.</CardDescription>
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Minimal padding */}
+        <CardTitle className="text-lg">AI Market Analysis</CardTitle> {/* Slightly smaller title */}
+        <CardDescription className="text-xs">Symbol updates main chart & tech widget.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="flex-grow p-3 min-h-0">
+      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden"> {/* No padding, min-h-0 */}
+        <ScrollArea ref={scrollAreaRef} className="flex-grow p-3 min-h-0"> {/* Padding for messages, min-h-0 */}
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div
@@ -127,7 +128,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             </div>
           ))}
            {isLoading && (
-            <div className="flex justify-start gap-2 mb-3"> {/* Loading indicator already within ScrollArea's padding */}
+            <div className="flex justify-start gap-2 mb-3">
               <Bot className="h-6 w-6 text-primary flex-shrink-0" />
               <div className="p-3 rounded-lg bg-secondary text-secondary-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -135,7 +136,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             </div>
           )}
         </ScrollArea>
-        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t">
+        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t"> {/* Padding for form elements */}
           <Input
             type="text"
             placeholder="Cryptocurrency (e.g., LTCUSDT)"
@@ -143,6 +144,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             onChange={(e) => setCryptocurrencyInput(e.target.value)}
             disabled={isLoading}
             aria-label="Cryptocurrency Symbol"
+            className="h-9" // Slightly smaller input
           />
           <Textarea
             placeholder="Your query (e.g., What are the short-term prospects?)"
@@ -152,7 +154,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             rows={2} 
             aria-label="Your Query"
           />
-          <Button type="submit" disabled={isLoading} className="w-full">
+          <Button type="submit" disabled={isLoading} className="w-full h-9"> {/* Slightly smaller button */}
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Send & Update Charts'}
           </Button>
         </form>

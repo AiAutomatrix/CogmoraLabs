@@ -1,6 +1,6 @@
 
 'use client';
-import React from 'react'; // Corrected import
+import React from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Combine, MessageCircle, ClipboardList, TrendingUp, Coins } from 'lucide-react';
@@ -17,7 +17,7 @@ interface MiniWidgetsProps {
 }
 
 const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
-  const TABS_CONTENT_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
+  const TABS_CONTENT_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0"; // Gold standard for full height tab content
 
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">

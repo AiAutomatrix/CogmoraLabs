@@ -1,3 +1,4 @@
+
 import type React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -5,7 +6,7 @@ import Image from 'next/image';
 
 const DashboardContent: React.FC = () => {
   return (
-    <Card className="h-full overflow-auto">
+    <Card className="h-full overflow-auto"> {/* Ensure card itself can scroll if content exceeds */}
       <CardHeader>
         <CardTitle>Dashboard Overview</CardTitle>
         <CardDescription>Your trading performance at a glance.</CardDescription>

@@ -13,7 +13,7 @@ interface MainViewsProps {
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]";
+  const WIDGET_IFRAME_CLASS = "w-full h-full"; // Simplified for iframes directly filling TabsContent
   const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
 
 
@@ -53,16 +53,16 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartConfigObject = useMemo(() => ({
     container_id: "technical-analysis-chart-demo",
     width: "100%",
-    height: "97%",
+    height: "97%", 
     autosize: true,
-    symbol: currentSymbol, // Use dynamic symbol from props
+    symbol: currentSymbol, 
     interval: "180",
     timezone: "exchange",
     theme: "dark",
     style: "1",
     withdateranges: true,
     hide_side_toolbar: true,
-    allow_symbol_change: true, // Important to allow symbol changes
+    allow_symbol_change: true, 
     save_image: false,
     studies: [
         "StochasticRSI@tv-basicstudies",
@@ -74,7 +74,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]); // Add currentSymbol to dependency array
+  }), [currentSymbol]); 
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -214,7 +214,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 mb-4">
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6"> {/* Removed mb-4 */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
@@ -233,10 +233,10 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
       <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
         <iframe
-          key={currentSymbol} // Add key to force iframe reload on symbol change
+          key={currentSymbol} 
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
-          className={WIDGET_CONTAINER_CLASS}
+          className={WIDGET_IFRAME_CLASS}
           style={{ border: 'none' }}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
@@ -247,19 +247,20 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
           title="TradingView Crypto Heatmap"
-          className={WIDGET_CONTAINER_CLASS}
+          className={WIDGET_IFRAME_CLASS}
           style={{ border: 'none' }}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
 
       <TabsContent value="options_screener" className={TABS_CONTENT_BASE_CLASS}>
+        {/* The div wrapper for screeners might need overflow-auto if the iframe itself doesn't scroll with its internal content */}
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
-              className={WIDGET_CONTAINER_CLASS} 
+              className={WIDGET_IFRAME_CLASS} 
               style={{ border: 'none' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
@@ -272,7 +273,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
-              className={WIDGET_CONTAINER_CLASS}
+              className={WIDGET_IFRAME_CLASS}
               style={{ border: 'none' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
