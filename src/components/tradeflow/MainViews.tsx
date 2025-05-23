@@ -8,14 +8,13 @@ import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 }
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 
+// Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
   currentSymbol: string;
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
-  const WIDGET_IFRAME_CLASS = "w-full h-full"; // Simplified for iframes directly filling TabsContent
-  const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
-
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -55,7 +54,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "97%", 
     autosize: true,
-    symbol: currentSymbol, 
+    symbol: currentSymbol, // Use the prop here
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -74,7 +73,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]); 
+  }), [currentSymbol]); // Add currentSymbol to dependency array
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -214,7 +213,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6"> {/* Removed mb-4 */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 mb-4">
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
@@ -223,58 +222,57 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}>
+      <TabsContent value="blog" className="flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}>
+      <TabsContent value="dashboard" className="flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
-          key={currentSymbol} 
+          key={`adv-chart-iframe-${currentSymbol}`} // Ensure iframe re-renders when symbol changes
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
-          className={WIDGET_IFRAME_CLASS}
+          className={WIDGET_CONTAINER_CLASS}
           style={{ border: 'none' }}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className={TABS_CONTENT_BASE_CLASS}>
+      <TabsContent value="heatmap" className="flex-grow overflow-hidden">
         <iframe
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
           title="TradingView Crypto Heatmap"
-          className={WIDGET_IFRAME_CLASS}
+          className={WIDGET_CONTAINER_CLASS}
           style={{ border: 'none' }}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
 
-      <TabsContent value="options_screener" className={TABS_CONTENT_BASE_CLASS}>
-        {/* The div wrapper for screeners might need overflow-auto if the iframe itself doesn't scroll with its internal content */}
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
-              className={WIDGET_IFRAME_CLASS} 
-              style={{ border: 'none' }}
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className={TABS_CONTENT_BASE_CLASS}>
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
          <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
-              className={WIDGET_IFRAME_CLASS}
-              style={{ border: 'none' }}
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
