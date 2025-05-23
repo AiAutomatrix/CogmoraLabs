@@ -95,7 +95,7 @@ const MainViews: FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: false, // Changed from true for consistency with #222222 bg
+    hasTransparentBackground: false, 
     width: "100%",
     height: "100%"
   }), []);
@@ -143,7 +143,7 @@ const MainViews: FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: false, // Changed from true
+    isTransparent: false,
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -176,7 +176,7 @@ const MainViews: FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: false, // Changed from true
+    isTransparent: false,
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -212,15 +212,15 @@ const MainViews: FC = () => {
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="flex-grow overflow-auto">
+      <TabsContent value="blog" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="flex-grow overflow-auto">
+      <TabsContent value="dashboard" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
+      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <iframe
           key="adv-chart-iframe"
           srcDoc={chartSrcDoc}
@@ -231,7 +231,7 @@ const MainViews: FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-hidden">
+      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <iframe
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
@@ -242,7 +242,7 @@ const MainViews: FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="options_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
          <iframe
             key="options-screener-iframe"
             srcDoc={optionsScreenerSrcDoc}
@@ -253,7 +253,7 @@ const MainViews: FC = () => {
           />
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
           <iframe
             key="crypto-screener-iframe"
             srcDoc={cryptoScreenerSrcDoc}
