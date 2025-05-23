@@ -26,36 +26,40 @@ const MiniWidgets: React.FC = () => {
         <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden p-2 gap-2">
-        <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Tech Widget" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="overview"><Settings className="mr-2 h-4 w-4 inline-block" />Tech Overview</SelectItem>
-            <SelectItem value="technical_analysis"><TrendingUp className="mr-2 h-4 w-4 inline-block" />Technical Analysis</SelectItem>
-          </SelectContent>
-        </Select>
+      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <div className="p-2 border-b border-border">
+          <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select Tech Widget" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="overview"><Settings className="mr-2 h-4 w-4 inline-block" />Tech Overview</SelectItem>
+              <SelectItem value="technical_analysis"><TrendingUp className="mr-2 h-4 w-4 inline-block" />Technical Analysis</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex-grow overflow-hidden min-h-0"> {/* Tech content wrapper */}
             {selectedTechWidget === 'overview' && <TechWidgetContent />}
             {selectedTechWidget === 'technical_analysis' && <TradingViewTechAnalysisWidget />}
         </div>
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="mt-0 flex-grow flex flex-col overflow-hidden">
+      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden">
         <AiWebchat />
       </TabsContent>
 
-      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden p-2 gap-2">
-        <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Tracker View" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="trade_log"><ClipboardList className="mr-2 h-4 w-4 inline-block" />Trade Log</SelectItem>
-            <SelectItem value="kucoin_panel"><Coins className="mr-2 h-4 w-4 inline-block" />Kucoin Trade Panel</SelectItem>
-          </SelectContent>
-        </Select>
+      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <div className="p-2 border-b border-border">
+          <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select Tracker View" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="trade_log"><ClipboardList className="mr-2 h-4 w-4 inline-block" />Trade Log</SelectItem>
+              <SelectItem value="kucoin_panel"><Coins className="mr-2 h-4 w-4 inline-block" />Kucoin Trade Panel</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex-grow overflow-hidden min-h-0"> {/* Tracker content wrapper */}
             {selectedTrackerView === 'trade_log' && <TradeTracker />}
             {selectedTrackerView === 'kucoin_panel' && <KucoinTradePanel />}
