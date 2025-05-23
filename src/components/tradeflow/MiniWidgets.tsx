@@ -26,7 +26,7 @@ const MiniWidgets: React.FC = () => {
         <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden p-2 gap-2">
+      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pb-2 pt-0 gap-2">
         <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select Tech Widget" />
@@ -46,7 +46,7 @@ const MiniWidgets: React.FC = () => {
         <AiWebchat />
       </TabsContent>
 
-      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden p-2 gap-2">
+      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pb-2 pt-0 gap-2">
         <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select Tracker View" />
