@@ -34,7 +34,7 @@ type KucoinTradeFormData = z.infer<typeof kucoinTradeSchema>;
 
 const KucoinTradePanel: React.FC = () => {
   const { toast } = useToast();
-  const formHook = useForm<KucoinTradeFormData>({ // Renamed form to formHook
+  const formHook = useForm<KucoinTradeFormData>({ 
     resolver: zodResolver(kucoinTradeSchema),
     defaultValues: {
       symbol: '',
@@ -65,12 +65,12 @@ const KucoinTradePanel: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 py-2 border-b">
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Reduced top padding */}
         <CardTitle className="flex items-center"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle>
         <CardDescription className="text-xs">Place spot & futures orders (simulated).</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col p-3 overflow-y-auto min-h-0">
-        <ScrollArea className="flex-grow min-h-0"> {/* ScrollArea takes grow, internal form scrolls */}
+        <ScrollArea className="flex-grow min-h-0"> 
           <Form {...formHook}>
             <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField

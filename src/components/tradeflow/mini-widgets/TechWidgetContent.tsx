@@ -9,30 +9,30 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 const TechWidgetContent: React.FC = () => {
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 py-2 border-b">
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Reduced top padding */}
         <CardTitle>Tech Overview</CardTitle>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col p-3 overflow-y-auto min-h-0">
-        <ScrollArea className="flex-grow min-h-0"> {/* ScrollArea takes grow, internal content scrolls */}
+      <CardContent className="flex-grow flex flex-col p-0 overflow-hidden min-h-0"> {/* Removed CardContent padding */}
+        <ScrollArea className="h-full p-3"> {/* Added padding to ScrollArea */}
           <p className="text-muted-foreground text-sm mb-4">System status and technical indicators relevant to trading operations.</p>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4"> {/* Reduced gap */}
               <Card className="bg-card-foreground/5">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-3"> {/* Adjusted padding */}
                       <CardTitle className="text-sm font-medium">API Latency</CardTitle>
                       <Wifi className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 pt-0"> {/* Adjusted padding */}
                       <div className="text-2xl font-bold">15ms</div>
                       <p className="text-xs text-muted-foreground">Exchange: Binance</p>
                   </CardContent>
               </Card>
               <Card className="bg-card-foreground/5">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-3"> {/* Adjusted padding */}
                       <CardTitle className="text-sm font-medium">Server Load</CardTitle>
                       <Cpu className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-4 pt-0"> {/* Adjusted padding */}
                       <div className="text-2xl font-bold">35%</div>
                       <p className="text-xs text-muted-foreground">Strategy Engine</p>
                   </CardContent>

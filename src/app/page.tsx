@@ -11,12 +11,12 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-grow container mx-auto p-4 flex flex-col"> {/* Ensure main can grow */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 flex-grow"> {/* Ensure grid takes up available space */}
-          <section className="lg:col-span-2 h-full flex flex-col"> {/* Main content area, ensure it's a flex column */}
+      <main className="flex-grow container mx-auto p-4 flex flex-col">
+        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 h-full"> {/* Changed flex-grow to h-full for more explicit height */}
+          <section className="lg:col-span-2 h-full flex flex-col">
             <MainViews />
           </section>
-          <aside className="lg:col-span-1 h-full flex flex-col"> {/* Sidebar / Mini widgets area, ensure it's a flex column */}
+          <aside className="lg:col-span-1 h-full flex flex-col">
             <MiniWidgets />
           </aside>
         </div>

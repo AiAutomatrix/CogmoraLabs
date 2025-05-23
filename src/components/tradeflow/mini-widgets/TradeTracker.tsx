@@ -29,7 +29,7 @@ const TradeTracker: React.FC = () => {
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const formHook = useForm<TradeFormData>({ // Renamed form to formHook to avoid conflict
+  const formHook = useForm<TradeFormData>({ 
     resolver: zodResolver(TradeSchema.omit({ id: true, createdAt: true, status: true })),
     defaultValues: {
       cryptocurrency: '',
@@ -94,7 +94,7 @@ const TradeTracker: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 py-2 border-b">
+      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Reduced top padding */}
         <CardTitle>Trade Tracker</CardTitle>
         <CardDescription className="text-xs">Log and monitor your cryptocurrency trades.</CardDescription>
       </CardHeader>
@@ -170,7 +170,7 @@ const TradeTracker: React.FC = () => {
         </Form>
 
         <h3 className="text-md font-semibold mt-3 mb-1">Active Trades</h3>
-        <ScrollArea className="flex-grow min-h-0"> {/* Table will scroll if needed */}
+        <ScrollArea className="flex-grow min-h-0"> 
           <Table>
             {trades.length === 0 && <TableCaption>No trades tracked yet.</TableCaption>}
             <TableHeader>
