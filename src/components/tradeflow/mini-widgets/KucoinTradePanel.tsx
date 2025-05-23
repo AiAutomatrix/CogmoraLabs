@@ -8,11 +8,11 @@ import { z } from 'zod';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Coins, TrendingUp, TrendingDown, Zap, Settings } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const kucoinTradeSchema = z.object({
   symbol: z.string().min(3, "Symbol must be at least 3 characters (e.g., BTC/USDT)").toUpperCase(),
@@ -60,150 +60,152 @@ const KucoinTradePanel: React.FC = () => {
       ),
     });
     console.log("Kucoin Trade Data:", data);
-    // form.reset(); // Optionally reset form
+    // form.reset(); 
   };
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="flex items-center"><Coins className="mr-2 h-6 w-6 text-green-500" /> Kucoin Trade Panel</CardTitle>
-        <CardDescription>Place spot and futures orders (simulation).</CardDescription>
+      <CardHeader className="px-4 pt-2 pb-2">
+        <CardTitle className="flex items-center"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle>
+        <CardDescription className="text-xs">Place spot & futures orders (simulated).</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow overflow-auto space-y-4">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="symbol"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Symbol (e.g., BTC/USDT)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="BTC/USDT" {...field} onChange={e => field.onChange(e.target.value.toUpperCase())} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
+      <CardContent className="flex-grow flex flex-col overflow-hidden min-h-0 p-2">
+        <ScrollArea className="flex-grow min-h-0">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 p-2">
               <FormField
                 control={form.control}
-                name="tradeType"
+                name="symbol"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Trade Type</FormLabel>
+                    <FormLabel>Symbol (e.g., BTC/USDT)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="BTC/USDT" {...field} onChange={e => field.onChange(e.target.value.toUpperCase())} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="tradeType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Trade Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="spot"><Zap className="mr-2 h-4 w-4 inline-block" />Spot</SelectItem>
+                          <SelectItem value="futures"><Settings className="mr-2 h-4 w-4 inline-block" />Futures</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="orderType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Order Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select order type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="market">Market</SelectItem>
+                          <SelectItem value="limit">Limit</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="side"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Side</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
+                          <SelectValue placeholder="Select side" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="spot"><Zap className="mr-2 h-4 w-4 inline-block" />Spot</SelectItem>
-                        <SelectItem value="futures"><Settings className="mr-2 h-4 w-4 inline-block" />Futures</SelectItem>
+                        <SelectItem value="buy"><TrendingUp className="mr-2 h-4 w-4 text-green-500 inline-block" />Buy / Long</SelectItem>
+                        <SelectItem value="sell"><TrendingDown className="mr-2 h-4 w-4 text-red-500 inline-block" />Sell / Short</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="orderType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Order Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+              
+              {watchedOrderType === 'limit' && (
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select order type" />
-                        </SelectTrigger>
+                        <Input type="number" placeholder="Enter price for limit order" {...field} step="any" />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="market">Market</SelectItem>
-                        <SelectItem value="limit">Limit</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="side"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Side</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select side" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="buy"><TrendingUp className="mr-2 h-4 w-4 text-green-500 inline-block" />Buy / Long</SelectItem>
-                      <SelectItem value="sell"><TrendingDown className="mr-2 h-4 w-4 text-red-500 inline-block" />Sell / Short</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            />
-            
-            {watchedOrderType === 'limit' && (
+
               <FormField
                 control={form.control}
-                name="price"
+                name="amount"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Price</FormLabel>
+                    <FormLabel>Amount (e.g. in BTC or USDT)</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="Enter price for limit order" {...field} step="any" />
+                      <Input type="number" placeholder="Enter amount" {...field} step="any"/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            )}
 
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Amount (e.g. in BTC or USDT)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="Enter amount" {...field} step="any"/>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              {watchedTradeType === 'futures' && (
+                <FormField
+                  control={form.control}
+                  name="leverage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Leverage (1x-100x)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="e.g., 10" {...field} min="1" max="100" step="1"/>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
-            />
-
-            {watchedTradeType === 'futures' && (
-              <FormField
-                control={form.control}
-                name="leverage"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Leverage (1x-100x)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="e.g., 10" {...field} min="1" max="100" step="1"/>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-            
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? "Placing Order..." : "Place Order"}
-            </Button>
-          </form>
-        </Form>
+              
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? "Placing Order..." : "Place Order"}
+              </Button>
+            </form>
+          </Form>
+        </ScrollArea>
       </CardContent>
     </Card>
   );

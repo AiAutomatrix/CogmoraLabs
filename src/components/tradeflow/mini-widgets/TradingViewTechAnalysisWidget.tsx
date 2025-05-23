@@ -38,9 +38,8 @@ const TradingViewTechAnalysisWidget: React.FC = () => {
           width: 100%;
           height: 100%;
         }
-        /* The script typically injects a div with this class or similar */
         .tradingview-widget-container__widget {
-            width: 100% !important; /* Ensure widget fills container */
+            width: 100% !important; 
             height: 100% !important;
         }
       </style>

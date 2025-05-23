@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { TradeSchema, type Trade } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -27,7 +26,7 @@ type TradeFormData = Omit<Trade, 'id' | 'createdAt' | 'status'>;
 
 const TradeTracker: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [isEditing, setIsEditing] = useState<string | null>(null); // stores ID of trade being edited
+  const [isEditing, setIsEditing] = useState<string | null>(null);
   const { toast } = useToast();
 
   const form = useForm<TradeFormData>({
@@ -40,7 +39,6 @@ const TradeTracker: React.FC = () => {
     },
   });
 
-  // Load trades from local storage on component mount
   useEffect(() => {
     const storedTrades = localStorage.getItem('tradeflow_trades');
     if (storedTrades) {
@@ -48,7 +46,6 @@ const TradeTracker: React.FC = () => {
     }
   }, []);
 
-  // Save trades to local storage whenever trades state changes
   useEffect(() => {
     localStorage.setItem('tradeflow_trades', JSON.stringify(trades));
   }, [trades]);
@@ -97,13 +94,13 @@ const TradeTracker: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader>
+      <CardHeader className="px-4 pt-2 pb-2">
         <CardTitle>Trade Tracker</CardTitle>
-        <CardDescription>Log and monitor your cryptocurrency trades.</CardDescription>
+        <CardDescription className="text-xs">Log and monitor your cryptocurrency trades.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
+      <CardContent className="flex-grow flex flex-col gap-3 overflow-hidden min-h-0 p-2">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 px-1">
             <FormField
               control={form.control}
               name="cryptocurrency"
@@ -117,7 +114,7 @@ const TradeTracker: React.FC = () => {
                 </FormItem>
               )}
             />
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3">
               <FormField
                 control={form.control}
                 name="entryPrice"
@@ -172,7 +169,7 @@ const TradeTracker: React.FC = () => {
           </form>
         </Form>
 
-        <h3 className="text-lg font-semibold mt-6 mb-2">Active Trades</h3>
+        <h3 className="text-md font-semibold mt-3 mb-1 px-1">Active Trades</h3>
         <ScrollArea className="flex-grow border rounded-md min-h-0">
           <Table>
             {trades.length === 0 && <TableCaption>No trades tracked yet.</TableCaption>}
@@ -189,12 +186,12 @@ const TradeTracker: React.FC = () => {
             <TableBody>
               {trades.map((trade) => (
                 <TableRow key={trade.id}>
-                  <TableCell className="font-medium">{trade.cryptocurrency}</TableCell>
-                  <TableCell>{trade.entryPrice.toLocaleString()}</TableCell>
-                  <TableCell>{trade.targetPrice.toLocaleString()}</TableCell>
-                  <TableCell>{trade.stopLoss.toLocaleString()}</TableCell>
-                  <TableCell>{trade.createdAt.toLocaleDateString()}</TableCell>
-                  <TableCell className="text-right space-x-1">
+                  <TableCell className="font-medium py-2 px-3">{trade.cryptocurrency}</TableCell>
+                  <TableCell className="py-2 px-3">{trade.entryPrice.toLocaleString()}</TableCell>
+                  <TableCell className="py-2 px-3">{trade.targetPrice.toLocaleString()}</TableCell>
+                  <TableCell className="py-2 px-3">{trade.stopLoss.toLocaleString()}</TableCell>
+                  <TableCell className="py-2 px-3">{trade.createdAt.toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right space-x-1 py-2 px-3">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(trade)} aria-label="Edit trade">
                         <Edit3 className="h-4 w-4" />
                     </Button>
