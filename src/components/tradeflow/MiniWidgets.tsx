@@ -2,18 +2,21 @@
 'use client';
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu, MessageCircle, ClipboardList } from 'lucide-react';
+import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins } from 'lucide-react'; // Ensured Coins is imported
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import TechWidgetContent from './TechWidgetContent';
 import AiWebchat from './AiWebchat';
 import TradeTracker from './TradeTracker';
 import TradingViewTechAnalysisWidget from './TradingViewTechAnalysisWidget';
+import KucoinTradePanel from './KucoinTradePanel';
 
 type TechWidgetSelection = 'overview' | 'technical_analysis';
+type TrackerViewSelection = 'trade_log' | 'kucoin_panel';
 
 const MiniWidgets: React.FC = () => {
   const [selectedTechWidget, setSelectedTechWidget] = useState<TechWidgetSelection>('overview');
+  const [selectedTrackerView, setSelectedTrackerView] = useState<TrackerViewSelection>('trade_log');
 
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
@@ -30,12 +33,12 @@ const MiniWidgets: React.FC = () => {
                 <SelectValue placeholder="Select Tech Widget" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="overview">Tech Overview</SelectItem>
-                <SelectItem value="technical_analysis">Technical Analysis</SelectItem>
+                <SelectItem value="overview"><Settings className="mr-2 h-4 w-4 inline-block" />Tech Overview</SelectItem>
+                <SelectItem value="technical_analysis"><TrendingUp className="mr-2 h-4 w-4 inline-block" />Technical Analysis</SelectItem>
               </SelectContent>
             </Select>
         </div>
-        <div className="flex-grow overflow-hidden"> {/* This div will contain the selected widget and allow it to grow */}
+        <div className="flex-grow overflow-hidden">
             {selectedTechWidget === 'overview' && <TechWidgetContent />}
             {selectedTechWidget === 'technical_analysis' && <TradingViewTechAnalysisWidget />}
         </div>
@@ -44,8 +47,23 @@ const MiniWidgets: React.FC = () => {
       <TabsContent value="ai_chat" className="flex-grow overflow-hidden">
         <AiWebchat />
       </TabsContent>
-      <TabsContent value="trade_tracker" className="flex-grow overflow-hidden">
-        <TradeTracker />
+
+      <TabsContent value="trade_tracker" className="flex-grow flex flex-col overflow-hidden">
+        <div className="p-2 border-b border-border">
+            <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Tracker View" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="trade_log"><ClipboardList className="mr-2 h-4 w-4 inline-block" />Trade Log</SelectItem>
+                <SelectItem value="kucoin_panel"><Coins className="mr-2 h-4 w-4 inline-block" />Kucoin Trade Panel</SelectItem>
+              </SelectContent>
+            </Select>
+        </div>
+        <div className="flex-grow overflow-hidden">
+            {selectedTrackerView === 'trade_log' && <TradeTracker />}
+            {selectedTrackerView === 'kucoin_panel' && <KucoinTradePanel />}
+        </div>
       </TabsContent>
     </Tabs>
   );
