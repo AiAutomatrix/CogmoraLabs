@@ -20,14 +20,14 @@ const MiniWidgets: React.FC = () => {
 
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-3"> {/* Removed mb-4 */}
+      <TabsList className="grid w-full grid-cols-3">
         <TabsTrigger value="tech_widget"><Cpu className="mr-2" />Tech</TabsTrigger>
         <TabsTrigger value="ai_chat"><MessageCircle className="mr-2" />AI Chat</TabsTrigger>
         <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden"> {/* Added mt-0 */}
-        <div className="p-2 border-b border-border">
+      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <div className="px-2 pb-2 border-b border-border"> {/* Changed p-2 to px-2 pb-2 */}
             <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Tech Widget" />
@@ -44,12 +44,12 @@ const MiniWidgets: React.FC = () => {
         </div>
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
+      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden">
         <AiWebchat />
       </TabsContent>
 
-      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden"> {/* Added mt-0 */}
-        <div className="p-2 border-b border-border">
+      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden">
+        <div className="px-2 pb-2 border-b border-border"> {/* Changed p-2 to px-2 pb-2 */}
             <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Tracker View" />
