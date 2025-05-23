@@ -34,7 +34,7 @@ type KucoinTradeFormData = z.infer<typeof kucoinTradeSchema>;
 
 const KucoinTradePanel: React.FC = () => {
   const { toast } = useToast();
-  const form = useForm<KucoinTradeFormData>({
+  const formHook = useForm<KucoinTradeFormData>({ // Renamed form to formHook
     resolver: zodResolver(kucoinTradeSchema),
     defaultValues: {
       symbol: '',
@@ -47,8 +47,8 @@ const KucoinTradePanel: React.FC = () => {
     },
   });
 
-  const watchedTradeType = form.watch('tradeType');
-  const watchedOrderType = form.watch('orderType');
+  const watchedTradeType = formHook.watch('tradeType');
+  const watchedOrderType = formHook.watch('orderType');
 
   const onSubmit: SubmitHandler<KucoinTradeFormData> = (data) => {
     toast({
@@ -60,21 +60,21 @@ const KucoinTradePanel: React.FC = () => {
       ),
     });
     console.log("Kucoin Trade Data:", data);
-    // form.reset(); 
+    // formHook.reset(); 
   };
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="px-4 pt-2 pb-2">
+    <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
+      <CardHeader className="px-3 py-2 border-b">
         <CardTitle className="flex items-center"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle>
         <CardDescription className="text-xs">Place spot & futures orders (simulated).</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col overflow-hidden min-h-0 p-2">
-        <ScrollArea className="flex-grow min-h-0">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 p-2">
+      <CardContent className="flex-grow flex flex-col p-3 overflow-y-auto min-h-0">
+        <ScrollArea className="flex-grow min-h-0"> {/* ScrollArea takes grow, internal form scrolls */}
+          <Form {...formHook}>
+            <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField
-                control={form.control}
+                control={formHook.control}
                 name="symbol"
                 render={({ field }) => (
                   <FormItem>
@@ -89,7 +89,7 @@ const KucoinTradePanel: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <FormField
-                  control={form.control}
+                  control={formHook.control}
                   name="tradeType"
                   render={({ field }) => (
                     <FormItem>
@@ -110,7 +110,7 @@ const KucoinTradePanel: React.FC = () => {
                   )}
                 />
                 <FormField
-                  control={form.control}
+                  control={formHook.control}
                   name="orderType"
                   render={({ field }) => (
                     <FormItem>
@@ -133,7 +133,7 @@ const KucoinTradePanel: React.FC = () => {
               </div>
 
               <FormField
-                control={form.control}
+                control={formHook.control}
                 name="side"
                 render={({ field }) => (
                   <FormItem>
@@ -156,7 +156,7 @@ const KucoinTradePanel: React.FC = () => {
               
               {watchedOrderType === 'limit' && (
                 <FormField
-                  control={form.control}
+                  control={formHook.control}
                   name="price"
                   render={({ field }) => (
                     <FormItem>
@@ -171,7 +171,7 @@ const KucoinTradePanel: React.FC = () => {
               )}
 
               <FormField
-                control={form.control}
+                control={formHook.control}
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
@@ -186,7 +186,7 @@ const KucoinTradePanel: React.FC = () => {
 
               {watchedTradeType === 'futures' && (
                 <FormField
-                  control={form.control}
+                  control={formHook.control}
                   name="leverage"
                   render={({ field }) => (
                     <FormItem>
@@ -200,8 +200,8 @@ const KucoinTradePanel: React.FC = () => {
                 />
               )}
               
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Placing Order..." : "Place Order"}
+              <Button type="submit" className="w-full" disabled={formHook.formState.isSubmitting}>
+                {formHook.formState.isSubmitting ? "Placing Order..." : "Place Order"}
               </Button>
             </form>
           </Form>

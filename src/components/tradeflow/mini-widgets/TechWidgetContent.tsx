@@ -8,12 +8,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const TechWidgetContent: React.FC = () => {
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="px-4 pt-2 pb-2">
+    <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
+      <CardHeader className="px-3 py-2 border-b">
         <CardTitle>Tech Overview</CardTitle>
       </CardHeader>
-      <CardContent className="flex-grow overflow-hidden min-h-0 p-0"> {/* No padding here */}
-        <ScrollArea className="h-full p-4"> {/* ScrollArea gets internal padding */}
+      <CardContent className="flex-grow flex flex-col p-3 overflow-y-auto min-h-0">
+        <ScrollArea className="flex-grow min-h-0"> {/* ScrollArea takes grow, internal content scrolls */}
           <p className="text-muted-foreground text-sm mb-4">System status and technical indicators relevant to trading operations.</p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

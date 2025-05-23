@@ -29,7 +29,7 @@ const TradeTracker: React.FC = () => {
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const form = useForm<TradeFormData>({
+  const formHook = useForm<TradeFormData>({ // Renamed form to formHook to avoid conflict
     resolver: zodResolver(TradeSchema.omit({ id: true, createdAt: true, status: true })),
     defaultValues: {
       cryptocurrency: '',
@@ -65,12 +65,12 @@ const TradeTracker: React.FC = () => {
       setTrades([...trades, newTrade]);
       toast({ title: "Trade Added", description: `${data.cryptocurrency} position tracked.` });
     }
-    form.reset();
+    formHook.reset();
   };
 
   const handleEdit = (trade: Trade) => {
     setIsEditing(trade.id);
-    form.reset({
+    formHook.reset({
         cryptocurrency: trade.cryptocurrency,
         entryPrice: trade.entryPrice,
         targetPrice: trade.targetPrice,
@@ -83,26 +83,26 @@ const TradeTracker: React.FC = () => {
     toast({ title: "Trade Deleted", description: "Trade removed from tracker.", variant: "destructive" });
     if (isEditing === id) {
         setIsEditing(null);
-        form.reset();
+        formHook.reset();
     }
   };
   
   const handleCancelEdit = () => {
     setIsEditing(null);
-    form.reset();
+    formHook.reset();
   }
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="px-4 pt-2 pb-2">
+    <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
+      <CardHeader className="px-3 py-2 border-b">
         <CardTitle>Trade Tracker</CardTitle>
         <CardDescription className="text-xs">Log and monitor your cryptocurrency trades.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-3 overflow-hidden min-h-0 p-2">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 px-1">
+      <CardContent className="flex-grow flex flex-col gap-3 p-3 overflow-y-auto min-h-0">
+        <Form {...formHook}>
+          <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
             <FormField
-              control={form.control}
+              control={formHook.control}
               name="cryptocurrency"
               render={({ field }) => (
                 <FormItem>
@@ -116,7 +116,7 @@ const TradeTracker: React.FC = () => {
             />
             <div className="grid grid-cols-3 gap-3">
               <FormField
-                control={form.control}
+                control={formHook.control}
                 name="entryPrice"
                 render={({ field }) => (
                   <FormItem>
@@ -129,7 +129,7 @@ const TradeTracker: React.FC = () => {
                 )}
               />
               <FormField
-                control={form.control}
+                control={formHook.control}
                 name="targetPrice"
                 render={({ field }) => (
                   <FormItem>
@@ -142,7 +142,7 @@ const TradeTracker: React.FC = () => {
                 )}
               />
               <FormField
-                control={form.control}
+                control={formHook.control}
                 name="stopLoss"
                 render={({ field }) => (
                   <FormItem>
@@ -169,8 +169,8 @@ const TradeTracker: React.FC = () => {
           </form>
         </Form>
 
-        <h3 className="text-md font-semibold mt-3 mb-1 px-1">Active Trades</h3>
-        <ScrollArea className="flex-grow border rounded-md min-h-0">
+        <h3 className="text-md font-semibold mt-3 mb-1">Active Trades</h3>
+        <ScrollArea className="flex-grow min-h-0"> {/* Table will scroll if needed */}
           <Table>
             {trades.length === 0 && <TableCaption>No trades tracked yet.</TableCaption>}
             <TableHeader>
