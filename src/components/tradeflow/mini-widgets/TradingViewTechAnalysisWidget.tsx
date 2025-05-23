@@ -1,7 +1,8 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo } from 'react'; // Corrected import
+import type { FC } from 'react';
 
 interface TradingViewTechAnalysisWidgetProps {
   symbol: string;
@@ -13,7 +14,7 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
     width: "100%",
     isTransparent: false,
     height: "100%",
-    symbol: symbol, // Use dynamic symbol
+    symbol: symbol, // Use dynamic symbol from props
     showIntervalTabs: false,
     displayMode: "multiple",
     locale: "en",

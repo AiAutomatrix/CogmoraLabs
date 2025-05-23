@@ -1,7 +1,7 @@
 
 'use client';
-import type React from 'react';
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react'; // Corrected import
+import type { FC } from 'react';
 import { marketAnalysisQuery, type MarketAnalysisQueryInput } from '@/ai/flows/market-analysis-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ interface AiWebchatProps {
 
 const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [cryptocurrencyInput, setCryptocurrencyInput] = useState<string>('BTCUSDT'); // Local state for the input field
+  const [cryptocurrencyInput, setCryptocurrencyInput] = useState<string>('BTCUSDT');
   const [userQuery, setUserQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -47,23 +47,30 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
         });
         return;
     }
-
+    
+    const symbolToSubmit = cryptocurrencyInput.toUpperCase();
     // Call the callback to update the symbol in the parent component
-    onSymbolSubmit(cryptocurrencyInput);
+    // Convert to EXCHANGE:SYMBOL format if not already
+    if (symbolToSubmit.includes(':')) {
+        onSymbolSubmit(symbolToSubmit);
+    } else {
+        onSymbolSubmit(`BINANCE:${symbolToSubmit}`); // Default to BINANCE or make it configurable
+    }
+
 
     const newUserMessage: ChatMessage = {
       id: crypto.randomUUID(),
       sender: 'user',
-      text: `Analysis for ${cryptocurrencyInput}: ${userQuery}`,
+      text: `Analysis for ${symbolToSubmit}: ${userQuery}`,
       timestamp: new Date(),
     };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
-    // setUserQuery(''); // Optionally clear query, or keep it for iterative questions on same symbol
+    // setUserQuery(''); // Optionally clear query
     setIsLoading(true);
 
     try {
       const input: MarketAnalysisQueryInput = {
-        cryptocurrency: cryptocurrencyInput, // Use the symbol from local input for the query
+        cryptocurrency: symbolToSubmit, 
         userQuery: userQuery,
       };
       const result = await marketAnalysisQuery(input);
@@ -97,10 +104,10 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
       <CardHeader className="px-3 pt-1 pb-2 border-b">
         <CardTitle>AI Market Analysis</CardTitle>
-        <CardDescription className="text-xs">Ask about market trends. Symbol entered below updates main chart.</CardDescription>
+        <CardDescription className="text-xs">Symbol entered updates main chart & tech widget.</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0 p-0">
-        <ScrollArea className="flex-grow min-h-0 p-3">
+        <ScrollArea className="flex-grow p-3 min-h-0"> {/* Added p-3 here for messages */}
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div
@@ -124,7 +131,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             </div>
           ))}
            {isLoading && (
-            <div className="flex justify-start gap-2 mb-3">
+            <div className="flex justify-start gap-2 mb-3 p-3"> {/* Ensure loading also respects padding */}
               <Bot className="h-6 w-6 text-primary flex-shrink-0" />
               <div className="p-3 rounded-lg bg-secondary text-secondary-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -132,12 +139,12 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             </div>
           )}
         </ScrollArea>
-        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t">
+        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t"> {/* Added p-3 here for form */}
           <Input
             type="text"
             placeholder="Cryptocurrency (e.g., LTCUSDT)"
             value={cryptocurrencyInput}
-            onChange={(e) => setCryptocurrencyInput(e.target.value.toUpperCase())}
+            onChange={(e) => setCryptocurrencyInput(e.target.value)} // Removed .toUpperCase() for now, handle in submit
             disabled={isLoading}
             aria-label="Cryptocurrency Symbol"
           />
@@ -146,7 +153,7 @@ const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
             value={userQuery}
             onChange={(e) => setUserQuery(e.target.value)}
             disabled={isLoading}
-            rows={2} // Reduced rows for compactness
+            rows={2} 
             aria-label="Your Query"
           />
           <Button type="submit" disabled={isLoading} className="w-full">

@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
@@ -54,14 +55,14 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "97%",
     autosize: true,
-    symbol: currentSymbol, // Use dynamic symbol
+    symbol: currentSymbol, // Use dynamic symbol from props
     interval: "180",
     timezone: "exchange",
     theme: "dark",
     style: "1",
     withdateranges: true,
     hide_side_toolbar: true,
-    allow_symbol_change: true,
+    allow_symbol_change: true, // Important to allow symbol changes
     save_image: false,
     studies: [
         "StochasticRSI@tv-basicstudies",

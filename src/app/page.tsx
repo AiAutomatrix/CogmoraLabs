@@ -7,11 +7,21 @@ import MiniWidgets from '@/components/tradeflow/MiniWidgets';
 import React, { useState } from 'react';
 
 export default function HomePage() {
-  const [activeSymbol, setActiveSymbol] = useState<string>('BTCUSDT'); // Default symbol
+  const [activeSymbol, setActiveSymbol] = useState<string>('BINANCE:BTCUSDT'); // Default symbol, TradingView format
 
   const handleSymbolChange = (newSymbol: string) => {
     if (newSymbol && newSymbol.trim() !== '') {
-      setActiveSymbol(newSymbol.toUpperCase());
+      // Assuming newSymbol might come from user input like "LTCUSDT"
+      // We might need to prepend "BINANCE:" or similar if not already formatted
+      // For now, let's assume the AiWebchat sends it in a usable format or we adapt it there.
+      // A common format for TradingView symbols is EXCHANGE:PAIR (e.g., BINANCE:BTCUSDT)
+      // For simplicity, let's ensure it's uppercase and trim.
+      // If the symbol from AI chat doesn't include an exchange, we might default to BINANCE.
+      let formattedSymbol = newSymbol.toUpperCase().trim();
+      if (!formattedSymbol.includes(':')) {
+        formattedSymbol = `BINANCE:${formattedSymbol}`;
+      }
+      setActiveSymbol(formattedSymbol);
     }
   };
 
@@ -24,7 +34,7 @@ export default function HomePage() {
       </header>
 
       <main className="flex-grow container mx-auto p-4 flex flex-col">
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 h-full"> {/* Changed flex-grow to h-full for more explicit height */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 h-full">
           <section className="lg:col-span-2 h-full flex flex-col">
             <MainViews currentSymbol={activeSymbol} />
           </section>
