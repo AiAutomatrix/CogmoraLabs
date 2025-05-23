@@ -44,7 +44,7 @@ const MiniWidgets: React.FC = () => {
         </div>
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden">
+      <TabsContent value="ai_chat" className="mt-0 flex-grow flex flex-col overflow-hidden">
         <AiWebchat />
       </TabsContent>
 
