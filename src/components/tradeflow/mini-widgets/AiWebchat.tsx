@@ -94,7 +94,7 @@ const AiWebchat: React.FC = () => {
         <CardTitle>AI Market Analysis</CardTitle>
         <CardDescription>Ask about cryptocurrency market trends. Default: BTCUSDT</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden">
+      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0">
         <ScrollArea className="flex-grow border rounded-md p-4 min-h-0">
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
