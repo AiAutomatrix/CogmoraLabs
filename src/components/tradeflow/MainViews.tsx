@@ -2,14 +2,19 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 
-const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]"; // Removed max-h and overflow-auto
+interface MainViewsProps {
+  currentSymbol: string;
+}
+
+const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]";
+  const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
+
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -49,7 +54,7 @@ const MainViews: React.FC = () => {
     width: "100%",
     height: "97%",
     autosize: true,
-    symbol: "BINANCE:BTCUSDT",
+    symbol: currentSymbol, // Use dynamic symbol
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -68,7 +73,7 @@ const MainViews: React.FC = () => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), []);
+  }), [currentSymbol]); // Add currentSymbol to dependency array
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -206,8 +211,6 @@ const MainViews: React.FC = () => {
     </html>
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
-  const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
-
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
       <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 mb-4">
@@ -229,7 +232,7 @@ const MainViews: React.FC = () => {
 
       <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
         <iframe
-          key="adv-chart-iframe"
+          key={currentSymbol} // Add key to force iframe reload on symbol change
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
           className={WIDGET_CONTAINER_CLASS}

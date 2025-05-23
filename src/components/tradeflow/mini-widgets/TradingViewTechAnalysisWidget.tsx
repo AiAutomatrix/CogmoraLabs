@@ -3,18 +3,22 @@
 
 import React, { useMemo } from 'react';
 
-const TradingViewTechAnalysisWidget: React.FC = () => {
+interface TradingViewTechAnalysisWidgetProps {
+  symbol: string;
+}
+
+const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps> = ({ symbol }) => {
   const widgetConfig = useMemo(() => ({
     interval: "30m",
     width: "100%",
     isTransparent: false,
     height: "100%",
-    symbol: "KUCOIN:BTCUSDT",
+    symbol: symbol, // Use dynamic symbol
     showIntervalTabs: false,
     displayMode: "multiple",
     locale: "en",
     colorTheme: "dark"
-  }), []);
+  }), [symbol]); // Add symbol to dependency array
 
   const srcDocContent = useMemo(() => `
     <!DOCTYPE html>
@@ -57,6 +61,7 @@ const TradingViewTechAnalysisWidget: React.FC = () => {
 
   return (
     <iframe
+      key={symbol} // Add key to force iframe reload on symbol change
       srcDoc={srcDocContent}
       title="TradingView Technical Analysis Widget"
       className="w-full h-full"

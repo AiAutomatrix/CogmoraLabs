@@ -2,7 +2,7 @@
 'use client';
 import type React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MessageCircle, ClipboardList, TrendingUp, Coins, Combine } from 'lucide-react';
+import { Combine, MessageCircle, ClipboardList, TrendingUp, Coins } from 'lucide-react';
 
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
 import AiWebchat from './mini-widgets/AiWebchat';
@@ -10,7 +10,12 @@ import TradeTracker from './mini-widgets/TradeTracker';
 import TradingViewTechAnalysisWidget from './mini-widgets/TradingViewTechAnalysisWidget';
 import KucoinTradePanel from './mini-widgets/KucoinTradePanel';
 
-const MiniWidgets: React.FC = () => {
+interface MiniWidgetsProps {
+  currentSymbol: string;
+  onSymbolChange: (symbol: string) => void;
+}
+
+const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
   const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full";
 
   return (
@@ -23,23 +28,23 @@ const MiniWidgets: React.FC = () => {
         <TabsTrigger value="kucoin_panel"><Coins className="mr-1 h-4 w-4 sm:mr-2" />Kucoin</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_overview" className={`flex-grow overflow-auto ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="tech_overview" className={`mt-0 flex-grow flex flex-col overflow-auto min-h-0 ${WIDGET_CONTAINER_CLASS}`}>
         <TechWidgetContent />
       </TabsContent>
 
-      <TabsContent value="tech_analysis" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
-        <TradingViewTechAnalysisWidget />
+      <TabsContent value="tech_analysis" className={`mt-0 flex-grow flex flex-col overflow-hidden min-h-0 ${WIDGET_CONTAINER_CLASS}`}>
+        <TradingViewTechAnalysisWidget symbol={currentSymbol} />
       </TabsContent>
 
-      <TabsContent value="ai_chat" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
-        <AiWebchat />
+      <TabsContent value="ai_chat" className={`mt-0 flex-grow flex flex-col overflow-hidden min-h-0 ${WIDGET_CONTAINER_CLASS}`}>
+        <AiWebchat onSymbolSubmit={onSymbolChange} />
       </TabsContent>
 
-      <TabsContent value="trade_log" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="trade_log" className={`mt-0 flex-grow flex flex-col overflow-hidden min-h-0 ${WIDGET_CONTAINER_CLASS}`}>
         <TradeTracker />
       </TabsContent>
 
-      <TabsContent value="kucoin_panel" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="kucoin_panel" className={`mt-0 flex-grow flex flex-col overflow-hidden min-h-0 ${WIDGET_CONTAINER_CLASS}`}>
         <KucoinTradePanel />
       </TabsContent>
     </Tabs>

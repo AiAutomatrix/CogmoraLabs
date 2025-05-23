@@ -1,8 +1,20 @@
+
+'use client';
+
 import TradeFlowLogo from '@/components/tradeflow/TradeFlowLogo';
 import MainViews from '@/components/tradeflow/MainViews';
 import MiniWidgets from '@/components/tradeflow/MiniWidgets';
+import React, { useState } from 'react';
 
 export default function HomePage() {
+  const [activeSymbol, setActiveSymbol] = useState<string>('BTCUSDT'); // Default symbol
+
+  const handleSymbolChange = (newSymbol: string) => {
+    if (newSymbol && newSymbol.trim() !== '') {
+      setActiveSymbol(newSymbol.toUpperCase());
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <header className="p-4 border-b border-border shadow-md sticky top-0 bg-background z-50">
@@ -14,10 +26,10 @@ export default function HomePage() {
       <main className="flex-grow container mx-auto p-4 flex flex-col">
         <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 h-full"> {/* Changed flex-grow to h-full for more explicit height */}
           <section className="lg:col-span-2 h-full flex flex-col">
-            <MainViews />
+            <MainViews currentSymbol={activeSymbol} />
           </section>
           <aside className="lg:col-span-1 h-full flex flex-col">
-            <MiniWidgets />
+            <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
           </aside>
         </div>
       </main>

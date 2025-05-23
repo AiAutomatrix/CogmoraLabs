@@ -12,10 +12,13 @@ import { Bot, User, Loader2 } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 
+interface AiWebchatProps {
+  onSymbolSubmit: (symbol: string) => void;
+}
 
-const AiWebchat: React.FC = () => {
+const AiWebchat: React.FC<AiWebchatProps> = ({ onSymbolSubmit }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [cryptocurrency, setCryptocurrency] = useState<string>('BTCUSDT');
+  const [cryptocurrencyInput, setCryptocurrencyInput] = useState<string>('BTCUSDT'); // Local state for the input field
   const [userQuery, setUserQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -36,7 +39,7 @@ const AiWebchat: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userQuery.trim() || !cryptocurrency.trim()) {
+    if (!userQuery.trim() || !cryptocurrencyInput.trim()) {
         toast({
             title: "Missing Information",
             description: "Please enter both a cryptocurrency symbol and your query.",
@@ -45,19 +48,22 @@ const AiWebchat: React.FC = () => {
         return;
     }
 
+    // Call the callback to update the symbol in the parent component
+    onSymbolSubmit(cryptocurrencyInput);
+
     const newUserMessage: ChatMessage = {
       id: crypto.randomUUID(),
       sender: 'user',
-      text: `Analysis for ${cryptocurrency}: ${userQuery}`,
+      text: `Analysis for ${cryptocurrencyInput}: ${userQuery}`,
       timestamp: new Date(),
     };
     setMessages((prevMessages) => [...prevMessages, newUserMessage]);
-    setUserQuery('');
+    // setUserQuery(''); // Optionally clear query, or keep it for iterative questions on same symbol
     setIsLoading(true);
 
     try {
       const input: MarketAnalysisQueryInput = {
-        cryptocurrency: cryptocurrency,
+        cryptocurrency: cryptocurrencyInput, // Use the symbol from local input for the query
         userQuery: userQuery,
       };
       const result = await marketAnalysisQuery(input);
@@ -89,12 +95,12 @@ const AiWebchat: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b"> {/* Reduced top padding */}
+      <CardHeader className="px-3 pt-1 pb-2 border-b">
         <CardTitle>AI Market Analysis</CardTitle>
-        <CardDescription>Ask about cryptocurrency market trends. Default: BTCUSDT</CardDescription>
+        <CardDescription className="text-xs">Ask about market trends. Symbol entered below updates main chart.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0 p-0"> {/* Removed CardContent padding */}
-        <ScrollArea className="flex-grow min-h-0 p-3"> {/* Added padding to ScrollArea */}
+      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0 p-0">
+        <ScrollArea className="flex-grow min-h-0 p-3">
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div
@@ -126,12 +132,12 @@ const AiWebchat: React.FC = () => {
             </div>
           )}
         </ScrollArea>
-        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t"> {/* Added padding to form, and border-t */}
+        <form onSubmit={handleSubmit} className="p-3 space-y-2 border-t">
           <Input
             type="text"
-            placeholder="Cryptocurrency (e.g., BTCUSDT)"
-            value={cryptocurrency}
-            onChange={(e) => setCryptocurrency(e.target.value.toUpperCase())}
+            placeholder="Cryptocurrency (e.g., LTCUSDT)"
+            value={cryptocurrencyInput}
+            onChange={(e) => setCryptocurrencyInput(e.target.value.toUpperCase())}
             disabled={isLoading}
             aria-label="Cryptocurrency Symbol"
           />
@@ -140,11 +146,11 @@ const AiWebchat: React.FC = () => {
             value={userQuery}
             onChange={(e) => setUserQuery(e.target.value)}
             disabled={isLoading}
-            rows={3}
+            rows={2} // Reduced rows for compactness
             aria-label="Your Query"
           />
           <Button type="submit" disabled={isLoading} className="w-full">
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Send'}
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Send & Update Charts'}
           </Button>
         </form>
       </CardContent>
