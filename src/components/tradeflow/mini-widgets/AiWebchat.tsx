@@ -93,8 +93,8 @@ const AiWebchat: React.FC = () => {
         <CardTitle>AI Market Analysis</CardTitle>
         <CardDescription>Ask about cryptocurrency market trends. Default: BTCUSDT</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0"> {/* Ensure this can grow and shrink */}
-        <ScrollArea className="flex-grow border rounded-md p-4 min-h-0"> {/* Scroll area takes up space */}
+      <CardContent className="flex-grow flex flex-col gap-2 overflow-hidden min-h-0 p-0"> {/* No padding here */}
+        <ScrollArea className="flex-grow border rounded-md p-4 min-h-0"> {/* Scroll area gets internal padding */}
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div
@@ -126,7 +126,7 @@ const AiWebchat: React.FC = () => {
             </div>
           )}
         </ScrollArea>
-        <form onSubmit={handleSubmit} className="p-2 space-y-2"> {/* Form with padding */}
+        <form onSubmit={handleSubmit} className="p-2 space-y-2"> {/* Form gets padding */}
           <Input
             type="text"
             placeholder="Cryptocurrency (e.g., BTCUSDT)"

@@ -3,7 +3,7 @@
 import React from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins, Combine } from 'lucide-react';
+import { MessageCircle, ClipboardList, TrendingUp, Coins, Combine } from 'lucide-react';
 
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
 import AiWebchat from './mini-widgets/AiWebchat';

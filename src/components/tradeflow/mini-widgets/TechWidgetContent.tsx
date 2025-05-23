@@ -1,3 +1,4 @@
+
 import type React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Cpu, Wifi } from 'lucide-react';
@@ -11,8 +12,8 @@ const TechWidgetContent: React.FC = () => {
       <CardHeader className="px-4 pt-2 pb-2">
         <CardTitle>Tech Overview</CardTitle>
       </CardHeader>
-      <CardContent className="flex-grow overflow-hidden min-h-0 p-0">
-        <ScrollArea className="h-full p-4">
+      <CardContent className="flex-grow overflow-hidden min-h-0 p-0"> {/* No padding here */}
+        <ScrollArea className="h-full p-4"> {/* ScrollArea gets internal padding */}
           <p className="text-muted-foreground text-sm mb-4">System status and technical indicators relevant to trading operations.</p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
