@@ -9,7 +9,8 @@ import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
+  // Removed max-h and overflow-auto as children will handle their own sizing/scroll
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]";
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -129,7 +130,7 @@ const MainViews: React.FC = () => {
   `, [heatmapConfigObject, tvWidgetBaseStyle]);
 
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle}
+    ${tvWidgetBaseStyle} 
     html, body {
       overflow: auto !important; /* Allow scrolling for screeners */
     }
@@ -137,15 +138,15 @@ const MainViews: React.FC = () => {
     ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
     ::-webkit-scrollbar-thumb { background-color: #363a45; border-radius: 10px; border: 6px solid #1e222d; }
     ::-webkit-scrollbar-thumb:hover { background-color: #4f535d; }
-    .tradingview-widget-container { padding-bottom: 20px; height: 100%; box-sizing: border-box; }
-    .tradingview-widget-container__widget { height: 100% !important; width: 100% !important; overflow: hidden; }
+    .tradingview-widget-container { padding-bottom: 20px; /* height: 100%; /* Let outer iframe control total height */ box-sizing: border-box; }
+    .tradingview-widget-container__widget { /* height: 100% !important; */ width: 100% !important; overflow: hidden; }
   `, [tvWidgetBaseStyle]);
 
   const optionsScreenerConfigObject = useMemo(() => ({
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock",
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -218,15 +219,15 @@ const MainViews: React.FC = () => {
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="flex-grow overflow-auto">
+      <TabsContent value="blog" className="mt-0 flex-grow overflow-auto min-h-0">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="flex-grow overflow-auto">
+      <TabsContent value="dashboard" className="mt-0 flex-grow overflow-auto min-h-0">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
+      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <iframe
           key="adv-chart-iframe"
           srcDoc={chartSrcDoc}
@@ -237,7 +238,7 @@ const MainViews: React.FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-hidden">
+      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <iframe
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
@@ -248,27 +249,27 @@ const MainViews: React.FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto">
+      <TabsContent value="options_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              style={{ border: 'none' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto">
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              style={{ border: 'none' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
