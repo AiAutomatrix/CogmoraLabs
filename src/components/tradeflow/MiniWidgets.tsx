@@ -27,7 +27,7 @@ const MiniWidgets: React.FC = () => {
       </TabsList>
 
       <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden">
-        <div className="px-2 pb-2 border-b border-border"> {/* Removed top padding */}
+        <div className="px-2 pb-2 border-b border-border"> {/* Tech Select wrapper */}
             <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Tech Widget" />
@@ -38,7 +38,7 @@ const MiniWidgets: React.FC = () => {
               </SelectContent>
             </Select>
         </div>
-        <div className="flex-grow overflow-hidden">
+        <div className="flex-grow overflow-hidden"> {/* Tech content wrapper */}
             {selectedTechWidget === 'overview' && <TechWidgetContent />}
             {selectedTechWidget === 'technical_analysis' && <TradingViewTechAnalysisWidget />}
         </div>
@@ -49,7 +49,7 @@ const MiniWidgets: React.FC = () => {
       </TabsContent>
 
       <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden">
-        <div className="px-2 pb-2 border-b border-border"> {/* Removed top padding */}
+        <div className="px-2 pb-2 border-b border-border"> {/* Tracker Select wrapper - styled same as Tech's */}
             <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select Tracker View" />
@@ -60,7 +60,7 @@ const MiniWidgets: React.FC = () => {
               </SelectContent>
             </Select>
         </div>
-        <div className="flex-grow overflow-hidden">
+        <div className="flex-grow overflow-hidden"> {/* Tracker content wrapper - styled same as Tech's */}
             {selectedTrackerView === 'trade_log' && <TradeTracker />}
             {selectedTrackerView === 'kucoin_panel' && <KucoinTradePanel />}
         </div>
