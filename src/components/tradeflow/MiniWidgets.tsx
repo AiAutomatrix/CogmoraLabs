@@ -5,11 +5,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import TechWidgetContent from './TechWidgetContent';
-import AiWebchat from './AiWebchat';
-import TradeTracker from './TradeTracker';
-import TradingViewTechAnalysisWidget from './TradingViewTechAnalysisWidget';
-import KucoinTradePanel from './KucoinTradePanel';
+import TechWidgetContent from './mini-widgets/TechWidgetContent';
+import AiWebchat from './mini-widgets/AiWebchat';
+import TradeTracker from './mini-widgets/TradeTracker';
+import TradingViewTechAnalysisWidget from './mini-widgets/TradingViewTechAnalysisWidget';
+import KucoinTradePanel from './mini-widgets/KucoinTradePanel';
 
 type TechWidgetSelection = 'overview' | 'technical_analysis';
 type TrackerViewSelection = 'trade_log' | 'kucoin_panel';
@@ -38,7 +38,7 @@ const MiniWidgets: React.FC = () => {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex-grow overflow-hidden min-h-0"> {/* Tech content wrapper */}
+        <div className="flex-grow overflow-hidden min-h-0">
             {selectedTechWidget === 'overview' && <TechWidgetContent />}
             {selectedTechWidget === 'technical_analysis' && <TradingViewTechAnalysisWidget />}
         </div>
@@ -60,7 +60,7 @@ const MiniWidgets: React.FC = () => {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex-grow overflow-hidden min-h-0"> {/* Tracker content wrapper */}
+        <div className="flex-grow overflow-hidden min-h-0">
             {selectedTrackerView === 'trade_log' && <TradeTracker />}
             {selectedTrackerView === 'kucoin_panel' && <KucoinTradePanel />}
         </div>

@@ -5,14 +5,14 @@ import React, { useMemo } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 } from 'lucide-react';
-import BlogContent from './BlogContent';
-import DashboardContent from './DashboardContent';
+import BlogContent from './main-views/BlogContent';
+import DashboardContent from './main-views/DashboardContent';
 // TradingViewChartWidget is no longer used for the main chart but kept for potential other uses.
 // import { TradingViewChartWidget } from './TradingViewChartWidget';
 
 
 const MainViews: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]"; // Removed max-h and overflow-auto for iframes
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px]"; 
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -49,29 +49,29 @@ const MainViews: React.FC = () => {
 
   // Configuration for the Advanced Real-Time Chart (based on user's working example)
   const chartConfigObject = useMemo(() => ({
-    container_id: "technical-analysis-chart-demo", // From user's example
+    container_id: "technical-analysis-chart-demo", 
     width: "100%",
-    height: "112%", // From user's example
-    autosize: true, // From user's example
-    symbol: "BINANCE:BTCUSDT", // Default, was KUCOIN:BTCUSDT in example
-    interval: "180", // '3H', from user's example
-    timezone: "exchange", // From user's example
+    height: "97%", 
+    autosize: true, 
+    symbol: "BINANCE:BTCUSDT", 
+    interval: "180", 
+    timezone: "exchange", 
     theme: "dark",
     style: "1",
-    withdateranges: true, // From user's example
-    hide_side_toolbar: true, // From user's example
+    withdateranges: true, 
+    hide_side_toolbar: true, 
     allow_symbol_change: true,
     save_image: false,
-    studies: [ // From user's example
+    studies: [ 
         "StochasticRSI@tv-basicstudies",
         "MASimple@tv-basicstudies"
     ],
-    show_popup_button: true, // From user's example
-    popup_width: "1000", // From user's example
-    popup_height: "650", // From user's example
-    support_host: "https://www.tradingview.com", // From user's example
+    show_popup_button: true, 
+    popup_width: "1000", 
+    popup_height: "650", 
+    support_host: "https://www.tradingview.com", 
     locale: "en",
-    enable_publishing: false, // Kept from previous TradeFlow setup
+    enable_publishing: false, 
   }), []);
 
   const chartSrcDoc = useMemo(() => `
@@ -281,4 +281,3 @@ const MainViews: React.FC = () => {
 };
 
 export default MainViews;
-
