@@ -1,3 +1,4 @@
+
 'use client';
 import type React from 'react';
 import { useState, useRef, useEffect } from 'react';
@@ -94,7 +95,7 @@ const AiWebchat: React.FC = () => {
         <CardDescription>Ask about cryptocurrency market trends. Default: BTCUSDT</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
-        <ScrollArea className="flex-grow h-[300px] border rounded-md p-4" ref={scrollAreaRef}>
+        <ScrollArea className="flex-grow border rounded-md p-4" ref={scrollAreaRef}> {/* Removed h-[300px] */}
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div

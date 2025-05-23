@@ -1,3 +1,4 @@
+
 'use client';
 import type React from 'react';
 import { useState, useEffect } from 'react';
@@ -172,7 +173,7 @@ const TradeTracker: React.FC = () => {
         </Form>
 
         <h3 className="text-lg font-semibold mt-6 mb-2">Active Trades</h3>
-        <ScrollArea className="flex-grow h-[200px] border rounded-md">
+        <ScrollArea className="flex-grow border rounded-md"> {/* Removed h-[200px] */}
           <Table>
             {trades.length === 0 && <TableCaption>No trades tracked yet.</TableCaption>}
             <TableHeader>
@@ -212,4 +213,3 @@ const TradeTracker: React.FC = () => {
 };
 
 export default TradeTracker;
-

@@ -2,7 +2,7 @@
 'use client';
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins } from 'lucide-react'; // Ensured Coins is imported
+import { Cpu, MessageCircle, ClipboardList, Settings, TrendingUp, Coins } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import TechWidgetContent from './TechWidgetContent';
@@ -20,13 +20,13 @@ const MiniWidgets: React.FC = () => {
 
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-3 mb-4">
+      <TabsList className="grid w-full grid-cols-3"> {/* Removed mb-4 */}
         <TabsTrigger value="tech_widget"><Cpu className="mr-2" />Tech</TabsTrigger>
         <TabsTrigger value="ai_chat"><MessageCircle className="mr-2" />AI Chat</TabsTrigger>
         <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_widget" className="flex-grow flex flex-col overflow-hidden">
+      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden"> {/* Added mt-0 */}
         <div className="p-2 border-b border-border">
             <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
               <SelectTrigger className="w-full">
@@ -44,11 +44,11 @@ const MiniWidgets: React.FC = () => {
         </div>
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="flex-grow overflow-hidden">
+      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
         <AiWebchat />
       </TabsContent>
 
-      <TabsContent value="trade_tracker" className="flex-grow flex flex-col overflow-hidden">
+      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden"> {/* Added mt-0 */}
         <div className="p-2 border-b border-border">
             <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
               <SelectTrigger className="w-full">
