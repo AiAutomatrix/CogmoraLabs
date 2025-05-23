@@ -26,8 +26,13 @@ const MiniWidgets: React.FC = () => {
         <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pb-2 pt-0 gap-2">
-        <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
+      {/* Tech Tab Content */}
+      <TabsContent value="tech_widget" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pt-0 pb-2">
+        <Select 
+          value={selectedTechWidget} 
+          onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}
+          className="mb-2"
+        >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select Tech Widget" />
           </SelectTrigger>
@@ -42,12 +47,18 @@ const MiniWidgets: React.FC = () => {
         </div>
       </TabsContent>
 
+      {/* AI Chat Tab Content */}
       <TabsContent value="ai_chat" className="mt-0 flex-grow flex flex-col overflow-hidden">
         <AiWebchat />
       </TabsContent>
 
-      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pb-2 pt-0 gap-2">
-        <Select value={selectedTrackerView} onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}>
+      {/* Tracker Tab Content */}
+      <TabsContent value="trade_tracker" className="mt-0 flex-grow flex flex-col overflow-hidden px-2 pt-0 pb-2">
+        <Select 
+          value={selectedTrackerView} 
+          onValueChange={(value) => setSelectedTrackerView(value as TrackerViewSelection)}
+          className="mb-2"
+        >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select Tracker View" />
           </SelectTrigger>
