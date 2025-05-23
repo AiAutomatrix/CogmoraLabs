@@ -51,7 +51,7 @@ const MainViews: React.FC = () => {
   const chartConfigObject = useMemo(() => ({
     container_id: "technical-analysis-chart-demo", // From user's example
     width: "100%",
-    height: "97%", // From user's example
+    height: "112%", // From user's example
     autosize: true, // From user's example
     symbol: "BINANCE:BTCUSDT", // Default, was KUCOIN:BTCUSDT in example
     interval: "180", // '3H', from user's example
