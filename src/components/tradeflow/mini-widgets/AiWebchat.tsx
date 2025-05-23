@@ -90,11 +90,11 @@ const AiWebchat: React.FC = () => {
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="px-6 pt-3 pb-4">
+      <CardHeader className="px-4 py-2">
         <CardTitle>AI Market Analysis</CardTitle>
         <CardDescription>Ask about cryptocurrency market trends. Default: BTCUSDT</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
+      <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden p-4">
         <ScrollArea className="flex-grow border rounded-md p-4 min-h-0">
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
