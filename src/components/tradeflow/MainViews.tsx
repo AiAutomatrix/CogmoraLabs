@@ -8,11 +8,8 @@ import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2 }
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 
-const MainViews: FC = () => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full"; 
-  // Consistent class for TabsContent to ensure they grow and have a minimum height
-  const TABS_CONTENT_CLASS = "mt-0 flex-grow h-full min-h-[500px] flex flex-col overflow-hidden";
-
+const MainViews: React.FC = () => {
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -20,21 +17,26 @@ const MainViews: FC = () => {
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: #222222; 
+      background-color: #222222; /* Match app's dark background */
       box-sizing: border-box;
-      overflow: hidden; 
+      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
     }
     *, *::before, *::after { box-sizing: inherit; }
-    .tradingview-widget-container { 
+    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
       width: 100%;
       height: 100%;
-      position: relative; 
+      position: relative;
     }
-    .tradingview-widget-container__widget { 
-      width: 100% !important; 
+    .tradingview-widget-container__widget { /* Used by embed scripts */
+      width: 100% !important;
       height: 100% !important;
-      overflow: hidden; 
+      overflow: hidden;
     }
+    /* Default scrollbar style for heatmap - can be overridden for screeners */
+    ::-webkit-scrollbar { width: 12px; height: 12px; }
+    ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
+    ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
+    ::-webkit-scrollbar-thumb:hover { background-color: #718096; }
     .tradingview-widget-copyright {
       position:absolute; bottom:0; left:0; right:0; text-align:center; padding:2px 0; font-size:11px; color:#9db2bd; background-color:rgba(34,34,34,0.8); box-sizing:border-box; z-index:10;
     }
@@ -42,30 +44,31 @@ const MainViews: FC = () => {
     .tradingview-widget-copyright a:hover { text-decoration: underline; }
   `, []);
 
+  // Configuration for the Advanced Real-Time Chart (based on user's working example)
   const chartConfigObject = useMemo(() => ({
-    container_id: "technical-analysis-chart-demo", 
+    container_id: "technical-analysis-chart-demo", // From user's example
     width: "100%",
-    height: "97%", 
-    autosize: true, 
-    symbol: "BINANCE:BTCUSDT", 
-    interval: "180", 
-    timezone: "exchange", 
+    height: "97%", // From user's example
+    autosize: true, // From user's example
+    symbol: "BINANCE:BTCUSDT", // Default, was KUCOIN:BTCUSDT in example
+    interval: "180", // '3H', from user's example
+    timezone: "exchange", // From user's example
     theme: "dark",
     style: "1",
-    withdateranges: true, 
-    hide_side_toolbar: true, 
+    withdateranges: true, // From user's example
+    hide_side_toolbar: true, // From user's example
     allow_symbol_change: true,
     save_image: false,
-    studies: [ 
+    studies: [ // From user's example
         "StochasticRSI@tv-basicstudies",
         "MASimple@tv-basicstudies"
     ],
-    show_popup_button: true, 
-    popup_width: "1000", 
-    popup_height: "650", 
-    support_host: "https://www.tradingview.com", 
+    show_popup_button: true, // From user's example
+    popup_width: "1000", // From user's example
+    popup_height: "650", // From user's example
+    support_host: "https://www.tradingview.com", // From user's example
     locale: "en",
-    enable_publishing: false, 
+    enable_publishing: false, // Kept from previous TradeFlow setup
   }), []);
 
   const chartSrcDoc = useMemo(() => `
@@ -98,7 +101,7 @@ const MainViews: FC = () => {
     locale: "en",
     symbolUrl: "",
     colorTheme: "dark",
-    hasTransparentBackground: false, 
+    hasTransparentBackground: true, // Match iframe body bg
     width: "100%",
     height: "100%"
   }), []);
@@ -126,7 +129,7 @@ const MainViews: FC = () => {
   `, [heatmapConfigObject, tvWidgetBaseStyle]);
 
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle} 
+    ${tvWidgetBaseStyle}
     html, body {
       overflow: auto !important; /* Allow scrolling for screeners */
     }
@@ -142,11 +145,11 @@ const MainViews: FC = () => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", 
+    screener_type: "stock",
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: false,
+    isTransparent: true, // Match iframe body bg
   }), []);
 
   const optionsScreenerSrcDoc = useMemo(() => `
@@ -179,7 +182,7 @@ const MainViews: FC = () => {
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
-    isTransparent: false,
+    isTransparent: true, // Match iframe body bg
   }), []);
 
   const cryptoScreenerSrcDoc = useMemo(() => `
@@ -206,7 +209,7 @@ const MainViews: FC = () => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6">
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 mb-4">
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
@@ -215,15 +218,15 @@ const MainViews: FC = () => {
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className={TABS_CONTENT_CLASS}>
+      <TabsContent value="blog" className="flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className={TABS_CONTENT_CLASS}>
+      <TabsContent value="dashboard" className="flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className={TABS_CONTENT_CLASS}>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
           key="adv-chart-iframe"
           srcDoc={chartSrcDoc}
@@ -234,7 +237,7 @@ const MainViews: FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className={TABS_CONTENT_CLASS}>
+      <TabsContent value="heatmap" className="flex-grow overflow-hidden">
         <iframe
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
@@ -245,30 +248,33 @@ const MainViews: FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="options_screener" className={TABS_CONTENT_CLASS}>
-         <iframe
-            key="options-screener-iframe"
-            srcDoc={optionsScreenerSrcDoc}
-            title="TradingView Options/Stock Screener"
-            className={WIDGET_CONTAINER_CLASS}
-            style={{ border: 'none' }} 
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+        <div className="h-full w-full overflow-auto">
+            <iframe
+              key="options-screener-iframe"
+              srcDoc={optionsScreenerSrcDoc}
+              title="TradingView Options/Stock Screener"
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+        </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className={TABS_CONTENT_CLASS}>
-          <iframe
-            key="crypto-screener-iframe"
-            srcDoc={cryptoScreenerSrcDoc}
-            title="TradingView Crypto Screener"
-            className={WIDGET_CONTAINER_CLASS}
-            style={{ border: 'none'}}
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-          />
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+         <div className="h-full w-full overflow-auto">
+            <iframe
+              key="crypto-screener-iframe"
+              srcDoc={cryptoScreenerSrcDoc}
+              title="TradingView Crypto Screener"
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+        </div>
       </TabsContent>
     </Tabs>
   );
 };
 
 export default MainViews;
-
