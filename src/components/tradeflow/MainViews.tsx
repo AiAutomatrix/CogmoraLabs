@@ -10,6 +10,9 @@ import DashboardContent from './main-views/DashboardContent';
 
 const MainViews: FC = () => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full"; 
+  // Consistent class for TabsContent to ensure they grow and have a minimum height
+  const TABS_CONTENT_CLASS = "mt-0 flex-grow h-full min-h-[500px] flex flex-col overflow-hidden";
+
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -212,15 +215,15 @@ const MainViews: FC = () => {
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="blog" className={TABS_CONTENT_CLASS}>
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="dashboard" className={TABS_CONTENT_CLASS}>
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="chart" className={TABS_CONTENT_CLASS}>
         <iframe
           key="adv-chart-iframe"
           srcDoc={chartSrcDoc}
@@ -231,7 +234,7 @@ const MainViews: FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="heatmap" className={TABS_CONTENT_CLASS}>
         <iframe
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
@@ -242,7 +245,7 @@ const MainViews: FC = () => {
         />
       </TabsContent>
 
-      <TabsContent value="options_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="options_screener" className={TABS_CONTENT_CLASS}>
          <iframe
             key="options-screener-iframe"
             srcDoc={optionsScreenerSrcDoc}
@@ -253,7 +256,7 @@ const MainViews: FC = () => {
           />
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="crypto_screener" className={TABS_CONTENT_CLASS}>
           <iframe
             key="crypto-screener-iframe"
             srcDoc={cryptoScreenerSrcDoc}
@@ -268,3 +271,4 @@ const MainViews: FC = () => {
 };
 
 export default MainViews;
+
