@@ -13,7 +13,6 @@ import TradingViewTechAnalysisWidget from './TradingViewTechAnalysisWidget';
 type TechWidgetSelection = 'overview' | 'technical_analysis';
 
 const MiniWidgets: React.FC = () => {
-  const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full";
   const [selectedTechWidget, setSelectedTechWidget] = useState<TechWidgetSelection>('overview');
 
   return (
@@ -24,7 +23,7 @@ const MiniWidgets: React.FC = () => {
         <TabsTrigger value="trade_tracker"><ClipboardList className="mr-2" />Tracker</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_widget" className={`flex-grow flex flex-col overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="tech_widget" className="flex-grow flex flex-col overflow-hidden">
         <div className="p-2 border-b border-border">
             <Select value={selectedTechWidget} onValueChange={(value) => setSelectedTechWidget(value as TechWidgetSelection)}>
               <SelectTrigger className="w-full">
@@ -36,16 +35,16 @@ const MiniWidgets: React.FC = () => {
               </SelectContent>
             </Select>
         </div>
-        <div className="flex-grow overflow-hidden"> {/* This div will contain the selected widget */}
+        <div className="flex-grow overflow-hidden"> {/* This div will contain the selected widget and allow it to grow */}
             {selectedTechWidget === 'overview' && <TechWidgetContent />}
             {selectedTechWidget === 'technical_analysis' && <TradingViewTechAnalysisWidget />}
         </div>
       </TabsContent>
 
-      <TabsContent value="ai_chat" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="ai_chat" className="flex-grow overflow-hidden">
         <AiWebchat />
       </TabsContent>
-      <TabsContent value="trade_tracker" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="trade_tracker" className="flex-grow overflow-hidden">
         <TradeTracker />
       </TabsContent>
     </Tabs>
