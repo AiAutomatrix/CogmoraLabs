@@ -89,3 +89,4 @@ export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses
   const data = await fetchApiData<PairDetail[]>(`/tokens/v1/${chainId}/${tokenAddresses}`);
   return data || [];
 }
+

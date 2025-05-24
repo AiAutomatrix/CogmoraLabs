@@ -54,8 +54,6 @@ type DexScreenerViewType =
 
 type DexScreenerData = TokenProfileItem[] | TokenBoostItem[] | OrderInfoItem[] | PairData | PairDetail[] | null;
 
-const ITEMS_PER_PAGE = 10; // For pagination if implemented later
-
 // Helper function to format currency
 const formatCurrency = (value?: number | string | null, fractionDigits = 2) => {
   if (value == null || Number.isNaN(Number(value))) return '-';
@@ -91,13 +89,12 @@ const DexScreenerContent: React.FC = () => {
 
   const fetchDataForView = useCallback(async (view: DexScreenerViewType, forceFetch: boolean = false) => {
     if (!forceFetch && selectedView === view && data !== null && !['tokenOrders', 'pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(view)) {
-      // For static list views, don't refetch if data already exists unless forced
       return;
     }
 
     setIsLoading(true);
     setError(null);
-    setData(null); // Clear previous data
+    setData(null); 
     
     let result: DexScreenerData = null;
     try {
@@ -165,11 +162,10 @@ const DexScreenerContent: React.FC = () => {
   }, [selectedView, data, toast, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
   useEffect(() => {
-    // Fetch data for initial view or when view changes (only for non-input views)
     if (!['tokenOrders', 'pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) {
       fetchDataForView(selectedView);
     } else {
-      setData(null); // Clear data when switching to an input-based view until user fetches
+      setData(null); 
       setIsLoading(false);
     }
   }, [selectedView, fetchDataForView]);
@@ -185,6 +181,11 @@ const DexScreenerContent: React.FC = () => {
       console.error("Failed to copy address: ", err);
       toast({ title: "Copy Failed", description: "Could not copy address.", variant: "destructive"});
     });
+  };
+  
+  const truncateAddress = (address: string | null | undefined, startChars = 6, endChars = 4) => {
+    if (!address) return '-';
+    return address.length <= startChars + endChars ? address : `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
   };
 
   const renderDescriptionInteraction = (description?: string | null) => {
@@ -228,7 +229,7 @@ const DexScreenerContent: React.FC = () => {
   };
   
   const renderPairInfoDialog = (pair: PairDetail) => (
-    <Dialog>
+    <Dialog open={selectedPairForDialog?.pairAddress === pair.pairAddress} onOpenChange={(isOpen) => { if(!isOpen) setSelectedPairForDialog(null); else setSelectedPairForDialog(pair);}}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedPairForDialog(pair)}>
           <Eye className="h-4 w-4" />
@@ -237,51 +238,51 @@ const DexScreenerContent: React.FC = () => {
       {selectedPairForDialog && selectedPairForDialog.pairAddress === pair.pairAddress && (
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pair Details: {pair.baseToken?.symbol}/{pair.quoteToken?.symbol}</DialogTitle>
-            <DialogDescription>{pair.pairAddress}</DialogDescription>
+            <DialogTitle>Pair: {selectedPairForDialog.baseToken?.symbol}/{selectedPairForDialog.quoteToken?.symbol}</DialogTitle>
+            <DialogDescription className="text-xs break-all">{selectedPairForDialog.pairAddress}</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4 text-sm">
-            {pair.info?.imageUrl && (
-              <div className="relative h-40 w-full mb-2">
-                <Image src={pair.info.imageUrl} alt="Pair image" layout="fill" style={{objectFit:"contain"}} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"/>
+          <div className="grid gap-3 py-4 text-sm max-h-[60vh] overflow-y-auto pr-2">
+            {selectedPairForDialog.info?.imageUrl && (
+              <div className="relative h-40 w-full mb-2 rounded overflow-hidden">
+                <Image src={selectedPairForDialog.info.imageUrl} alt="Pair image" layout="fill" style={{objectFit:"contain"}} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"/>
               </div>
             )}
-            <p><strong>Price (USD):</strong> {formatCurrency(pair.priceUsd, 6)}</p>
-            <p><strong>Price (Native):</strong> {pair.priceNative}</p>
-            <p><strong>Market Cap:</strong> {formatCurrency(pair.marketCap)}</p>
-            <p><strong>FDV:</strong> {formatCurrency(pair.fdv)}</p>
-            <p><strong>Liquidity (USD):</strong> {formatCurrency(pair.liquidity?.usd)}</p>
-            <p><strong>Created:</strong> {pair.pairCreatedAt ? format(fromUnixTime(pair.pairCreatedAt), 'PPpp') : '-'}</p>
+            <p><strong>Price (USD):</strong> {formatCurrency(selectedPairForDialog.priceUsd, 8)}</p>
+            <p><strong>Price (Native):</strong> {selectedPairForDialog.priceNative || '-'}</p>
+            <p><strong>Market Cap:</strong> {formatCurrency(selectedPairForDialog.marketCap)}</p>
+            <p><strong>FDV:</strong> {formatCurrency(selectedPairForDialog.fdv)}</p>
+            <p><strong>Liquidity (USD):</strong> {formatCurrency(selectedPairForDialog.liquidity?.usd)}</p>
+            <p><strong>Created:</strong> {selectedPairForDialog.pairCreatedAt ? format(fromUnixTime(selectedPairForDialog.pairCreatedAt), 'PPpp') : '-'}</p>
             
-            {pair.txns && (
-              <div><strong>Transactions:</strong>
-                <ul className="list-disc pl-5">
-                  {Object.entries(pair.txns).map(([key, val]) => <li key={key}>{key}: Buys: {val.buys}, Sells: {val.sells}</li>)}
+            {selectedPairForDialog.txns && (
+              <div><strong>Transactions (Buys/Sells):</strong>
+                <ul className="list-disc pl-5 text-xs">
+                  {Object.entries(selectedPairForDialog.txns).map(([key, val]) => <li key={key}>{key.toUpperCase()}: {val.buys} / {val.sells}</li>)}
                 </ul>
               </div>
             )}
-             {pair.volume && (
+             {selectedPairForDialog.volume && (
               <div><strong>Volume:</strong>
-                <ul className="list-disc pl-5">
-                  {Object.entries(pair.volume).map(([key, val]) => <li key={key}>{key}: {formatCurrency(val)}</li>)}
+                <ul className="list-disc pl-5 text-xs">
+                  {Object.entries(selectedPairForDialog.volume).map(([key, val]) => <li key={key}>{key.toUpperCase()}: {formatCurrency(val)}</li>)}
                 </ul>
               </div>
             )}
-            {pair.priceChange && (
-               <div><strong>Price Change:</strong>
-                <ul className="list-disc pl-5">
-                  {Object.entries(pair.priceChange).map(([key, val]) => <li key={key}>{key}: {val.toFixed(2)}%</li>)}
+            {selectedPairForDialog.priceChange && (
+               <div><strong>Price Change (%):</strong>
+                <ul className="list-disc pl-5 text-xs">
+                  {Object.entries(selectedPairForDialog.priceChange).map(([key, val]) => <li key={key}>{key.toUpperCase()}: {val.toFixed(2)}%</li>)}
                 </ul>
               </div>
             )}
-            {pair.info?.websites && pair.info.websites.length > 0 && (
+            {selectedPairForDialog.info?.websites && selectedPairForDialog.info.websites.length > 0 && (
               <div><strong>Websites:</strong>
-                <ul className="list-disc pl-5">{pair.info.websites.map(w => <li key={w.url}><a href={w.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{w.label || w.url}</a></li>)}</ul>
+                <ul className="list-disc pl-5 text-xs">{selectedPairForDialog.info.websites.map(w => <li key={w.url}><a href={w.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{w.label || w.url}</a></li>)}</ul>
               </div>
             )}
-            {pair.info?.socials && pair.info.socials.length > 0 && (
+            {selectedPairForDialog.info?.socials && selectedPairForDialog.info.socials.length > 0 && (
                <div><strong>Socials:</strong>
-                <ul className="list-disc pl-5">{pair.info.socials.map(s => <li key={s.type || s.platform || s.url }><a href={s.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{s.platform || s.type}: {s.handle || s.name || s.url}</a></li>)}</ul>
+                <ul className="list-disc pl-5 text-xs">{selectedPairForDialog.info.socials.map(s => <li key={s.type || s.platform || s.url }><a href={s.url || '#'} target="_blank" rel="noreferrer" className="text-primary hover:underline">{s.platform || s.type}: {s.handle || s.name || s.url}</a></li>)}</ul>
               </div>
             )}
           </div>
@@ -289,11 +290,6 @@ const DexScreenerContent: React.FC = () => {
       )}
     </Dialog>
   );
-
-  const truncateAddress = (address: string | null | undefined, startChars = 6, endChars = 4) => {
-    if (!address) return '-';
-    return address.length <= startChars + endChars ? address : `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
-  };
 
   const renderInputSection = () => {
     const commonInputs = (
@@ -310,17 +306,17 @@ const DexScreenerContent: React.FC = () => {
 
     if (selectedView === 'searchPairs') {
       return (
-        <div className="flex gap-2 items-center mb-3">
-          <Input placeholder="Search pairs (e.g., WIF/SOL)" value={inputSearchQuery} onChange={e => setInputSearchQuery(e.target.value)} className="h-9 text-xs flex-grow" />
-          <Button onClick={() => fetchDataForView(selectedView, true)} size="sm" className="h-9 text-xs">Fetch</Button>
-        </div>
+        <form onSubmit={(e) => { e.preventDefault(); fetchDataForView(selectedView, true);}} className="flex gap-2 items-center mb-3">
+          <Input placeholder="Search pairs (e.g., WIF SOL)" value={inputSearchQuery} onChange={e => setInputSearchQuery(e.target.value)} className="h-9 text-xs flex-grow" />
+          <Button type="submit" size="sm" className="h-9 text-xs">Fetch</Button>
+        </form>
       );
     } else if (['tokenOrders', 'pairDetailsByPairAddress', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) {
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-end mb-3">
+        <form onSubmit={(e) => { e.preventDefault(); fetchDataForView(selectedView, true);}} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-end mb-3">
           {commonInputs}
-          <Button onClick={() => fetchDataForView(selectedView, true)} size="sm" className="h-9 text-xs sm:col-span-2 md:col-span-1">Fetch View Data</Button>
-        </div>
+          <Button type="submit" size="sm" className="h-9 text-xs sm:col-span-2 md:col-span-1">Fetch</Button>
+        </form>
       );
     }
     return null;
@@ -347,7 +343,7 @@ const DexScreenerContent: React.FC = () => {
     // Render Profiles or Boosts
     if (selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') {
       const items = data as (TokenProfileItem[] | TokenBoostItem[]);
-      const isBoost = selectedView !== 'profiles';
+      const isBoost = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
       return (
         <Table>
           <TableHeader>
@@ -366,7 +362,7 @@ const DexScreenerContent: React.FC = () => {
           <TableBody>
             {items.map((item, index) => (
               <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
-                <TableCell><Avatar className="h-6 w-6"><AvatarImage src={item.icon ?? ''} alt={item.name || item.symbol || 'Token icon'} /><AvatarFallback>{(item.symbol || item.name || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback></Avatar></TableCell>
+                <TableCell><Avatar className="h-6 w-6"><AvatarImage src={item.icon ?? undefined} alt={item.name || item.symbol || 'Token icon'} /><AvatarFallback>{(item.symbol || item.name || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback></Avatar></TableCell>
                 <TableCell className="font-medium max-w-[150px] min-w-0">
                   <Tooltip delayDuration={100}><TooltipTrigger asChild><div className="truncate" title={item.name || item.description || item.tokenAddress || "Unknown"}>{item.name || item.description || "Unknown Token"}</div></TooltipTrigger><TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent></Tooltip>
                 </TableCell>
@@ -414,9 +410,9 @@ const DexScreenerContent: React.FC = () => {
     // Render Pair Details (covers pairDetailsByPairAddress, searchPairs, tokenPairPools, pairsByTokenAddresses)
     if (['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) {
         let pairsArray: PairDetail[] = [];
-        if (data && 'pairs' in data && Array.isArray((data as PairData).pairs)) { // PairDataSchema
+        if (data && 'pairs' in data && Array.isArray((data as PairData).pairs)) { 
             pairsArray = (data as PairData).pairs;
-        } else if (data && Array.isArray(data)) { // PairDetail[]
+        } else if (data && Array.isArray(data)) { 
             pairsArray = data as PairDetail[];
         }
 
@@ -444,7 +440,7 @@ const DexScreenerContent: React.FC = () => {
                 <TableRow key={`${pair.pairAddress}-${index}`}>
                   <TableCell>
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={pair.info?.imageUrl ?? ''} alt={pair.baseToken?.name || 'Pair Image'} />
+                      <AvatarImage src={pair.info?.imageUrl || undefined} alt={pair.baseToken?.name || 'Pair Image'} />
                       <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
