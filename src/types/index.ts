@@ -99,11 +99,11 @@ export const PairInfoWebsiteSchema = z.object({
 export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
-  platform: z.string().optional().nullable(), // API example shows "platform": "text"
-  type: z.string().optional().nullable(), // Some APIs use "type"
-  handle: z.string().optional().nullable(), // API example shows "handle": "text"
-  url: z.string().url().optional().nullable(), // Some APIs provide full URL for socials
-  name: z.string().optional().nullable(), // Some APIs provide name for socials
+  platform: z.string().optional().nullable(), 
+  type: z.string().optional().nullable(), 
+  handle: z.string().optional().nullable(), 
+  url: z.string().url().optional().nullable(), 
+  name: z.string().optional().nullable(), 
 });
 export type PairSocial = z.infer<typeof PairInfoSocialSchema>;
 
@@ -125,8 +125,8 @@ export const PairDetailSchema = z.object({
   priceNative: z.string().optional().nullable(),
   priceUsd: z.string().optional().nullable(),
   txns: TxnsSchema.optional().nullable(),
-  volume: VolumeSchema.optional().nullable(), // API shows "ANY_ADDITIONAL_PROPERTY": 1
-  priceChange: PriceChangeSchema.optional().nullable(), // API shows "ANY_ADDITIONAL_PROPERTY": 1
+  volume: VolumeSchema.optional().nullable(), 
+  priceChange: PriceChangeSchema.optional().nullable(),
   liquidity: LiquiditySchema.optional().nullable(),
   fdv: z.number().optional().nullable(),
   marketCap: z.number().optional().nullable(),
@@ -140,5 +140,3 @@ export type PairDetail = z.infer<typeof PairDetailSchema>;
 export const PairDataSchema = z.object({
   schemaVersion: z.string(),
   pairs: z.array(PairDetailSchema),
-});
-export type PairData = z.infer<typeof PairDataSchema>;
