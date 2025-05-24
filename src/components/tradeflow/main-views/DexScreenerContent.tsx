@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, PackageSearch, TrendingUp, ListFilter, ReceiptText, Layers, Search, Blocks, Users, Eye, BarChartHorizontalBig } from 'lucide-react';
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, PackageSearch, TrendingUp, ListFilter, ReceiptText, Layers, Search, Blocks, Users, Eye, BarChartHorizontalBig, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format, fromUnixTime } from 'date-fns';
@@ -192,7 +192,7 @@ const DexScreenerContent: React.FC = () => {
     }
   }, [selectedView, fetchDataForView]);
 
-  const handleCopy = (text: string, type: string = "Address") => {
+  const handleCopyAddress = (text: string, type: string = "Address") => {
     if (!navigator.clipboard) {
       toast({ title: "Copy Failed", description: "Clipboard API not available.", variant: "destructive" });
       return;
@@ -252,38 +252,35 @@ const DexScreenerContent: React.FC = () => {
     setIsPairDetailDialogOpen(true);
   };
 
+  const isBoostView = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
+  const isProfileOrBoostView = selectedView === 'profiles' || isBoostView;
+  const isOrderView = selectedView === 'tokenOrders';
+  const isPairView = ['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView);
+
   const renderTableHeaders = () => {
-    switch (selectedView) {
-      case 'profiles':
-      case 'latestBoosts':
-      case 'topBoosts':
-        const isBoost = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
-        return (
-          <TableRow>
+    return (
+      <TableRow>
+        {isProfileOrBoostView && (
+          <>
             <TableHead className="w-[50px]">Icon</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Chain</TableHead>
             <TableHead className="min-w-[150px]">Address</TableHead>
-            {isBoost && <TableHead className="text-right">Boost Amt.</TableHead>}
-            {isBoost && <TableHead className="text-right">Total Boost</TableHead>}
+            {isBoostView && <TableHead className="text-right">Boost Amt.</TableHead>}
+            {selectedView === 'latestBoosts' && <TableHead className="text-right">Total Boost</TableHead>}
             <TableHead className="w-[60px] text-center">Info</TableHead>
             <TableHead className="w-[100px] text-center">Links</TableHead>
-          </TableRow>
-        );
-      case 'tokenOrders':
-        return (
-          <TableRow>
+          </>
+        )}
+        {isOrderView && (
+          <>
             <TableHead>Type</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Payment Date</TableHead>
-          </TableRow>
-        );
-      case 'pairDetailsByPairAddress':
-      case 'searchPairs':
-      case 'tokenPairPools':
-      case 'pairsByTokenAddresses':
-        return (
-          <TableRow>
+          </>
+        )}
+        {isPairView && (
+           <>
             <TableHead className="w-[50px]">Icon</TableHead>
             <TableHead>Pair</TableHead>
             <TableHead className="text-right">Price (USD)</TableHead>
@@ -292,111 +289,104 @@ const DexScreenerContent: React.FC = () => {
             <TableHead>Chain</TableHead>
             <TableHead>DEX ID</TableHead>
             <TableHead className="text-center">Actions</TableHead>
-          </TableRow>
-        );
-      default:
-        return null;
-    }
+          </>
+        )}
+      </TableRow>
+    );
   };
 
   const renderTableRows = () => {
     if (!data) return null;
 
-    switch (selectedView) {
-      case 'profiles':
-      case 'latestBoosts':
-      case 'topBoosts':
-        const items = data as (TokenProfileItem[] | TokenBoostItem[]);
-        const isBoost = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
-        return items.map((item, index) => (
-          <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
-            <TableCell>
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.name || item.description || 'Token icon'} />
-                <AvatarFallback>{(item.name || item.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-            </TableCell>
-            <TableCell className="font-medium max-w-[200px] min-w-0">
-              <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild>
-                  <div className="truncate">{item.name || item.description || "Unknown Token"}</div>
-                </TooltipTrigger>
-                <TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent>
-              </Tooltip>
-            </TableCell>
-            <TableCell>{item.chainId}</TableCell>
-            <TableCell className="font-mono text-xs">
-              <div className="flex items-center gap-1">
-                <span className="truncate" title={item.tokenAddress}>{truncateAddress(item.tokenAddress)}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => item.tokenAddress && handleCopy(item.tokenAddress, "Token Address")}>
-                  <Copy className="h-3 w-3"/>
-                </Button>
-              </div>
-            </TableCell>
-            {isBoost && 'amount' in item && (
-              <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
-            )}
-            {isBoost && 'totalAmount' in item && (
-              <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
-            )}
-            <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
-            <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
-          </TableRow>
-        ));
-
-      case 'tokenOrders':
-        const orders = data as OrderInfoItem[];
-        return orders.map((order, index) => (
-          <TableRow key={`${order.type}-${order.paymentTimestamp}-${index}`}>
-            <TableCell>{order.type}</TableCell>
-            <TableCell>{order.status}</TableCell>
-            <TableCell>{formatDateFromTimestamp(order.paymentTimestamp)}</TableCell>
-          </TableRow>
-        ));
-
-      case 'pairDetailsByPairAddress':
-      case 'searchPairs':
-      case 'tokenPairPools':
-      case 'pairsByTokenAddresses':
-        let pairsToRender: PairDetail[] = [];
-        if (selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs') {
-          pairsToRender = (data as PairDataSchema)?.pairs || [];
-        } else if (selectedView === 'tokenPairPools' || selectedView === 'pairsByTokenAddresses') {
-          pairsToRender = data as PairDetail[] || [];
-        }
-        
-        return pairsToRender.map((pair) => (
-          <TableRow key={pair.pairAddress}>
-            <TableCell>
-              <Avatar className="h-6 w-6">
-                <AvatarImage src={pair.info?.imageUrl || (pair.baseToken?.symbol ? `https://dd.dexscreener.com/ds-data/tokens/${pair.chainId}/${pair.baseToken.address}.png` : `https://placehold.co/24x24.png`)} alt={pair.baseToken?.name || 'Pair icon'} />
-                <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-            </TableCell>
-            <TableCell>
-              <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild>
-                    <div className="truncate font-medium max-w-[150px]">{`${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`}</div>
-                </TooltipTrigger>
-                <TooltipContent><p>{`${pair.baseToken?.name || 'Unknown'}/${pair.quoteToken?.name || 'Unknown'}`}</p></TooltipContent>
-              </Tooltip>
-              <div className="text-xs text-muted-foreground truncate max-w-[150px]" title={pair.pairAddress}>{truncateAddress(pair.pairAddress)}</div>
-            </TableCell>
-            <TableCell className="text-right">{formatCurrency(pair.priceUsd)}</TableCell>
-            <TableCell className="text-right">{formatLargeNumber(pair.volume?.h24)}</TableCell>
-            <TableCell className="text-right">{formatCurrency(pair.liquidity?.usd)}</TableCell>
-            <TableCell>{pair.chainId}</TableCell>
-            <TableCell>{pair.dexId}</TableCell>
-            <TableCell className="text-center">
-              <Button variant="outline" size="sm" onClick={() => openPairDetailDialog(pair)}>
-                <Eye className="mr-2 h-4 w-4" /> View
+    if (isProfileOrBoostView) {
+      const items = data as (TokenProfileItem[] | TokenBoostItem[]);
+      return items.map((item, index) => (
+        <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
+          <TableCell>
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.name || item.description || 'Token icon'} />
+              <AvatarFallback>{(item.name || item.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          </TableCell>
+          <TableCell className="font-medium max-w-[200px] min-w-0">
+            <Tooltip delayDuration={150}>
+              <TooltipTrigger asChild>
+                <div className="truncate">{item.name || item.description || "Unknown Token"}</div>
+              </TooltipTrigger>
+              <TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent>
+            </Tooltip>
+          </TableCell>
+          <TableCell>{item.chainId}</TableCell>
+          <TableCell className="font-mono text-xs">
+            <div className="flex items-center gap-1">
+              <span className="truncate" title={item.tokenAddress}>{truncateAddress(item.tokenAddress)}</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => item.tokenAddress && handleCopyAddress(item.tokenAddress, "Token Address")}>
+                <Copy className="h-3 w-3"/>
               </Button>
-            </TableCell>
-          </TableRow>
-        ));
-      default:
-        return null;
+            </div>
+          </TableCell>
+          {isBoostView && 'amount' in item && (
+            <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
+          )}
+          {selectedView === 'latestBoosts' && 'totalAmount' in item && (
+            <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
+          )}
+          <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
+          <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
+        </TableRow>
+      ));
     }
+
+    if (isOrderView) {
+      const orders = data as OrderInfoItem[];
+      return orders.map((order, index) => (
+        <TableRow key={`${order.type}-${order.paymentTimestamp}-${index}`}>
+          <TableCell>{order.type}</TableCell>
+          <TableCell>{order.status}</TableCell>
+          <TableCell>{formatDateFromTimestamp(order.paymentTimestamp)}</TableCell>
+        </TableRow>
+      ));
+    }
+
+    if (isPairView) {
+      let pairsToRender: PairDetail[] = [];
+      if (selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs') {
+        pairsToRender = (data as PairDataSchema)?.pairs || [];
+      } else if (selectedView === 'tokenPairPools' || selectedView === 'pairsByTokenAddresses') {
+        pairsToRender = data as PairDetail[] || [];
+      }
+      
+      return pairsToRender.map((pair) => (
+        <TableRow key={pair.pairAddress}>
+          <TableCell>
+            <Avatar className="h-6 w-6">
+              <AvatarImage src={pair.info?.imageUrl || (pair.baseToken?.symbol ? `https://dd.dexscreener.com/ds-data/tokens/${pair.chainId}/${pair.baseToken.address}.png` : `https://placehold.co/24x24.png`)} alt={pair.baseToken?.name || 'Pair icon'} />
+              <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
+            </Avatar>
+          </TableCell>
+          <TableCell>
+            <Tooltip delayDuration={150}>
+              <TooltipTrigger asChild>
+                  <div className="truncate font-medium max-w-[150px]">{`${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`}</div>
+              </TooltipTrigger>
+              <TooltipContent><p>{`${pair.baseToken?.name || 'Unknown'}/${pair.quoteToken?.name || 'Unknown'}`}</p></TooltipContent>
+            </Tooltip>
+            <div className="text-xs text-muted-foreground truncate max-w-[150px]" title={pair.pairAddress}>{truncateAddress(pair.pairAddress)}</div>
+          </TableCell>
+          <TableCell className="text-right">{formatCurrency(pair.priceUsd)}</TableCell>
+          <TableCell className="text-right">{formatLargeNumber(pair.volume?.h24)}</TableCell>
+          <TableCell className="text-right">{formatCurrency(pair.liquidity?.usd)}</TableCell>
+          <TableCell>{pair.chainId}</TableCell>
+          <TableCell>{pair.dexId}</TableCell>
+          <TableCell className="text-center">
+            <Button variant="outline" size="sm" onClick={() => openPairDetailDialog(pair)}>
+              <Eye className="mr-2 h-4 w-4" /> View
+            </Button>
+          </TableCell>
+        </TableRow>
+      ));
+    }
+    return null;
   };
 
   const viewOptions = [
@@ -417,6 +407,19 @@ const DexScreenerContent: React.FC = () => {
   const needsCommaSeparatedTokenAddressesInput = selectedView === 'pairsByTokenAddresses';
   const isInputBasedView = needsChainIdInput || needsTokenAddressInput || needsPairAddressInput || needsSearchQueryInput || needsCommaSeparatedTokenAddressesInput;
 
+  const getTableCaption = () => {
+    switch (selectedView) {
+      case 'profiles': return 'Latest token profiles.';
+      case 'latestBoosts': return 'Latest boosted tokens.';
+      case 'topBoosts': return 'Tokens with most active boosts.';
+      case 'tokenOrders': return `Orders for token ${inputTokenAddress || '[Token]'} on ${inputChainId || '[Chain]'}.`;
+      case 'pairDetailsByPairAddress': return `Details for pair ${inputPairAddress || '[Pair]'} on ${inputChainId || '[Chain]'}.`;
+      case 'searchPairs': return `Search results for "${inputSearchQuery || ''}".`;
+      case 'tokenPairPools': return `Pools for token ${inputTokenAddress || '[Token]'} on ${inputChainId || '[Chain]'}.`;
+      case 'pairsByTokenAddresses': return `Pairs for token(s) on ${inputChainId || '[Chain]'}.`;
+      default: return 'DEX Screener Data';
+    }
+  };
 
   const renderTable = () => {
      if (!data && !isLoading && !error && isInputBasedView) {
@@ -427,33 +430,25 @@ const DexScreenerContent: React.FC = () => {
     if (Array.isArray(data)) {
         isEmpty = data.length === 0;
     } else if (data && typeof data === 'object' && 'pairs' in data) {
-        isEmpty = (data as PairDataSchema).pairs === null || (data as PairDataSchema).pairs?.length === 0;
+        // This handles PairDataSchema
+        const pairData = data as PairDataSchema;
+        isEmpty = pairData.pairs === null || pairData.pairs?.length === 0;
     } else if (data === null && !isLoading && !error) {
         isEmpty = true;
     }
 
-
     if (isEmpty && !isLoading && !error) {
       return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No data available for this view. {isInputBasedView ? 'Try different inputs or check API.' : ''}</p></div>;
     }
+
     return (
         <Table>
-            <TableCaption>
-              {selectedView === 'profiles' && 'Latest token profiles.'}
-              {selectedView === 'latestBoosts' && 'Latest boosted tokens.'}
-              {selectedView === 'topBoosts' && 'Tokens with most active boosts.'}
-              {selectedView === 'tokenOrders' && `Orders for token ${inputTokenAddress} on ${inputChainId}.`}
-              {selectedView === 'pairDetailsByPairAddress' && `Details for pair ${inputPairAddress} on ${inputChainId}.`}
-              {selectedView === 'searchPairs' && `Search results for "${inputSearchQuery}".`}
-              {selectedView === 'tokenPairPools' && `Pools for token ${inputTokenAddress} on ${inputChainId}.`}
-              {selectedView === 'pairsByTokenAddresses' && `Pairs for token(s) on ${inputChainId}.`}
-            </TableCaption>
+            <TableCaption>{getTableCaption()}</TableCaption>
             <TableHeader>{renderTableHeaders()}</TableHeader>
             <TableBody>{renderTableRows()}</TableBody>
         </Table>
-    )
-  }
-
+    );
+  };
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
@@ -466,7 +461,6 @@ const DexScreenerContent: React.FC = () => {
             value={selectedView}
             onValueChange={(value) => {
                 setSelectedView(value as DexScreenerViewType);
-                 // Reset data when view changes if it's not one of the auto-fetching views
                 if (!['profiles', 'latestBoosts', 'topBoosts'].includes(value)) {
                     setData(null);
                 }
@@ -555,7 +549,7 @@ const DexScreenerContent: React.FC = () => {
               </DialogTitle>
               <DialogDescription>
                 {selectedPairForDialog.pairAddress} on {selectedPairForDialog.chainId} (DEX: {selectedPairForDialog.dexId})
-                <Button variant="ghost" size="icon" className="h-6 w-6 ml-2" onClick={() => handleCopy(selectedPairForDialog.pairAddress, "Pair Address")}>
+                <Button variant="ghost" size="icon" className="h-6 w-6 ml-2" onClick={() => selectedPairForDialog.pairAddress && handleCopyAddress(selectedPairForDialog.pairAddress, "Pair Address")}>
                   <Copy className="h-3 w-3"/>
                 </Button>
               </DialogDescription>
