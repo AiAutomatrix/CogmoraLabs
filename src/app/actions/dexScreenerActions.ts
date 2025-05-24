@@ -1,94 +1,80 @@
 
 'use server';
 
-import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairData, PairDetail } from '@/types';
+import type { TokenProfileItem, TokenBoostItem } from '@/types';
 
 const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 
-// Generic helper function to fetch and parse data from Dex Screener API
-async function fetchApiData<T>(endpoint: string, isSingleObjectResponseToArray: boolean = false): Promise<T | null> {
+// Helper function to fetch and parse data
+async function fetchData<T>(endpoint: string): Promise<T[]> {
   try {
-    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`, { cache: 'no-store' }); // Disable caching for fresh data
+    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error(`DEX API Error (${response.status}) for ${endpoint}: ${errorBody}`);
-      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status} - ${errorBody}`);
+      console.error(`API Error (${response.status}) for ${endpoint}: ${errorBody}`);
+      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
     }
     const data = await response.json();
+    // The API seems to return a single object for these "latest" endpoints based on user docs.
+    // We will wrap it in an array if it's not already an array.
+    // If the API actually returns { "data": [...] } or similar, this needs adjustment.
+    // For now, assuming it might return a single item or an array directly.
+    // Let's assume the API returns an object like { "profiles": [] } or { "boosts": [] }
+    // OR directly an array. The user's schema was for single item.
+    // If data.data is the array: return data.data as T[];
+    // If data.profiles is the array: return data.profiles as T[];
+    // If data is the array: return data as T[];
 
-    // The API docs for /latest/v1 for profiles and boosts show a single object response.
-    // We wrap it in an array to consistently handle it as a list in the UI.
-    if (isSingleObjectResponseToArray && data && typeof data === 'object' && !Array.isArray(data)) {
-      return [data] as unknown as T; 
+    // Let's assume the API returns an array of items directly for now.
+    // If the actual API returns an object with a specific key containing the array,
+    // this parsing logic will need to be updated.
+    // e.g. if response is { "data": [...] }, then use `return data.data || [];`
+    // For now, we'll trust the API directly returns an array or we handle it gracefully.
+     if (Array.isArray(data)) {
+      return data as T[];
+    } else if (data && typeof data === 'object') {
+      // Fallback for single item response as per user's doc snippet.
+      // In a real scenario, if "latest" or "top" returns single item, it's unusual.
+      // For now, we'll assume the response is an array. If it's consistently single, adjust.
+      // This part handles if the API truly returns a single object for `/latest` or `/top`
+      // The component expecting an array would just render one item.
+      // However, typical APIs return arrays for "latest" or "top".
+      // The problem description indicates "latest token profiles" (plural).
+      // Let's assume the API returns an object with a key e.g. "pairs" or "tokens".
+      // Since the user's doc shows a single object as the *response*, not as an item in an array,
+      // this implies the "latest" endpoint returns ONE latest item.
+      // This is unusual but we will code to it. Our components will just render one item.
+      // To make components more general (displaying lists), we'll wrap it in an array.
+      // This is a temporary assumption if the API always returns a single object.
+      // If the API *can* return an array, then this is fine.
+      // The provided schema `Response object` suggests the endpoint returns ONE object of that type.
+      // To make it usable in a list display, we will wrap it.
+      return [data as T]; // Wrap single object in an array
     }
-    // For endpoints that already return an array (like /orders), or object (like /pairs), return as is.
-    return data as T;
+    return []; // Fallback for unexpected structure
   } catch (error) {
-    console.error(`Error in fetchApiData for ${endpoint}:`, error);
-    return null;
+    console.error(`Error in fetchData for ${endpoint}:`, error);
+    throw error; // Re-throw to be caught by the caller
   }
 }
 
+
 export async function fetchLatestTokenProfiles(): Promise<TokenProfileItem[]> {
-  const data = await fetchApiData<TokenProfileItem[]>('/token-profiles/latest/v1', true);
-  return data || [];
+  // The API doc shows the response as a single object. We'll wrap it in an array for consistency.
+  const profile = await fetchData<TokenProfileItem>('/token-profiles/latest/v1');
+  return profile; // fetchData already wraps if single
 }
 
 export async function fetchLatestBoostedTokens(): Promise<TokenBoostItem[]> {
-  const data = await fetchApiData<TokenBoostItem[]>('/token-boosts/latest/v1', true);
-  return data || [];
+  // The API doc shows the response as a single object. We'll wrap it in an array.
+  const boosts = await fetchData<TokenBoostItem>('/token-boosts/latest/v1');
+  return boosts; // fetchData already wraps if single
 }
 
 export async function fetchTopBoostedTokens(): Promise<TokenBoostItem[]> {
-  const data = await fetchApiData<TokenBoostItem[]>('/token-boosts/top/v1', true);
-  return data || [];
+  // The API doc shows the response as a single object. We'll wrap it in an array.
+  const boosts = await fetchData<TokenBoostItem>('/token-boosts/top/v1');
+  return boosts; // fetchData already wraps if single
 }
 
-export async function fetchTokenOrders(chainId: string, tokenAddress: string): Promise<OrderInfoItem[]> {
-  if (!chainId || !tokenAddress) {
-    console.error("fetchTokenOrders: chainId and tokenAddress are required.");
-    return [];
-  }
-  // This endpoint returns an array directly
-  const data = await fetchApiData<OrderInfoItem[]>(`/orders/v1/${chainId}/${tokenAddress}`);
-  return data || [];
-}
-
-// Fetches one specific pair by its address
-export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairData | null> {
-   if (!chainId || !pairAddress) {
-    console.error("fetchPairDetailsByPairAddress: chainId and pairAddress are required.");
-    return null;
-  }
-  // This endpoint returns an object containing a 'pairs' array
-  return fetchApiData<PairData>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
-}
-
-export async function searchPairs(query: string): Promise<PairData | null> {
-  if (!query) {
-    console.error("searchPairs: query is required.");
-    return null;
-  }
-  // This endpoint returns an object containing a 'pairs' array
-  return fetchApiData<PairData>(`/latest/dex/search?q=${encodeURIComponent(query)}`);
-}
-
-export async function fetchTokenPairPools(chainId: string, tokenAddress: string): Promise<PairDetail[]> {
-   if (!chainId || !tokenAddress) {
-    console.error("fetchTokenPairPools: chainId and tokenAddress are required.");
-    return [];
-  }
-  // This endpoint directly returns an array of pair-like objects
-  const data = await fetchApiData<PairDetail[]>(`/token-pairs/v1/${chainId}/${tokenAddress}`);
-  return data || [];
-}
-
-export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses: string): Promise<PairDetail[]> {
-  if (!chainId || !tokenAddresses) {
-    console.error("fetchPairsByTokenAddresses: chainId and tokenAddresses are required.");
-    return [];
-  }
-  // This endpoint directly returns an array of pair-like objects
-  const data = await fetchApiData<PairDetail[]>(`/tokens/v1/${chainId}/${tokenAddresses}`);
-  return data || [];
-}
+    
