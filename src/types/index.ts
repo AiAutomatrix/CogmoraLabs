@@ -30,11 +30,10 @@ export const TokenProfileItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Name is often the description or a separate field
-  // symbol: z.string().optional().nullable(), // Removed: Not directly available in API for profiles/boosts
+  name: z.string().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
-  description: z.string().optional().nullable(), // Will be used for name if name field is missing
+  description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
@@ -43,13 +42,12 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Name is often the description or a separate field
-  // symbol: z.string().optional().nullable(), // Removed: Not directly available in API for profiles/boosts
+  name: z.string().optional().nullable(),
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
-  description: z.string().optional().nullable(), // Will be used for name if name field is missing
+  description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
@@ -58,32 +56,32 @@ export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
 export const OrderInfoItemSchema = z.object({
   type: z.string(),
   status: z.string(),
-  paymentTimestamp: z.number(),
+  paymentTimestamp: z.number(), // Unix timestamp
 });
 export type OrderInfoItem = z.infer<typeof OrderInfoItemSchema>;
 
 // Schemas for pair data
 export const TokenInfoSchema = z.object({
   address: z.string(),
-  name: z.string(),
-  symbol: z.string(),
+  name: z.string().optional().nullable(),
+  symbol: z.string().optional().nullable(),
 });
 export type TokenInfo = z.infer<typeof TokenInfoSchema>;
 
 export const TxnsDetailSchema = z.object({
-  buys: z.number(),
-  sells: z.number(),
+  buys: z.number().optional().nullable(),
+  sells: z.number().optional().nullable(),
 });
 export type TxnsDetail = z.infer<typeof TxnsDetailSchema>;
 
 // Using z.record for dynamic keys like "m5", "h1", etc.
-export const TxnsSchema = z.record(z.string(), TxnsDetailSchema);
+export const TxnsSchema = z.record(z.string(), TxnsDetailSchema.optional()).optional().nullable();
 export type PairTxns = z.infer<typeof TxnsSchema>;
 
-export const VolumeSchema = z.record(z.string(), z.coerce.number());
+export const VolumeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
 export type PairVolume = z.infer<typeof VolumeSchema>;
 
-export const PriceChangeSchema = z.record(z.string(), z.coerce.number());
+export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
 export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
 
 export const LiquiditySchema = z.object({
@@ -101,8 +99,8 @@ export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
   platform: z.string().optional().nullable(),
-  type: z.string().optional().nullable(), // API docs show 'type' sometimes, platform is more common
-  name: z.string().optional().nullable(), // 'name' can sometimes be used for social links
+  type: z.string().optional().nullable(), 
+  name: z.string().optional().nullable(), 
   handle: z.string().optional().nullable(),
   url: z.string().url().optional().nullable(),
 });
@@ -118,17 +116,17 @@ export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
 export const PairDetailSchema = z.object({
   chainId: z.string(),
-  dexId: z.string(),
-  url: z.string().url(),
+  dexId: z.string().optional().nullable(),
+  url: z.string().url().optional().nullable(),
   pairAddress: z.string(),
   labels: z.array(z.string()).optional().nullable(),
   baseToken: TokenInfoSchema,
   quoteToken: TokenInfoSchema,
   priceNative: z.string().optional().nullable(),
   priceUsd: z.string().optional().nullable(),
-  txns: TxnsSchema.optional().nullable(),
-  volume: VolumeSchema.optional().nullable(),
-  priceChange: PriceChangeSchema.optional().nullable(),
+  txns: TxnsSchema,
+  volume: VolumeSchema,
+  priceChange: PriceChangeSchema,
   liquidity: LiquiditySchema.optional().nullable(),
   fdv: z.number().optional().nullable(),
   marketCap: z.number().optional().nullable(),
