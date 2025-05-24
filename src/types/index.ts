@@ -30,12 +30,11 @@ export const TokenProfileItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Though not directly in sample, often used for display
+  name: z.string().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
-  // symbol: z.string().optional().nullable(), // Removed as per last correction
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
 
@@ -43,14 +42,13 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Though not directly in sample
+  name: z.string().optional().nullable(),
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
-  // symbol: z.string().optional().nullable(), // Removed as per last correction
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
 
@@ -75,7 +73,6 @@ export const TxnsDetailSchema = z.object({
 });
 export type TxnsDetail = z.infer<typeof TxnsDetailSchema>;
 
-// Using z.record for dynamic keys like "m5", "h1", etc.
 export const TxnsSchema = z.record(z.string(), TxnsDetailSchema.optional()).optional().nullable();
 export type PairTxns = z.infer<typeof TxnsSchema>;
 
@@ -111,7 +108,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
-  description: z.string().optional().nullable(), // Added description as per common API patterns
+  description: z.string().optional().nullable(),
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -130,15 +127,12 @@ export const PairDetailSchema = z.object({
   priceChange: PriceChangeSchema,
   liquidity: LiquiditySchema.optional().nullable(),
   fdv: z.number().optional().nullable(),
-  marketCap: z.number().optional().nullable(),
+  marketCap: z.number().optional().nullable(), // Added marketCap
   pairCreatedAt: z.number().optional().nullable(), // Timestamp
   info: PairInfoDetailsSchema.optional().nullable(),
-  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(),
+  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(), // Added boosts
 });
 export type PairDetail = z.infer<typeof PairDetailSchema>;
 
 export const PairDataSchema = z.object({
-  schemaVersion: z.string(),
-  pairs: z.array(PairDetailSchema),
-});
-export type PairData = z.infer<typeof PairDataSchema>;
+  schemaVersion: z.
