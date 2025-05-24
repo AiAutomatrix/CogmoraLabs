@@ -12,7 +12,10 @@ export default function HomePage() {
   const handleSymbolChange = (newSymbol: string) => {
     if (newSymbol && newSymbol.trim() !== '') {
       let formattedSymbol = newSymbol.toUpperCase().trim();
-      if (!formattedSymbol.includes(':')) {
+      // Ensure symbol is in TradingView format (e.g., EXCHANGE:SYMBOL)
+      if (!formattedSymbol.includes(':') && formattedSymbol.length > 0) {
+         // Basic heuristic: if it looks like a pair (e.g., BTCUSDT), assume Binance or a common exchange
+         // This might need to be smarter based on typical user input or a default exchange preference
         formattedSymbol = `BINANCE:${formattedSymbol}`;
       }
       setActiveSymbol(formattedSymbol);
@@ -29,7 +32,7 @@ export default function HomePage() {
 
       <main className="flex-grow container mx-auto p-4 flex flex-col">
         {/* This div is the direct child of main, it needs to grow */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 flex-grow"> {/* Changed h-full to flex-grow */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 flex-grow"> {/* Changed to flex-grow */}
           <section className="lg:col-span-2 h-full flex flex-col"> {/* h-full is correct here as grid child */}
             <MainViews currentSymbol={activeSymbol} />
           </section>

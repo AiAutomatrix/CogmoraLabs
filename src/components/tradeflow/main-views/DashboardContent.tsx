@@ -6,7 +6,7 @@ import Image from 'next/image';
 
 const DashboardContent: React.FC = () => {
   return (
-    <Card className="h-full overflow-auto"> {/* Ensure card itself can scroll if content exceeds */}
+    <Card className="h-full overflow-auto">
       <CardHeader>
         <CardTitle>Dashboard Overview</CardTitle>
         <CardDescription>Your trading performance at a glance.</CardDescription>

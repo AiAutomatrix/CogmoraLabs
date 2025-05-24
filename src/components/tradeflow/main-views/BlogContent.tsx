@@ -5,7 +5,7 @@ import Image from 'next/image';
 
 const BlogContent: React.FC = () => {
   return (
-    <Card className="h-full overflow-auto"> {/* Ensure card itself can scroll if content exceeds */}
+    <Card className="h-full overflow-auto">
       <CardHeader>
         <CardTitle>Blog</CardTitle>
       </CardHeader>
