@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 export const TradeSchema = z.object({
@@ -18,7 +19,7 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-// DEX Screener API Types - Original Three
+// DEX Screener API Types
 export const DexLinkSchema = z.object({
   type: z.string().optional().nullable(),
   label: z.string().optional().nullable(),
@@ -73,6 +74,7 @@ export const TxnsDetailSchema = z.object({
 });
 export type TxnsDetail = z.infer<typeof TxnsDetailSchema>;
 
+// Allows for dynamic keys like "m5", "h1", etc.
 export const TxnsSchema = z.record(z.string(), TxnsDetailSchema.optional()).optional().nullable();
 export type PairTxns = z.infer<typeof TxnsSchema>;
 
@@ -97,8 +99,8 @@ export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
   platform: z.string().optional().nullable(),
-  type: z.string().optional().nullable(),
-  name: z.string().optional().nullable(),
+  type: z.string().optional().nullable(), // Some APIs use 'type', some 'platform'
+  name: z.string().optional().nullable(), // For socials that might have a name property
   handle: z.string().optional().nullable(),
   url: z.string().url().optional().nullable(),
 });
@@ -108,7 +110,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
-  description: z.string().optional().nullable(),
+  description: z.string().optional().nullable(), // Adding description here
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -127,12 +129,15 @@ export const PairDetailSchema = z.object({
   priceChange: PriceChangeSchema,
   liquidity: LiquiditySchema.optional().nullable(),
   fdv: z.number().optional().nullable(),
-  marketCap: z.number().optional().nullable(), // Added marketCap
+  marketCap: z.number().optional().nullable(),
   pairCreatedAt: z.number().optional().nullable(), // Timestamp
   info: PairInfoDetailsSchema.optional().nullable(),
-  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(), // Added boosts
+  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(),
 });
 export type PairDetail = z.infer<typeof PairDetailSchema>;
 
 export const PairDataSchema = z.object({
-  schemaVersion: z.
+  schemaVersion: z.string(),
+  pairs: z.array(PairDetailSchema),
+});
+export type PairDataSchema = z.infer<typeof PairDataSchema>;
