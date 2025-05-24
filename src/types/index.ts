@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const TradeSchema = z.object({
@@ -31,11 +30,11 @@ export const TokenProfileItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(),
-  symbol: z.string().optional().nullable(),
+  name: z.string().optional().nullable(), // Name is often the description or a separate field
+  // symbol: z.string().optional().nullable(), // Removed: Not directly available in API for profiles/boosts
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
-  description: z.string().optional().nullable(),
+  description: z.string().optional().nullable(), // Will be used for name if name field is missing
   links: z.array(DexLinkSchema).optional().nullable(),
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
@@ -44,13 +43,13 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(),
-  symbol: z.string().optional().nullable(),
+  name: z.string().optional().nullable(), // Name is often the description or a separate field
+  // symbol: z.string().optional().nullable(), // Removed: Not directly available in API for profiles/boosts
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
-  description: z.string().optional().nullable(),
+  description: z.string().optional().nullable(), // Will be used for name if name field is missing
   links: z.array(DexLinkSchema).optional().nullable(),
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
@@ -63,7 +62,7 @@ export const OrderInfoItemSchema = z.object({
 });
 export type OrderInfoItem = z.infer<typeof OrderInfoItemSchema>;
 
-// Schemas for /latest/dex/pairs/{chainId}/{pairId} and similar pair data
+// Schemas for pair data
 export const TokenInfoSchema = z.object({
   address: z.string(),
   name: z.string(),
@@ -77,13 +76,14 @@ export const TxnsDetailSchema = z.object({
 });
 export type TxnsDetail = z.infer<typeof TxnsDetailSchema>;
 
-export const TxnsSchema = z.record(z.string(), TxnsDetailSchema); // e.g., "m5", "h1"
+// Using z.record for dynamic keys like "m5", "h1", etc.
+export const TxnsSchema = z.record(z.string(), TxnsDetailSchema);
 export type PairTxns = z.infer<typeof TxnsSchema>;
 
-export const VolumeSchema = z.record(z.string(), z.coerce.number()); // e.g., "h24", "h6"
+export const VolumeSchema = z.record(z.string(), z.coerce.number());
 export type PairVolume = z.infer<typeof VolumeSchema>;
 
-export const PriceChangeSchema = z.record(z.string(), z.coerce.number()); // e.g., "m5", "h1"
+export const PriceChangeSchema = z.record(z.string(), z.coerce.number());
 export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
 
 export const LiquiditySchema = z.object({
@@ -94,17 +94,17 @@ export const LiquiditySchema = z.object({
 export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
-  label: z.string().optional().nullable(), // Adding label as it can be part of API response
+  label: z.string().optional().nullable(),
   url: z.string().url(),
 });
 export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
-  platform: z.string().optional().nullable(), 
-  type: z.string().optional().nullable(), 
-  handle: z.string().optional().nullable(), 
-  url: z.string().url().optional().nullable(), 
-  name: z.string().optional().nullable(), 
+  platform: z.string().optional().nullable(),
+  type: z.string().optional().nullable(), // API docs show 'type' sometimes, platform is more common
+  name: z.string().optional().nullable(), // 'name' can sometimes be used for social links
+  handle: z.string().optional().nullable(),
+  url: z.string().url().optional().nullable(),
 });
 export type PairSocial = z.infer<typeof PairInfoSocialSchema>;
 
@@ -112,7 +112,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
-  description: z.string().optional().nullable(), // Description can be part of pair info
+  description: z.string().optional().nullable(),
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -127,18 +127,18 @@ export const PairDetailSchema = z.object({
   priceNative: z.string().optional().nullable(),
   priceUsd: z.string().optional().nullable(),
   txns: TxnsSchema.optional().nullable(),
-  volume: VolumeSchema.optional().nullable(), 
+  volume: VolumeSchema.optional().nullable(),
   priceChange: PriceChangeSchema.optional().nullable(),
   liquidity: LiquiditySchema.optional().nullable(),
   fdv: z.number().optional().nullable(),
   marketCap: z.number().optional().nullable(),
   pairCreatedAt: z.number().optional().nullable(), // Timestamp
   info: PairInfoDetailsSchema.optional().nullable(),
-  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(), // Added from potential API response
+  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(),
 });
 export type PairDetail = z.infer<typeof PairDetailSchema>;
 
-// Schema for responses that wrap an array of pairs, like /latest/dex/pairs and /latest/dex/search
+// Schema for responses that wrap an array of pairs
 export const PairDataSchema = z.object({
   schemaVersion: z.string(),
   pairs: z.array(PairDetailSchema),

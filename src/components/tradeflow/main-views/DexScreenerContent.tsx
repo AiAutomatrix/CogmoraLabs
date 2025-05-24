@@ -42,7 +42,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -66,8 +65,8 @@ type DexScreenerData =
   | TokenBoostItem[] 
   | OrderInfoItem[] 
   | PairDataSchema 
-  | PairDetail[] // For endpoints that return PairDetail[] directly
-  | null; // For views that might return null on error/no input
+  | PairDetail[] 
+  | null;
 
 // Helper function to format currency
 const formatCurrency = (value?: number | string | null, precision = 2) => {
@@ -82,9 +81,9 @@ const formatLargeNumber = (value?: number | string | null) => {
   if (value === null || value === undefined || value === '') return '-';
   const num = Number(value);
   if (isNaN(num)) return '-';
-  if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
+  if (Math.abs(num) >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2)}B`;
+  if (Math.abs(num) >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(num) >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
   return num.toLocaleString();
 };
 
@@ -94,9 +93,22 @@ const formatDateFromTimestamp = (timestamp?: number | null) => {
   try {
     return format(fromUnixTime(timestamp), 'MMM d, yyyy HH:mm');
   } catch (e) {
-    console.error("Error formatting date from timestamp:", timestamp, e);
     return 'Invalid Date';
   }
+};
+
+// Helper function to extract symbol from name or description
+const extractSymbol = (name?: string | null, description?: string | null): string => {
+    if (name && name.length >= 2 && name.length <= 6 && /^[A-Z0-9]+$/.test(name)) {
+      return name;
+    }
+    if (description) {
+      const match = description.match(/\(([^)]+)\)$/); // Text in last parentheses
+      if (match && match[1] && match[1].length >= 2 && match[1].length <= 10 && /^[A-Z0-9]+$/.test(match[1])) {
+        return match[1];
+      }
+    }
+    return 'N/A';
 };
 
 
@@ -107,7 +119,6 @@ const DexScreenerContent: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Input states for new views
   const [inputChainId, setInputChainId] = useState<string>('solana');
   const [inputTokenAddress, setInputTokenAddress] = useState<string>('');
   const [inputPairAddress, setInputPairAddress] = useState<string>('');
@@ -116,7 +127,6 @@ const DexScreenerContent: React.FC = () => {
   
   const [selectedPairForDialog, setSelectedPairForDialog] = useState<PairDetail | null>(null);
   const [isPairDetailDialogOpen, setIsPairDetailDialogOpen] = useState(false);
-
 
   const fetchDataForView = useCallback(async (view: DexScreenerViewType) => {
     setIsLoading(true);
@@ -137,7 +147,7 @@ const DexScreenerContent: React.FC = () => {
           break;
         case 'tokenOrders':
           if (!inputChainId || !inputTokenAddress) {
-            toast({ title: "Input Required", description: "Chain ID and Token Address are required for Token Orders.", variant: "destructive" });
+            toast({ title: "Input Required", description: "Chain ID and Token Address are required.", variant: "destructive" });
             setIsLoading(false); return;
           }
           result = await fetchTokenOrders(inputChainId, inputTokenAddress);
@@ -173,17 +183,7 @@ const DexScreenerContent: React.FC = () => {
         default:
           setIsLoading(false); return;
       }
-
-      if (view === 'profiles' || view === 'latestBoosts' || view === 'topBoosts') {
-         if (result && !Array.isArray(result)) {
-            setData([result as any] as TokenProfileItem[] | TokenBoostItem[]);
-         } else {
-            setData(result as TokenProfileItem[] | TokenBoostItem[] || []);
-         }
-      } else {
-        setData(result);
-      }
-
+      setData(result);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       setError(errorMessage);
@@ -199,12 +199,11 @@ const DexScreenerContent: React.FC = () => {
   }, [toast, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
   useEffect(() => {
-    // Fetch data only for views that don't require specific user input on initial load or view change
     if (['profiles', 'latestBoosts', 'topBoosts'].includes(selectedView)) {
       fetchDataForView(selectedView);
     } else {
-      setData(null); // Clear data when switching to input-based views initially
-      setIsLoading(false); // Stop loading for input-based views until fetch is triggered
+      setData(null); 
+      setIsLoading(false);
     }
   }, [selectedView, fetchDataForView]);
 
@@ -329,8 +328,8 @@ const DexScreenerContent: React.FC = () => {
           <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
             <TableCell>
               <Avatar className="h-8 w-8">
-                <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.name || item.tokenAddress || 'Token icon'} />
-                <AvatarFallback>{(item.name || item.symbol || item.tokenAddress || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
+                <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.name || item.description || 'Token icon'} />
+                <AvatarFallback>{(item.name || item.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </TableCell>
             <TableCell className="font-medium max-w-[150px] min-w-0">
@@ -339,7 +338,7 @@ const DexScreenerContent: React.FC = () => {
                 <TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent>
               </Tooltip>
             </TableCell>
-            <TableCell>{item.symbol || 'N/A'}</TableCell>
+            <TableCell>{extractSymbol(item.name, item.description)}</TableCell>
             <TableCell>{item.chainId}</TableCell>
             <TableCell className="font-mono text-xs">
               <div className="flex items-center gap-1">
@@ -349,8 +348,12 @@ const DexScreenerContent: React.FC = () => {
                 </Button>
               </div>
             </TableCell>
-            {isBoost && <TableCell className="text-right">{formatLargeNumber((item as TokenBoostItem).amount)}</TableCell>}
-            {isBoost && <TableCell className="text-right">{formatLargeNumber((item as TokenBoostItem).totalAmount)}</TableCell>}
+            {isBoost && 'amount' in item && (
+              <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
+            )}
+            {isBoost && 'totalAmount' in item && (
+              <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
+            )}
             <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
             <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
           </TableRow>
@@ -381,16 +384,16 @@ const DexScreenerContent: React.FC = () => {
           <TableRow key={pair.pairAddress}>
             <TableCell>
               <Avatar className="h-6 w-6">
-                <AvatarImage src={pair.info?.imageUrl || pair.baseToken?.symbol /* fallback needed */} alt={pair.baseToken?.name || 'Pair icon'} />
+                <AvatarImage src={pair.info?.imageUrl || `https://placehold.co/24x24.png`} alt={pair.baseToken?.name || 'Pair icon'} />
                 <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </TableCell>
             <TableCell>
               <Tooltip delayDuration={150}>
                 <TooltipTrigger asChild>
-                    <div className="truncate font-medium">{`${pair.baseToken?.symbol}/${pair.quoteToken?.symbol}`}</div>
+                    <div className="truncate font-medium">{`${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`}</div>
                 </TooltipTrigger>
-                <TooltipContent><p>{`${pair.baseToken?.name}/${pair.quoteToken?.name}`}</p></TooltipContent>
+                <TooltipContent><p>{`${pair.baseToken?.name || 'Unknown'}/${pair.quoteToken?.name || 'Unknown'}`}</p></TooltipContent>
               </Tooltip>
               <div className="text-xs text-muted-foreground truncate" title={pair.pairAddress}>{truncateAddress(pair.pairAddress)}</div>
             </TableCell>
@@ -427,7 +430,34 @@ const DexScreenerContent: React.FC = () => {
   const needsPairAddressInput = selectedView === 'pairDetailsByPairAddress';
   const needsSearchQueryInput = selectedView === 'searchPairs';
   const needsCommaSeparatedTokenAddressesInput = selectedView === 'pairsByTokenAddresses';
-  const isInputBasedView = needsChainIdInput || needsPairAddressInput || needsSearchQueryInput || needsCommaSeparatedTokenAddressesInput;
+  const isInputBasedView = needsChainIdInput || needsTokenAddressInput || needsPairAddressInput || needsSearchQueryInput || needsCommaSeparatedTokenAddressesInput;
+
+
+  const renderTable = () => {
+     if (!data && !isLoading && !error && isInputBasedView) {
+      return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">Enter parameters and click "Fetch View Data".</p></div>;
+    }
+    if (!data || (Array.isArray(data) && data.length === 0 && !isLoading) || (typeof data === 'object' && data && 'pairs' in data && (data as PairDataSchema).pairs?.length === 0 && !isLoading) ) {
+      return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No data available for this view. {isInputBasedView ? 'Try different inputs.' : ''}</p></div>;
+    }
+    return (
+        <Table>
+            <TableCaption>
+              {selectedView === 'profiles' && 'Latest token profiles.'}
+              {selectedView === 'latestBoosts' && 'Latest boosted tokens.'}
+              {selectedView === 'topBoosts' && 'Tokens with most active boosts.'}
+              {selectedView === 'tokenOrders' && `Orders for token ${inputTokenAddress} on ${inputChainId}.`}
+              {selectedView === 'pairDetailsByPairAddress' && `Details for pair ${inputPairAddress} on ${inputChainId}.`}
+              {selectedView === 'searchPairs' && `Search results for "${inputSearchQuery}".`}
+              {selectedView === 'tokenPairPools' && `Pools for token ${inputTokenAddress} on ${inputChainId}.`}
+              {selectedView === 'pairsByTokenAddresses' && `Pairs for token(s) on ${inputChainId}.`}
+            </TableCaption>
+            <TableHeader>{renderTableHeaders()}</TableHeader>
+            <TableBody>{renderTableRows()}</TableBody>
+        </Table>
+    )
+  }
+
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
@@ -491,7 +521,7 @@ const DexScreenerContent: React.FC = () => {
         )}
       </CardHeader>
 
-      <CardContent className="flex-grow overflow-y-auto p-2 bg-muted/10">
+      <CardContent className="flex-grow overflow-y-auto p-2 bg-muted/20">
         {isLoading ? (
           <div className="space-y-2 p-4">
             {[...Array(10)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
@@ -503,25 +533,8 @@ const DexScreenerContent: React.FC = () => {
             <p className="text-muted-foreground text-sm">{error}</p>
             <Button onClick={() => fetchDataForView(selectedView)} className="mt-4">Retry</Button>
           </div>
-        ) : (!data || (Array.isArray(data) && data.length === 0) || (typeof data === 'object' && data && 'pairs' in data && (data as PairDataSchema).pairs.length === 0) ) ? (
-           <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">No data available for this view. {isInputBasedView ? 'Try fetching with valid inputs.' : ''}</p>
-          </div>
         ) : (
-          <Table>
-            <TableCaption>
-              {selectedView === 'profiles' && 'Latest token profiles.'}
-              {selectedView === 'latestBoosts' && 'Latest boosted tokens.'}
-              {selectedView === 'topBoosts' && 'Tokens with most active boosts.'}
-              {selectedView === 'tokenOrders' && `Orders for token ${inputTokenAddress} on ${inputChainId}.`}
-              {selectedView === 'pairDetailsByPairAddress' && `Details for pair ${inputPairAddress} on ${inputChainId}.`}
-              {selectedView === 'searchPairs' && `Search results for "${inputSearchQuery}".`}
-              {selectedView === 'tokenPairPools' && `Pools for token ${inputTokenAddress} on ${inputChainId}.`}
-              {selectedView === 'pairsByTokenAddresses' && `Pairs for token(s) on ${inputChainId}.`}
-            </TableCaption>
-            <TableHeader>{renderTableHeaders()}</TableHeader>
-            <TableBody>{renderTableRows()}</TableBody>
-          </Table>
+          renderTable()
         )}
       </CardContent>
 
@@ -532,20 +545,20 @@ const DexScreenerContent: React.FC = () => {
               <DialogTitle className="flex items-center">
                 {selectedPairForDialog.info?.imageUrl && (
                   <Avatar className="h-7 w-7 mr-2">
-                    <AvatarImage src={selectedPairForDialog.info.imageUrl} alt={`${selectedPairForDialog.baseToken.name} icon`} />
-                    <AvatarFallback>{selectedPairForDialog.baseToken.symbol.substring(0,1)}</AvatarFallback>
+                    <AvatarImage src={selectedPairForDialog.info.imageUrl} alt={`${selectedPairForDialog.baseToken?.name || 'Pair'} icon`} />
+                    <AvatarFallback>{(selectedPairForDialog.baseToken?.symbol || 'P').substring(0,1)}</AvatarFallback>
                   </Avatar>
                 )}
-                Pair Details: {selectedPairForDialog.baseToken.symbol}/{selectedPairForDialog.quoteToken.symbol}
+                Pair Details: {selectedPairForDialog.baseToken?.symbol || '?'}/{selectedPairForDialog.quoteToken?.symbol || '?'}
               </DialogTitle>
               <DialogDescription>
                 {selectedPairForDialog.pairAddress} on {selectedPairForDialog.chainId} (DEX: {selectedPairForDialog.dexId})
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 py-4 overflow-y-auto px-1 flex-grow">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+            <div className="grid gap-3 py-4 overflow-y-auto px-1 flex-grow text-xs">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div><strong>Price (USD):</strong> {formatCurrency(selectedPairForDialog.priceUsd)}</div>
-                <div><strong>Price (Native):</strong> {selectedPairForDialog.priceNative}</div>
+                <div><strong>Price (Native):</strong> {selectedPairForDialog.priceNative || '-'}</div>
                 <div><strong>FDV:</strong> {formatCurrency(selectedPairForDialog.fdv)}</div>
                 <div><strong>Market Cap:</strong> {formatCurrency(selectedPairForDialog.marketCap)}</div>
                 <div><strong>Liquidity (USD):</strong> {formatCurrency(selectedPairForDialog.liquidity?.usd)}</div>
@@ -554,52 +567,52 @@ const DexScreenerContent: React.FC = () => {
 
               {selectedPairForDialog.txns && (
                 <div>
-                  <h4 className="font-semibold mt-2 mb-1 text-md">Transactions:</h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <h4 className="font-semibold mt-2 mb-1 text-sm">Transactions (Buys/Sells):</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
                     {Object.entries(selectedPairForDialog.txns).map(([period, details]) => (
-                      <div key={period}><strong>{period}:</strong> Buys: {details.buys}, Sells: {details.sells}</div>
+                      <div key={period}><strong>{period.toUpperCase()}:</strong> {details.buys}/{details.sells}</div>
                     ))}
                   </div>
                 </div>
               )}
               {selectedPairForDialog.volume && (
                  <div>
-                  <h4 className="font-semibold mt-2 mb-1 text-md">Volume:</h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <h4 className="font-semibold mt-2 mb-1 text-sm">Volume:</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
                     {Object.entries(selectedPairForDialog.volume).map(([period, vol]) => (
-                      <div key={period}><strong>{period}:</strong> {formatCurrency(vol)}</div>
+                      <div key={period}><strong>{period.toUpperCase()}:</strong> {formatCurrency(vol)}</div>
                     ))}
                   </div>
                 </div>
               )}
               {selectedPairForDialog.priceChange && (
                 <div>
-                  <h4 className="font-semibold mt-2 mb-1 text-md">Price Change (%):</h4>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <h4 className="font-semibold mt-2 mb-1 text-sm">Price Change (%):</h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
                     {Object.entries(selectedPairForDialog.priceChange).map(([period, change]) => (
-                      <div key={period}><strong>{period}:</strong> {change.toFixed(2)}%</div>
+                      <div key={period}><strong>{period.toUpperCase()}:</strong> {change?.toFixed(2) ?? '-'}%</div>
                     ))}
                   </div>
                 </div>
               )}
               {selectedPairForDialog.info?.websites && selectedPairForDialog.info.websites.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mt-2 mb-1 text-md">Websites:</h4>
-                  <ul className="list-disc list-inside text-xs">
-                    {selectedPairForDialog.info.websites.map(site => <li key={site.url}><a href={site.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{site.url}</a></li>)}
+                  <h4 className="font-semibold mt-2 mb-1 text-sm">Websites:</h4>
+                  <ul className="list-disc list-inside">
+                    {selectedPairForDialog.info.websites.map(site => <li key={site.url}><a href={site.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{site.label || site.url}</a></li>)}
                   </ul>
                 </div>
               )}
               {selectedPairForDialog.info?.socials && selectedPairForDialog.info.socials.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mt-2 mb-1 text-md">Socials:</h4>
-                   <ul className="list-disc list-inside text-xs">
-                    {selectedPairForDialog.info.socials.map(social => <li key={social.url || social.handle}>{social.name || social.platform}: {social.url ? <a href={social.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{social.handle || social.url}</a> : social.handle}</li>)}
+                  <h4 className="font-semibold mt-2 mb-1 text-sm">Socials:</h4>
+                   <ul className="list-disc list-inside">
+                    {selectedPairForDialog.info.socials.map(social => <li key={social.url || social.type || social.handle}>{social.name || social.type || social.platform}: {social.url ? <a href={social.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{social.handle || social.url}</a> : social.handle}</li>)}
                   </ul>
                 </div>
               )}
             </div>
-            <DialogFooter className="pt-2 border-t">
+            <DialogFooter className="pt-2 border-t mt-auto">
               <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
             </DialogFooter>
           </DialogContent>
