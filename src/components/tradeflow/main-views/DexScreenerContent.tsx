@@ -46,7 +46,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog'; // Import Dialog components
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink as ExternalLinkIcon, SearchCode, TrendingUp, ListFilter, ReceiptText, Layers, Search, Network, ListCollapse, Eye, PackageSearch, Loader2 } from 'lucide-react';
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink as ExternalLinkIcon, SearchCode, TrendingUp, ListFilter, ReceiptText, Layers, Search, Network, ListCollapse, Eye, PackageSearch, Loader2 } from 'lucide-react'; // Added new icons
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format } from 'date-fns'; // For date formatting
@@ -208,9 +208,11 @@ const DexScreenerContent: React.FC = () => {
     if (['profiles', 'latestBoosts', 'topBoosts'].includes(selectedView)) {
       fetchDataForView(selectedView);
     } else {
+      // For views requiring input, don't fetch automatically on view change
+      // Data will be fetched when the user clicks the "Fetch View Data" button
       const isObjectView = ['pairDetailsByPairAddress', 'searchPairs'].includes(selectedView);
       setData(isObjectView ? null : []);
-      setIsLoading(false);
+      setIsLoading(false); // Not loading until user interaction
       setError(null);
     }
   }, [selectedView, fetchDataForView]);
@@ -293,10 +295,13 @@ const DexScreenerContent: React.FC = () => {
   const getPairsArray = (rawData: DexScreenerData, viewType: DexScreenerViewType): PairDetail[] => {
     if (!rawData) return [];
     if (viewType === 'pairDetailsByPairAddress' || viewType === 'searchPairs') {
-      return (rawData as PairDataSchema).pairs || [];
+      // rawData here is PairDataSchema | null
+      const pairData = rawData as PairDataSchema | null;
+      return pairData?.pairs || [];
     }
     if (viewType === 'tokenPairPools' || viewType === 'pairsByTokenAddresses') {
-      return rawData as PairDetail[];
+      // rawData here is PairDetail[] | null
+      return (rawData as PairDetail[] | null) || [];
     }
     return [];
   };
@@ -366,6 +371,8 @@ const DexScreenerContent: React.FC = () => {
   ];
 
   const isProfilesOrBoostsView = selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts';
+  const isPairRelatedView = ['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView);
+
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
@@ -407,7 +414,7 @@ const DexScreenerContent: React.FC = () => {
             <p className="text-muted-foreground text-sm mb-3">{error}</p>
             <Button onClick={() => fetchDataForView(selectedView)} className="mt-2">Retry</Button>
           </div>
-        ) : (!data || (Array.isArray(data) && data.length === 0) || ((selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs') && (!data || !(data as PairDataSchema).pairs || (data as PairDataSchema).pairs.length === 0))) ? (
+        ) : (!data || (Array.isArray(data) && data.length === 0) || (isPairRelatedView && (!data || !(data as PairDataSchema).pairs || (data as PairDataSchema).pairs.length === 0))) ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">No data available for this view or criteria.</p>
           </div>
@@ -429,11 +436,9 @@ const DexScreenerContent: React.FC = () => {
                   <>
                     <TableHead className="w-[50px]">Icon</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Symbol</TableHead>
                     <TableHead>Chain</TableHead>
                     <TableHead className="min-w-[150px]">Address</TableHead>
                     {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && <TableHead className="text-right">Boost Amt.</TableHead>}
-                    {selectedView === 'latestBoosts' && <TableHead className="text-right">Total Boost</TableHead>} 
                     <TableHead className="w-[60px] text-center">Info</TableHead>
                     <TableHead className="w-[100px] text-center">Links</TableHead>
                   </>
@@ -445,7 +450,7 @@ const DexScreenerContent: React.FC = () => {
                     <TableHead>Payment Date</TableHead>
                   </>
                 )}
-                {(['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) && (
+                {isPairRelatedView && (
                    <>
                     <TableHead className="w-[50px]">Icon</TableHead>
                     <TableHead>Pair</TableHead>
@@ -479,7 +484,6 @@ const DexScreenerContent: React.FC = () => {
                         <TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent>
                      </Tooltip>
                   </TableCell>
-                  <TableCell>{/* Symbol data would go here if available for profiles/boosts */ '-'}</TableCell>
                   <TableCell>{item.chainId}</TableCell>
                   <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-1">
@@ -493,13 +497,10 @@ const DexScreenerContent: React.FC = () => {
                   </TableCell>
                   {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
                     <TableCell className="text-right">
-                      {(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}
+                      {typeof (item as TokenBoostItem).amount === 'number' 
+                        ? (item as TokenBoostItem).amount.toLocaleString() 
+                        : '-'}
                     </TableCell>
-                  )}
-                  {selectedView === 'latestBoosts' && (
-                     <TableCell className="text-right">
-                       {(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}
-                     </TableCell>
                   )}
                   <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
                   <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
@@ -512,11 +513,11 @@ const DexScreenerContent: React.FC = () => {
                   <TableCell>{formatDateFromTimestamp(order.paymentTimestamp)}</TableCell>
                 </TableRow>
               ))}
-              {(['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) && getPairsArray(data, selectedView).map((pair) => (
+              {isPairRelatedView && getPairsArray(data, selectedView).map((pair) => (
                 <TableRow key={pair.pairAddress}>
                   <TableCell>
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={pair.info?.imageUrl || pair.baseToken?.symbol /* fallback needed */} alt={pair.baseToken?.name || 'Token'} />
+                      <AvatarImage src={pair.info?.imageUrl || (pair.baseToken?.symbol ? `https://cdn.dexscreener.com/assets/chains/${pair.chainId.toLowerCase()}.png` : `https://placehold.co/32x32.png`) } alt={pair.baseToken?.name || 'Token'} />
                       <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
@@ -600,6 +601,7 @@ const DexScreenerContent: React.FC = () => {
                             {Object.entries(selectedPairForDialog.volume).map(([period, vol]) => (
                                 <div key={period} className="p-2 border rounded bg-muted/50">
                                     <strong>{period.toUpperCase()}:</strong> {formatCurrency(vol)}
+                                
                                 </div>
                             ))}
                         </div>
