@@ -4,8 +4,9 @@ import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairDataSchema, P
 
 const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 
-// Generic helper function to fetch and parse data
-async function fetchApiData<T>(endpoint: string, isSingleObjectResponseToArray: boolean = false): Promise<T | null> {
+// Helper function to fetch and parse data that always returns an array
+// Used for endpoints that might return a single object but we want to treat as an array.
+async function fetchDataAndWrapInArrayIfSingleObject<T>(endpoint: string): Promise<T[]> {
   try {
     const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
     if (!response.ok) {
@@ -14,26 +15,41 @@ async function fetchApiData<T>(endpoint: string, isSingleObjectResponseToArray: 
       throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
     }
     const data = await response.json();
-
-    if (isSingleObjectResponseToArray) {
-      // For endpoints that return a single object, wrap it in an array as T (which would be T_Item[])
-      // This is a bit of a hack due to the generic type T. It assumes T is desired as an array of the item.
-      // A more type-safe way would be for the calling function to handle the array wrapping.
-      // For now, if T is FooItem[], and API returns FooItem, we wrap it.
-      return [data] as unknown as T; // Cast needed due to generic manipulation
+    if (Array.isArray(data)) {
+      return data as T[];
+    } else if (data && typeof data === 'object') {
+      return [data as T]; // Wrap single object in an array
     }
-    return data as T;
+    return []; // Fallback for unexpected structure
   } catch (error) {
-    console.error(`Error in fetchApiData for ${endpoint}:`, error);
-    // throw error; // Re-throw to be caught by the specific action
-    return null; // Return null on error to be handled by UI
+    console.error(`Error in fetchDataAndWrapInArrayIfSingleObject for ${endpoint}:`, error);
+    throw error; // Re-throw to be caught by the caller
   }
 }
 
+// Generic helper function to fetch and parse data, returning T or null
+// Used for endpoints that return a specific object structure (like PairDataSchema) or an array directly.
+async function fetchApiData<T>(endpoint: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`API Error (${response.status}) for ${endpoint}: ${errorBody}`);
+      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data as T;
+  } catch (error) {
+    console.error(`Error in fetchApiData for ${endpoint}:`, error);
+    return null; 
+  }
+}
+
+
+// Original three working functions
 export async function fetchLatestTokenProfiles(): Promise<TokenProfileItem[]> {
   try {
-    const profile = await fetchApiData<TokenProfileItem>(`/token-profiles/latest/v1`, true);
-    return profile ? (profile as unknown as TokenProfileItem[]) : []; // API returns single object
+    return await fetchDataAndWrapInArrayIfSingleObject<TokenProfileItem>('/token-profiles/latest/v1');
   } catch (error) {
     console.error("Error in fetchLatestTokenProfiles:", error);
     return [];
@@ -41,9 +57,8 @@ export async function fetchLatestTokenProfiles(): Promise<TokenProfileItem[]> {
 }
 
 export async function fetchLatestBoostedTokens(): Promise<TokenBoostItem[]> {
-   try {
-    const boosts = await fetchApiData<TokenBoostItem>(`/token-boosts/latest/v1`, true);
-    return boosts ? (boosts as unknown as TokenBoostItem[]) : []; // API returns single object
+  try {
+    return await fetchDataAndWrapInArrayIfSingleObject<TokenBoostItem>('/token-boosts/latest/v1');
   } catch (error) {
     console.error("Error in fetchLatestBoostedTokens:", error);
     return [];
@@ -52,18 +67,18 @@ export async function fetchLatestBoostedTokens(): Promise<TokenBoostItem[]> {
 
 export async function fetchTopBoostedTokens(): Promise<TokenBoostItem[]> {
   try {
-    const boosts = await fetchApiData<TokenBoostItem>(`/token-boosts/top/v1`, true);
-    return boosts ? (boosts as unknown as TokenBoostItem[]) : []; // API returns single object
+    return await fetchDataAndWrapInArrayIfSingleObject<TokenBoostItem>('/token-boosts/top/v1');
   } catch (error) {
     console.error("Error in fetchTopBoostedTokens:", error);
     return [];
   }
 }
 
+// New functions
 export async function fetchTokenOrders(chainId: string, tokenAddress: string): Promise<OrderInfoItem[]> {
   try {
     const orders = await fetchApiData<OrderInfoItem[]>(`/orders/v1/${chainId}/${tokenAddress}`);
-    return orders || []; // API returns array
+    return orders || [];
   } catch (error) {
     console.error("Error in fetchTokenOrders:", error);
     return [];
@@ -72,8 +87,7 @@ export async function fetchTokenOrders(chainId: string, tokenAddress: string): P
 
 export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairDataSchema | null> {
   try {
-    // Note: API doc uses {pairId} but example uses pairAddress. Assuming pairAddress is the ID.
-    return await fetchApiData<PairDataSchema>(`/latest/dex/pairs/${chainId}/${pairAddress}`); // API returns PairDataSchema object
+    return await fetchApiData<PairDataSchema>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
   } catch (error) {
     console.error("Error in fetchPairDetailsByPairAddress:", error);
     return null;
@@ -82,7 +96,7 @@ export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress
 
 export async function searchPairs(query: string): Promise<PairDataSchema | null> {
   try {
-    return await fetchApiData<PairDataSchema>(`/latest/dex/search?q=${encodeURIComponent(query)}`); // API returns PairDataSchema object
+    return await fetchApiData<PairDataSchema>(`/latest/dex/search?q=${encodeURIComponent(query)}`);
   } catch (error) {
     console.error("Error in searchPairs:", error);
     return null;
@@ -92,7 +106,7 @@ export async function searchPairs(query: string): Promise<PairDataSchema | null>
 export async function fetchTokenPairPools(chainId: string, tokenAddress: string): Promise<PairDetail[]> {
   try {
     const pools = await fetchApiData<PairDetail[]>(`/token-pairs/v1/${chainId}/${tokenAddress}`);
-    return pools || []; // API returns array of PairDetail
+    return pools || [];
   } catch (error) {
     console.error("Error in fetchTokenPairPools:", error);
     return [];
@@ -101,8 +115,9 @@ export async function fetchTokenPairPools(chainId: string, tokenAddress: string)
 
 export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses: string): Promise<PairDetail[]> {
   try {
+    // DexScreener API uses comma-separated token addresses in the path directly
     const pairs = await fetchApiData<PairDetail[]>(`/tokens/v1/${chainId}/${tokenAddresses}`);
-    return pairs || []; // API returns array of PairDetail
+    return pairs || [];
   } catch (error) {
     console.error("Error in fetchPairsByTokenAddresses:", error);
     return [];

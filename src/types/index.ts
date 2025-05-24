@@ -18,7 +18,7 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-// DEX Screener API Types
+// DEX Screener API Types - Original Three
 export const DexLinkSchema = z.object({
   type: z.string().optional().nullable(),
   label: z.string().optional().nullable(),
@@ -30,11 +30,12 @@ export const TokenProfileItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(),
+  name: z.string().optional().nullable(), // Though not directly in sample, often used for display
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
+  // symbol: z.string().optional().nullable(), // Removed as per last correction
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
 
@@ -42,17 +43,18 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(),
+  name: z.string().optional().nullable(), // Though not directly in sample
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
+  // symbol: z.string().optional().nullable(), // Removed as per last correction
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
 
-// Schema for /orders/v1/{chainId}/{tokenAddress}
+// DEX Screener API Types - New Additions
 export const OrderInfoItemSchema = z.object({
   type: z.string(),
   status: z.string(),
@@ -60,7 +62,6 @@ export const OrderInfoItemSchema = z.object({
 });
 export type OrderInfoItem = z.infer<typeof OrderInfoItemSchema>;
 
-// Schemas for pair data
 export const TokenInfoSchema = z.object({
   address: z.string(),
   name: z.string().optional().nullable(),
@@ -99,8 +100,8 @@ export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
   platform: z.string().optional().nullable(),
-  type: z.string().optional().nullable(), 
-  name: z.string().optional().nullable(), 
+  type: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
   handle: z.string().optional().nullable(),
   url: z.string().url().optional().nullable(),
 });
@@ -110,7 +111,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
-  description: z.string().optional().nullable(),
+  description: z.string().optional().nullable(), // Added description as per common API patterns
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -136,7 +137,6 @@ export const PairDetailSchema = z.object({
 });
 export type PairDetail = z.infer<typeof PairDetailSchema>;
 
-// Schema for responses that wrap an array of pairs
 export const PairDataSchema = z.object({
   schemaVersion: z.string(),
   pairs: z.array(PairDetailSchema),
