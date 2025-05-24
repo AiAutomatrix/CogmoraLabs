@@ -1,6 +1,4 @@
-// Placeholder for LatestBoostedTokensView.tsx
-// Fetches and displays latest boosted tokens.
-// We will implement this in the next step.
+
 'use client';
 import React, { useState, useEffect } from 'react';
 import { fetchLatestBoostedTokens } from '@/app/actions/dexScreenerActions';
@@ -65,7 +63,7 @@ const LatestBoostedTokensView: React.FC = () => {
   return (
     <div className="space-y-4 columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-4 p-1">
       {boosts.map((boost, index) => (
-        <TokenBoostCard key={boost.tokenAddress || index} boost={boost} />
+        <TokenBoostCard key={`${boost.tokenAddress}-${index}`} boost={boost} />
       ))}
     </div>
   );
