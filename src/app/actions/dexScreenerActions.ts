@@ -91,7 +91,7 @@ export async function fetchPairDetails(chainId: string, pairAddress: string): Pr
     if (data && typeof data === 'object' && data.pairs && Array.isArray(data.pairs)) {
       return data;
     }
-    console.warn("fetchPairDetails: Unexpected data structure received or pairs array missing for ${chainId}/${pairAddress}", data);
+    console.warn(`fetchPairDetails: Unexpected data structure received or pairs array missing for ${chainId}/${pairAddress}`, data);
     return null; // Return null if structure is not as expected or data is missing
   } catch (error) {
     console.error(`Error in fetchPairDetails for ${chainId}/${pairAddress}:`, error);
