@@ -29,8 +29,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink } from 'lucide-react';
-import { useToast } from "@/hooks/use-toast";
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink } from 'lucide-react'; // Added Copy icon
+import { useToast } from "@/hooks/use-toast"; // Added useToast
 
 type DexScreenerViewType = 'profiles' | 'latestBoosts' | 'topBoosts';
 type DexScreenerData = TokenProfileItem[] | TokenBoostItem[];
@@ -40,12 +40,12 @@ const DexScreenerContent: React.FC = () => {
   const [data, setData] = useState<DexScreenerData>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
+  const { toast } = useToast(); // Initialize toast
 
   const fetchDataForView = useCallback(async (view: DexScreenerViewType) => {
     setIsLoading(true);
     setError(null);
-    setData([]);
+    setData([]); // Clear previous data
     try {
       let result: DexScreenerData = [];
       if (view === 'profiles') {
@@ -68,16 +68,25 @@ const DexScreenerContent: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast]); // Added toast to dependencies, though not strictly necessary if its identity is stable
 
   useEffect(() => {
     fetchDataForView(selectedView);
   }, [selectedView, fetchDataForView]);
 
   const handleCopyAddress = (address: string) => {
+    if (!navigator.clipboard) {
+      toast({
+        title: "Copy Failed",
+        description: "Clipboard API not available in this browser.",
+        variant: "destructive",
+      });
+      return;
+    }
     navigator.clipboard.writeText(address).then(() => {
       toast({ title: "Copied!", description: "Token address copied to clipboard." });
     }).catch(err => {
+      console.error("Failed to copy address: ", err);
       toast({ title: "Copy Failed", description: "Could not copy address.", variant: "destructive"});
     });
   };
@@ -176,36 +185,38 @@ const DexScreenerContent: React.FC = () => {
                 <TableHead>Name/Symbol</TableHead>
                 <TableHead>Chain</TableHead>
                 <TableHead>Address</TableHead>
-                {isBoostView && <TableHead>Boost Amt.</TableHead>}
-                {isBoostView && <TableHead>Total Boost</TableHead>}
+                {isBoostView && <TableHead className="text-right">Boost Amt.</TableHead>}
+                {isBoostView && <TableHead className="text-right">Total Boost</TableHead>}
                 <TableHead className="w-[80px] text-center">Info</TableHead>
                 <TableHead className="w-[100px] text-center">Links</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.map((item, index) => (
-                <TableRow key={`${item.tokenAddress}-${index}`}>
+                <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}`}> {/* Ensure key uniqueness */}
                   <TableCell>
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={item.icon ?? `https://placehold.co/32.png`} alt={item.description || 'Token icon'} data-ai-hint="token logo"/>
+                      <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.description || 'Token icon'} data-ai-hint="token logo" />
                       <AvatarFallback>{(item.description || item.tokenAddress || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
-                  <TableCell className="font-medium max-w-[150px] truncate" title={item.description || item.tokenAddress}>
+                  <TableCell className="font-medium max-w-[150px] min-w-0 truncate" title={item.description || item.tokenAddress}>
                     {item.description || item.tokenAddress}
                   </TableCell>
                   <TableCell>{item.chainId}</TableCell>
-                  <TableCell className="max-w-[120px] truncate font-mono text-xs group">
-                    <span title={item.tokenAddress}>{item.tokenAddress}</span>
-                    <Button variant="ghost" size="icon" className="ml-1 h-6 w-6 opacity-50 group-hover:opacity-100" onClick={() => handleCopyAddress(item.tokenAddress)}>
-                        <Copy className="h-3 w-3"/>
-                    </Button>
+                  <TableCell className="max-w-[150px] min-w-0 font-mono text-xs">
+                    <div className="flex items-center gap-1">
+                      <span className="truncate" title={item.tokenAddress}>{item.tokenAddress}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => handleCopyAddress(item.tokenAddress)}>
+                          <Copy className="h-3 w-3"/>
+                      </Button>
+                    </div>
                   </TableCell>
                   {isBoostView && 'amount' in item && (
-                    <TableCell>{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
+                    <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
                   )}
                   {isBoostView && 'totalAmount' in item && (
-                     <TableCell>{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
+                     <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
                   )}
                   <TableCell className="text-center">{renderDescriptionPopover(item.description)}</TableCell>
                   <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
@@ -220,3 +231,5 @@ const DexScreenerContent: React.FC = () => {
 };
 
 export default DexScreenerContent;
+
+    
