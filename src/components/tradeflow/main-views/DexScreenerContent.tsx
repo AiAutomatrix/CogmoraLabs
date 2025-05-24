@@ -58,7 +58,12 @@ const DexScreenerContent: React.FC = () => {
       } else if (view === 'topBoosts') {
         result = await fetchTopBoostedTokens();
       }
-      setData(result);
+      // Ensure result is always an array, even if API returns single object
+      if (result && !Array.isArray(result)) {
+        setData([result as any]);
+      } else {
+        setData(result || []);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       setError(errorMessage);
@@ -119,6 +124,8 @@ const DexScreenerContent: React.FC = () => {
         </Tooltip>
         <PopoverContent 
           className="w-80 max-h-60 overflow-y-auto text-sm z-[51] bg-popover text-popover-foreground p-3 rounded shadow-lg"
+          side="top"
+          align="center"
         >
           {description}
         </PopoverContent>
@@ -146,6 +153,12 @@ const DexScreenerContent: React.FC = () => {
         </DropdownMenuContent>
       </DropdownMenu>
     );
+  };
+
+  const truncateAddress = (address: string | null | undefined, startChars = 6, endChars = 4) => {
+    if (!address) return '-';
+    if (address.length <= startChars + endChars) return address;
+    return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
   };
 
   const isBoostView = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
@@ -206,10 +219,10 @@ const DexScreenerContent: React.FC = () => {
                 <TableHead className="w-[50px]">Icon</TableHead>
                 <TableHead>Name/Symbol</TableHead>
                 <TableHead>Chain</TableHead>
-                <TableHead className="min-w-[180px]">Address</TableHead>
+                <TableHead className="min-w-[150px]">Address</TableHead>
                 {isBoostView && <TableHead className="text-right">Boost Amt.</TableHead>}
                 {isBoostView && <TableHead className="text-right">Total Boost</TableHead>}
-                <TableHead className="w-[80px] text-center">Info</TableHead>
+                <TableHead className="w-[60px] text-center">Info</TableHead>
                 <TableHead className="w-[100px] text-center">Links</TableHead>
               </TableRow>
             </TableHeader>
@@ -218,7 +231,10 @@ const DexScreenerContent: React.FC = () => {
                 <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
                   <TableCell>
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.description || item.tokenAddress || 'Token icon'} data-ai-hint="token crypto" />
+                      <AvatarImage 
+                        src={item.icon ?? `https://placehold.co/32x32.png`} 
+                        alt={item.description || item.tokenAddress || 'Token icon'} 
+                      />
                       <AvatarFallback>{(item.description || item.tokenAddress || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
@@ -230,8 +246,10 @@ const DexScreenerContent: React.FC = () => {
                   <TableCell>{item.chainId}</TableCell>
                   <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-1">
-                      <span className="truncate" title={item.tokenAddress}>{item.tokenAddress}</span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => handleCopyAddress(item.tokenAddress)}>
+                      <span className="truncate" title={item.tokenAddress}>
+                        {truncateAddress(item.tokenAddress)}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => item.tokenAddress && handleCopyAddress(item.tokenAddress)}>
                           <Copy className="h-3 w-3"/>
                       </Button>
                     </div>
@@ -255,3 +273,4 @@ const DexScreenerContent: React.FC = () => {
 };
 
 export default DexScreenerContent;
+
