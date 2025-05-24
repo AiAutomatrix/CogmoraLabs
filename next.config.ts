@@ -23,6 +23,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.dexscreener.com', // Added this new hostname
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };
