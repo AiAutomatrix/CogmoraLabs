@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, PackageSearch, TrendingUp, ListFilter, ReceiptText, Layers, Search, Blocks, Users, Eye, Wallet, BarChartHorizontalBig } from 'lucide-react';
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, PackageSearch, TrendingUp, ListFilter, ReceiptText, Layers, Search, Blocks, Users, Eye, BarChartHorizontalBig } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format, fromUnixTime } from 'date-fns';
@@ -96,21 +96,6 @@ const formatDateFromTimestamp = (timestamp?: number | null) => {
     return 'Invalid Date';
   }
 };
-
-// Helper function to extract symbol from name or description
-const extractSymbol = (name?: string | null, description?: string | null): string => {
-    if (name && name.length >= 2 && name.length <= 6 && /^[A-Z0-9]+$/.test(name)) {
-      return name;
-    }
-    if (description) {
-      const match = description.match(/\(([^)]+)\)$/); // Text in last parentheses
-      if (match && match[1] && match[1].length >= 2 && match[1].length <= 10 && /^[A-Z0-9]+$/.test(match[1])) {
-        return match[1];
-      }
-    }
-    return 'N/A';
-};
-
 
 const DexScreenerContent: React.FC = () => {
   const [selectedView, setSelectedView] = useState<DexScreenerViewType>('profiles');
@@ -277,7 +262,6 @@ const DexScreenerContent: React.FC = () => {
           <TableRow>
             <TableHead className="w-[50px]">Icon</TableHead>
             <TableHead>Name</TableHead>
-            <TableHead>Symbol</TableHead>
             <TableHead>Chain</TableHead>
             <TableHead className="min-w-[150px]">Address</TableHead>
             {isBoost && <TableHead className="text-right">Boost Amt.</TableHead>}
@@ -332,13 +316,14 @@ const DexScreenerContent: React.FC = () => {
                 <AvatarFallback>{(item.name || item.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </TableCell>
-            <TableCell className="font-medium max-w-[150px] min-w-0">
+            <TableCell className="font-medium max-w-[200px] min-w-0">
               <Tooltip delayDuration={150}>
-                <TooltipTrigger asChild><div className="truncate">{item.name || item.description || "Unknown Token"}</div></TooltipTrigger>
+                <TooltipTrigger asChild>
+                  <div className="truncate">{item.name || item.description || "Unknown Token"}</div>
+                </TooltipTrigger>
                 <TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent>
               </Tooltip>
             </TableCell>
-            <TableCell>{extractSymbol(item.name, item.description)}</TableCell>
             <TableCell>{item.chainId}</TableCell>
             <TableCell className="font-mono text-xs">
               <div className="flex items-center gap-1">
@@ -384,18 +369,18 @@ const DexScreenerContent: React.FC = () => {
           <TableRow key={pair.pairAddress}>
             <TableCell>
               <Avatar className="h-6 w-6">
-                <AvatarImage src={pair.info?.imageUrl || `https://placehold.co/24x24.png`} alt={pair.baseToken?.name || 'Pair icon'} />
+                <AvatarImage src={pair.info?.imageUrl || (pair.baseToken?.symbol ? `https://dd.dexscreener.com/ds-data/tokens/${pair.chainId}/${pair.baseToken.address}.png` : `https://placehold.co/24x24.png`)} alt={pair.baseToken?.name || 'Pair icon'} />
                 <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
               </Avatar>
             </TableCell>
             <TableCell>
               <Tooltip delayDuration={150}>
                 <TooltipTrigger asChild>
-                    <div className="truncate font-medium">{`${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`}</div>
+                    <div className="truncate font-medium max-w-[150px]">{`${pair.baseToken?.symbol || '?'}/${pair.quoteToken?.symbol || '?'}`}</div>
                 </TooltipTrigger>
                 <TooltipContent><p>{`${pair.baseToken?.name || 'Unknown'}/${pair.quoteToken?.name || 'Unknown'}`}</p></TooltipContent>
               </Tooltip>
-              <div className="text-xs text-muted-foreground truncate" title={pair.pairAddress}>{truncateAddress(pair.pairAddress)}</div>
+              <div className="text-xs text-muted-foreground truncate max-w-[150px]" title={pair.pairAddress}>{truncateAddress(pair.pairAddress)}</div>
             </TableCell>
             <TableCell className="text-right">{formatCurrency(pair.priceUsd)}</TableCell>
             <TableCell className="text-right">{formatLargeNumber(pair.volume?.h24)}</TableCell>
@@ -422,7 +407,7 @@ const DexScreenerContent: React.FC = () => {
     { value: 'pairDetailsByPairAddress', label: 'Pair by Address', icon: <Layers className="mr-2 h-4 w-4" /> },
     { value: 'searchPairs', label: 'Search Pairs', icon: <Search className="mr-2 h-4 w-4" /> },
     { value: 'tokenPairPools', label: 'Token Pools', icon: <Blocks className="mr-2 h-4 w-4" /> },
-    { value: 'pairsByTokenAddresses', label: 'Pairs by Tokens', icon: <Wallet className="mr-2 h-4 w-4" /> },
+    { value: 'pairsByTokenAddresses', label: 'Pairs by Tokens', icon: <Users className="mr-2 h-4 w-4" /> },
   ];
   
   const needsChainIdInput = ['tokenOrders', 'pairDetailsByPairAddress', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView);
@@ -437,8 +422,19 @@ const DexScreenerContent: React.FC = () => {
      if (!data && !isLoading && !error && isInputBasedView) {
       return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">Enter parameters and click "Fetch View Data".</p></div>;
     }
-    if (!data || (Array.isArray(data) && data.length === 0 && !isLoading) || (typeof data === 'object' && data && 'pairs' in data && (data as PairDataSchema).pairs?.length === 0 && !isLoading) ) {
-      return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No data available for this view. {isInputBasedView ? 'Try different inputs.' : ''}</p></div>;
+    
+    let isEmpty = false;
+    if (Array.isArray(data)) {
+        isEmpty = data.length === 0;
+    } else if (data && typeof data === 'object' && 'pairs' in data) {
+        isEmpty = (data as PairDataSchema).pairs === null || (data as PairDataSchema).pairs?.length === 0;
+    } else if (data === null && !isLoading && !error) {
+        isEmpty = true;
+    }
+
+
+    if (isEmpty && !isLoading && !error) {
+      return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No data available for this view. {isInputBasedView ? 'Try different inputs or check API.' : ''}</p></div>;
     }
     return (
         <Table>
@@ -468,7 +464,13 @@ const DexScreenerContent: React.FC = () => {
         </div>
         <RadioGroup
             value={selectedView}
-            onValueChange={(value) => setSelectedView(value as DexScreenerViewType)}
+            onValueChange={(value) => {
+                setSelectedView(value as DexScreenerViewType);
+                 // Reset data when view changes if it's not one of the auto-fetching views
+                if (!['profiles', 'latestBoosts', 'topBoosts'].includes(value)) {
+                    setData(null);
+                }
+            }}
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-3"
           >
             {viewOptions.map(opt => (
@@ -514,7 +516,7 @@ const DexScreenerContent: React.FC = () => {
                 </div>
               )}
               <Button onClick={handleFetchInputBasedView} className="w-full lg:w-auto" disabled={isLoading}>
-                {isLoading ? 'Fetching...' : 'Fetch View Data'}
+                {isLoading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Fetching...</>) : 'Fetch View Data'}
               </Button>
             </div>
           </div>
@@ -553,6 +555,9 @@ const DexScreenerContent: React.FC = () => {
               </DialogTitle>
               <DialogDescription>
                 {selectedPairForDialog.pairAddress} on {selectedPairForDialog.chainId} (DEX: {selectedPairForDialog.dexId})
+                <Button variant="ghost" size="icon" className="h-6 w-6 ml-2" onClick={() => handleCopy(selectedPairForDialog.pairAddress, "Pair Address")}>
+                  <Copy className="h-3 w-3"/>
+                </Button>
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 py-4 overflow-y-auto px-1 flex-grow text-xs">
@@ -598,7 +603,7 @@ const DexScreenerContent: React.FC = () => {
               {selectedPairForDialog.info?.websites && selectedPairForDialog.info.websites.length > 0 && (
                 <div>
                   <h4 className="font-semibold mt-2 mb-1 text-sm">Websites:</h4>
-                  <ul className="list-disc list-inside">
+                  <ul className="list-disc list-inside ml-4">
                     {selectedPairForDialog.info.websites.map(site => <li key={site.url}><a href={site.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{site.label || site.url}</a></li>)}
                   </ul>
                 </div>
@@ -606,8 +611,8 @@ const DexScreenerContent: React.FC = () => {
               {selectedPairForDialog.info?.socials && selectedPairForDialog.info.socials.length > 0 && (
                 <div>
                   <h4 className="font-semibold mt-2 mb-1 text-sm">Socials:</h4>
-                   <ul className="list-disc list-inside">
-                    {selectedPairForDialog.info.socials.map(social => <li key={social.url || social.type || social.handle}>{social.name || social.type || social.platform}: {social.url ? <a href={social.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{social.handle || social.url}</a> : social.handle}</li>)}
+                   <ul className="list-disc list-inside ml-4">
+                    {selectedPairForDialog.info.socials.map(social => <li key={social.url || social.type || social.handle || social.name}>{social.name || social.type || social.platform}: {social.url ? <a href={social.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{social.handle || social.url}</a> : social.handle}</li>)}
                   </ul>
                 </div>
               )}
