@@ -1,93 +1,91 @@
 
 'use server';
 
-import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairDataSchema } from '@/types';
+import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairData, PairDetail } from '@/types';
 
 const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 
-// Generic fetch helper
-async function fetchApiData<T>(endpoint: string): Promise<T> {
-  const url = `${DEX_API_BASE_URL}${endpoint}`;
+// Generic helper function to fetch and parse data from Dex Screener API
+async function fetchApiData<T>(endpoint: string, isSingleObjectResponseToArray: boolean = false): Promise<T | null> {
   try {
-    const response = await fetch(url);
+    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
     if (!response.ok) {
-      let errorBody = 'Unknown error';
-      try {
-        errorBody = await response.text();
-      } catch (e) {
-        // ignore if reading text fails
-      }
-      console.error(`API Error (${response.status}) for ${url}: ${errorBody}`);
-      throw new Error(`Failed to fetch data from ${url}. Status: ${response.status}, Message: ${errorBody}`);
+      const errorBody = await response.text();
+      console.error(`DEX API Error (${response.status}) for ${endpoint}: ${errorBody}`);
+      // Consider throwing a more specific error or returning a structured error object
+      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status} - ${errorBody}`);
     }
-    return await response.json() as T;
+    const data = await response.json();
+
+    if (isSingleObjectResponseToArray && data && typeof data === 'object' && !Array.isArray(data)) {
+      return [data] as unknown as T; // Wrap single object in an array
+    }
+    return data as T;
   } catch (error) {
-    console.error(`Error in fetchApiData for ${url}:`, error);
-    if (error instanceof Error) {
-        throw error;
-    }
-    throw new Error('An unknown error occurred during data fetching.');
+    console.error(`Error in fetchApiData for ${endpoint}:`, error);
+    // Depending on how you want to handle errors upstream, you might re-throw or return null/empty
+    return null;
   }
 }
 
 export async function fetchLatestTokenProfiles(): Promise<TokenProfileItem[]> {
-  try {
-    const profile = await fetchApiData<TokenProfileItem>('/token-profiles/latest/v1');
-    return profile ? [profile] : []; // API doc implies single object, UI prefers array
-  } catch (error) {
-    console.error("Error in fetchLatestTokenProfiles:", error);
-    return [];
-  }
+  const data = await fetchApiData<TokenProfileItem[]>('/token-profiles/latest/v1', true);
+  return data || [];
 }
 
 export async function fetchLatestBoostedTokens(): Promise<TokenBoostItem[]> {
-  try {
-    const boost = await fetchApiData<TokenBoostItem>('/token-boosts/latest/v1');
-    return boost ? [boost] : []; // API doc implies single object, UI prefers array
-  } catch (error) {
-    console.error("Error in fetchLatestBoostedTokens:", error);
-    return [];
-  }
+  const data = await fetchApiData<TokenBoostItem[]>('/token-boosts/latest/v1', true);
+  return data || [];
 }
 
 export async function fetchTopBoostedTokens(): Promise<TokenBoostItem[]> {
-  try {
-    const boost = await fetchApiData<TokenBoostItem>('/token-boosts/top/v1');
-    return boost ? [boost] : []; // API doc implies single object, UI prefers array
-  } catch (error) {
-    console.error("Error in fetchTopBoostedTokens:", error);
-    return [];
-  }
+  const data = await fetchApiData<TokenBoostItem[]>('/token-boosts/top/v1', true);
+  return data || [];
 }
 
 export async function fetchTokenOrders(chainId: string, tokenAddress: string): Promise<OrderInfoItem[]> {
   if (!chainId || !tokenAddress) {
     console.error("fetchTokenOrders: chainId and tokenAddress are required.");
-    return []; 
-  }
-  try {
-    const orders = await fetchApiData<OrderInfoItem[]>(`/orders/v1/${chainId}/${tokenAddress}`);
-    return Array.isArray(orders) ? orders : [];
-  } catch (error) {
-    console.error(`Error in fetchTokenOrders for ${chainId}/${tokenAddress}:`, error);
     return [];
   }
+  const data = await fetchApiData<OrderInfoItem[]>(`/orders/v1/${chainId}/${tokenAddress}`);
+  return data || [];
 }
 
-export async function fetchPairDetails(chainId: string, pairAddress: string): Promise<PairDataSchema | null> {
-  if (!chainId || !pairAddress) {
-    console.error("fetchPairDetails: chainId and pairAddress are required.");
+// Fetches one specific pair by its address
+export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairData | null> {
+   if (!chainId || !pairAddress) {
+    console.error("fetchPairDetailsByPairAddress: chainId and pairAddress are required.");
     return null;
   }
-  try {
-    const data = await fetchApiData<PairDataSchema>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
-    if (data && typeof data === 'object' && data.pairs && Array.isArray(data.pairs)) {
-      return data;
-    }
-    console.warn(`fetchPairDetails: Unexpected data structure received or pairs array missing for ${chainId}/${pairAddress}`, data);
-    return null;
-  } catch (error) {
-    console.error(`Error in fetchPairDetails for ${chainId}/${pairAddress}:`, error);
+  // The API path is /latest/dex/pairs/{chainId}/{pairId} - assuming pairAddress is used as pairId
+  return fetchApiData<PairData>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
+}
+
+export async function searchPairs(query: string): Promise<PairData | null> {
+  if (!query) {
+    console.error("searchPairs: query is required.");
     return null;
   }
+  return fetchApiData<PairData>(`/latest/dex/search?q=${encodeURIComponent(query)}`);
+}
+
+export async function fetchTokenPairPools(chainId: string, tokenAddress: string): Promise<PairDetail[]> {
+   if (!chainId || !tokenAddress) {
+    console.error("fetchTokenPairPools: chainId and tokenAddress are required.");
+    return [];
+  }
+  // This endpoint directly returns an array of pair-like objects
+  const data = await fetchApiData<PairDetail[]>(`/token-pairs/v1/${chainId}/${tokenAddress}`);
+  return data || [];
+}
+
+export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses: string): Promise<PairDetail[]> {
+  if (!chainId || !tokenAddresses) {
+    console.error("fetchPairsByTokenAddresses: chainId and tokenAddresses are required.");
+    return [];
+  }
+  // This endpoint directly returns an array of pair-like objects
+  const data = await fetchApiData<PairDetail[]>(`/tokens/v1/${chainId}/${tokenAddresses}`);
+  return data || [];
 }
