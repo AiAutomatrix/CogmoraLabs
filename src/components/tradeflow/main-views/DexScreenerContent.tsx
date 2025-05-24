@@ -5,11 +5,18 @@ import {
   fetchLatestTokenProfiles,
   fetchLatestBoostedTokens,
   fetchTopBoostedTokens,
+  // Import new actions that were added in the previous step
+  fetchTokenOrders,
+  fetchPairDetailsByPairAddress,
+  searchPairs,
+  fetchTokenPairPools,
+  fetchPairsByTokenAddresses,
 } from '@/app/actions/dexScreenerActions';
-import type { TokenProfileItem, TokenBoostItem, DexLink } from '@/types';
+import type { TokenProfileItem, TokenBoostItem, DexLink, OrderInfoItem, PairDataSchema, PairDetail } from '@/types'; // Ensure all types are imported
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input'; // Import Input
 import {
   Table,
   TableBody,
@@ -29,14 +36,69 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+  DialogTrigger,
+} from '@/components/ui/dialog'; // Import Dialog components
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode } from 'lucide-react';
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, TrendingUp, ListFilter, ReceiptText, Layers, Search, Network, ListCollapse, Eye } from 'lucide-react'; // Import new icons
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
+import { format } from 'date-fns'; // For date formatting
+
+// Extended view types
+type DexScreenerViewType = 
+  | 'profiles' 
+  | 'latestBoosts' 
+  | 'topBoosts'
+  | 'tokenOrders'
+  | 'pairDetailsByPairAddress'
+  | 'searchPairs'
+  | 'tokenPairPools'
+  | 'pairsByTokenAddresses';
+
+// Extended data types
+type DexScreenerData = 
+  | TokenProfileItem[] 
+  | TokenBoostItem[] 
+  | OrderInfoItem[]
+  | PairDataSchema // For single pair details by address and search results
+  | PairDetail[]   // For token pair pools and pairs by token addresses
+  | null; // Allow null for initial state or errors for object types
 
 
-type DexScreenerViewType = 'profiles' | 'latestBoosts' | 'topBoosts';
-type DexScreenerData = TokenProfileItem[] | TokenBoostItem[];
+// Helper functions for formatting (can be moved to a utils file later)
+const formatCurrency = (value?: number | string | null, currency = 'USD') => {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = Number(value);
+  if (isNaN(num)) return '-';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(num);
+};
+
+const formatLargeNumber = (value?: number | null) => {
+  if (value === null || value === undefined) return '-';
+  if (Math.abs(value) < 1000) return value.toLocaleString();
+  const suffixes = ["", "K", "M", "B", "T"];
+  const suffixNum = Math.floor(Math.log10(Math.abs(value)) / 3);
+  const shortValue = (value / Math.pow(1000, suffixNum)).toFixed(2);
+  return `${shortValue}${suffixes[suffixNum]}`;
+};
+
+const formatDateFromTimestamp = (timestamp?: number | null) => {
+  if (timestamp === null || timestamp === undefined) return '-';
+  try {
+    return format(new Date(timestamp * 1000), 'MMM d, yyyy, HH:mm');
+  } catch (e) {
+    return 'Invalid Date';
+  }
+};
+
 
 const DexScreenerContent: React.FC = () => {
   const [selectedView, setSelectedView] = useState<DexScreenerViewType>('profiles');
@@ -45,25 +107,85 @@ const DexScreenerContent: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Input states for new views
+  const [inputChainId, setInputChainId] = useState<string>('solana');
+  const [inputTokenAddress, setInputTokenAddress] = useState<string>('');
+  const [inputPairAddress, setInputPairAddress] = useState<string>('');
+  const [inputSearchQuery, setInputSearchQuery] = useState<string>('');
+  const [inputCommaSeparatedTokenAddresses, setInputCommaSeparatedTokenAddresses] = useState<string>('');
+
+  // State for Pair Detail Dialog
+  const [selectedPairForDialog, setSelectedPairForDialog] = useState<PairDetail | null>(null);
+  const [isPairDetailDialogOpen, setIsPairDetailDialogOpen] = useState(false);
+
+
   const fetchDataForView = useCallback(async (view: DexScreenerViewType) => {
     setIsLoading(true);
     setError(null);
-    setData([]);
+    setData(null); // Reset data to null for object types, or [] for array types
+
     try {
-      let result: DexScreenerData = [];
+      let result: DexScreenerData = null; // Initialize to null for all types
+      // Set to empty array for views that expect arrays.
+      if (['profiles', 'latestBoosts', 'topBoosts', 'tokenOrders', 'tokenPairPools', 'pairsByTokenAddresses'].includes(view)) {
+        result = [];
+      }
+
+
       if (view === 'profiles') {
         result = await fetchLatestTokenProfiles();
       } else if (view === 'latestBoosts') {
         result = await fetchLatestBoostedTokens();
       } else if (view === 'topBoosts') {
         result = await fetchTopBoostedTokens();
+      } else if (view === 'tokenOrders') {
+        if (!inputChainId || !inputTokenAddress) {
+          toast({ title: "Input Required", description: "Chain ID and Token Address are required for Token Orders.", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        result = await fetchTokenOrders(inputChainId, inputTokenAddress);
+      } else if (view === 'pairDetailsByPairAddress') {
+        if (!inputChainId || !inputPairAddress) {
+          toast({ title: "Input Required", description: "Chain ID and Pair Address are required.", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        result = await fetchPairDetailsByPairAddress(inputChainId, inputPairAddress);
+      } else if (view === 'searchPairs') {
+        if (!inputSearchQuery) {
+          toast({ title: "Input Required", description: "Search query is required.", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        result = await searchPairs(inputSearchQuery);
+      } else if (view === 'tokenPairPools') {
+         if (!inputChainId || !inputTokenAddress) {
+          toast({ title: "Input Required", description: "Chain ID and Token Address are required.", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        result = await fetchTokenPairPools(inputChainId, inputTokenAddress);
+      } else if (view === 'pairsByTokenAddresses') {
+         if (!inputChainId || !inputCommaSeparatedTokenAddresses) {
+          toast({ title: "Input Required", description: "Chain ID and Token Addresses are required.", variant: "destructive" });
+          setIsLoading(false);
+          return;
+        }
+        result = await fetchPairsByTokenAddresses(inputChainId, inputCommaSeparatedTokenAddresses);
       }
-      // Ensure result is always an array, even if API returns single object
-      if (result && !Array.isArray(result)) {
-        setData([result as any]);
+      
+      // For the first three views, ensure result is always an array
+      if (view === 'profiles' || view === 'latestBoosts' || view === 'topBoosts') {
+        if (result && !Array.isArray(result)) {
+          setData([result as any]);
+        } else {
+          setData(result || []);
+        }
       } else {
-        setData(result || []);
+        setData(result);
       }
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       setError(errorMessage);
@@ -73,14 +195,26 @@ const DexScreenerContent: React.FC = () => {
         description: `Could not fetch data for ${view}. ${errorMessage}`,
         variant: "destructive",
       });
+      setData(null); // Set to null on error for object types
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
   useEffect(() => {
-    fetchDataForView(selectedView);
+    // Only fetch for the initial three views on component mount or view change
+    if (['profiles', 'latestBoosts', 'topBoosts'].includes(selectedView)) {
+      fetchDataForView(selectedView);
+    } else {
+      // For other views, clear data and wait for manual fetch
+      setData(null);
+      setIsLoading(false);
+    }
   }, [selectedView, fetchDataForView]);
+
+  const handleManualFetch = () => {
+    fetchDataForView(selectedView);
+  };
 
   const handleCopyAddress = (address: string) => {
     if (!navigator.clipboard) {
@@ -101,9 +235,7 @@ const DexScreenerContent: React.FC = () => {
 
   const renderDescriptionInteraction = (description?: string | null) => {
     if (!description) return <span className="text-muted-foreground">-</span>;
-    
     const truncatedDescription = description.length > 100 ? description.substring(0, 97) + "..." : description;
-
     return (
       <Popover>
         <Tooltip delayDuration={200}>
@@ -114,19 +246,11 @@ const DexScreenerContent: React.FC = () => {
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent 
-            side="top" 
-            align="center" 
-            className="max-w-xs z-50 bg-popover text-popover-foreground p-2 rounded shadow-md text-xs"
-          >
+          <TooltipContent side="top" align="center" className="max-w-xs z-50 bg-popover text-popover-foreground p-2 rounded shadow-md text-xs">
             <p>{truncatedDescription}</p>
           </TooltipContent>
         </Tooltip>
-        <PopoverContent 
-          className="w-80 max-h-60 overflow-y-auto text-sm z-[51] bg-popover text-popover-foreground p-3 rounded shadow-lg"
-          side="top"
-          align="center"
-        >
+        <PopoverContent className="w-80 max-h-60 overflow-y-auto text-sm z-[51] bg-popover text-popover-foreground p-3 rounded shadow-lg" side="top" align="center">
           {description}
         </PopoverContent>
       </Popover>
@@ -161,7 +285,80 @@ const DexScreenerContent: React.FC = () => {
     return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
   };
 
-  const isBoostView = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
+  const getPairsArray = (rawData: DexScreenerData, viewType: DexScreenerViewType): PairDetail[] => {
+    if (!rawData) return [];
+    if (viewType === 'pairDetailsByPairAddress' || viewType === 'searchPairs') {
+      return (rawData as PairDataSchema).pairs || [];
+    }
+    if (viewType === 'tokenPairPools' || viewType === 'pairsByTokenAddresses') {
+      return rawData as PairDetail[];
+    }
+    return [];
+  };
+
+
+  const renderInputSection = () => {
+    const needsChainId = ['tokenOrders', 'pairDetailsByPairAddress', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView);
+    const needsTokenAddress = ['tokenOrders', 'tokenPairPools'].includes(selectedView);
+    const needsPairAddress = selectedView === 'pairDetailsByPairAddress';
+    const needsSearchQuery = selectedView === 'searchPairs';
+    const needsCommaTokenAddresses = selectedView === 'pairsByTokenAddresses';
+
+    if (!needsChainId && !needsTokenAddress && !needsPairAddress && !needsSearchQuery && !needsCommaTokenAddresses) {
+      return null;
+    }
+
+    return (
+      <div className="p-4 border-b bg-card space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
+          {needsChainId && (
+            <div>
+              <Label htmlFor="chainIdInput" className="text-xs">Chain ID</Label>
+              <Input id="chainIdInput" placeholder="e.g., solana" value={inputChainId} onChange={(e) => setInputChainId(e.target.value)} />
+            </div>
+          )}
+          {needsTokenAddress && (
+            <div>
+              <Label htmlFor="tokenAddressInput" className="text-xs">Token Address</Label>
+              <Input id="tokenAddressInput" placeholder="Token Address" value={inputTokenAddress} onChange={(e) => setInputTokenAddress(e.target.value)} />
+            </div>
+          )}
+          {needsPairAddress && (
+            <div>
+              <Label htmlFor="pairAddressInput" className="text-xs">Pair Address</Label>
+              <Input id="pairAddressInput" placeholder="Pair Address" value={inputPairAddress} onChange={(e) => setInputPairAddress(e.target.value)} />
+            </div>
+          )}
+          {needsSearchQuery && (
+             <div className="md:col-span-2 lg:col-span-3">
+              <Label htmlFor="searchQueryInput" className="text-xs">Search Query</Label>
+              <Input id="searchQueryInput" placeholder="e.g., SOL/USDC or token address" value={inputSearchQuery} onChange={(e) => setInputSearchQuery(e.target.value)} />
+            </div>
+          )}
+          {needsCommaTokenAddresses && (
+            <div className="md:col-span-2 lg:col-span-3">
+              <Label htmlFor="commaTokenAddressesInput" className="text-xs">Token Addresses (comma-separated)</Label>
+              <Input id="commaTokenAddressesInput" placeholder="e.g., addr1,addr2" value={inputCommaSeparatedTokenAddresses} onChange={(e) => setInputCommaSeparatedTokenAddresses(e.target.value)} />
+            </div>
+          )}
+        </div>
+        <Button onClick={handleManualFetch} disabled={isLoading} size="sm">
+          {isLoading ? 'Fetching...' : 'Fetch View Data'}
+        </Button>
+      </div>
+    );
+  };
+  
+  const viewOptions = [
+    { value: 'profiles', label: 'Latest Profiles', icon: <PackageSearch className="mr-2 h-4 w-4" /> },
+    { value: 'latestBoosts', label: 'Latest Boosts', icon: <TrendingUp className="mr-2 h-4 w-4" /> },
+    { value: 'topBoosts', label: 'Top Boosts', icon: <ListFilter className="mr-2 h-4 w-4" /> },
+    { value: 'tokenOrders', label: 'Token Orders', icon: <ReceiptText className="mr-2 h-4 w-4" /> },
+    { value: 'pairDetailsByPairAddress', label: 'Pair by Address', icon: <Layers className="mr-2 h-4 w-4" /> },
+    { value: 'searchPairs', label: 'Search Pairs', icon: <Search className="mr-2 h-4 w-4" /> },
+    { value: 'tokenPairPools', label: 'Token Pair Pools', icon: <Network className="mr-2 h-4 w-4" /> },
+    { value: 'pairsByTokenAddresses', label: 'Pairs by Tokens', icon: <ListCollapse className="mr-2 h-4 w-4" /> },
+  ];
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
@@ -170,42 +367,42 @@ const DexScreenerContent: React.FC = () => {
           <SearchCode className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">DEX Screener</CardTitle>
         </div>
-        <div className="pt-2">
-          <RadioGroup
-            defaultValue="profiles"
-            onValueChange={(value) => setSelectedView(value as DexScreenerViewType)}
-            className="flex flex-wrap gap-x-4 gap-y-2"
-          >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="profiles" id="profiles" />
-              <Label htmlFor="profiles" className="cursor-pointer font-normal text-sm">Latest Profiles</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="latestBoosts" id="latestBoosts" />
-              <Label htmlFor="latestBoosts" className="cursor-pointer font-normal text-sm">Latest Boosts</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="topBoosts" id="topBoosts" />
-              <Label htmlFor="topBoosts" className="cursor-pointer font-normal text-sm">Top Boosts</Label>
-            </div>
-          </RadioGroup>
-        </div>
+        <RadioGroup
+          value={selectedView}
+          onValueChange={(value) => setSelectedView(value as DexScreenerViewType)}
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-3"
+        >
+          {viewOptions.map(opt => (
+            <Label
+              key={opt.value}
+              htmlFor={opt.value}
+              className={`flex items-center space-x-2 p-2 border rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground text-xs sm:text-sm ${selectedView === opt.value ? 'bg-accent text-accent-foreground ring-2 ring-primary' : 'bg-background'}`}
+            >
+              <RadioGroupItem value={opt.value} id={opt.value} className="sr-only" />
+              {opt.icon}
+              <span>{opt.label}</span>
+            </Label>
+          ))}
+        </RadioGroup>
       </CardHeader>
+
+      {renderInputSection()}
+
       <CardContent className="flex-grow overflow-y-auto p-2 bg-muted/20">
         {isLoading ? (
           <div className="space-y-2 p-4">
-            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+            {[...Array(10)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center h-full p-4">
-            <AlertCircle className="h-12 w-12 text-destructive mb-4" />
-            <p className="text-destructive font-semibold">Error loading data</p>
-            <p className="text-muted-foreground text-sm text-center">{error}</p>
-            <Button onClick={() => fetchDataForView(selectedView)} className="mt-4">Retry</Button>
+          <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mb-3" />
+            <p className="text-destructive font-semibold text-lg">Error Loading Data</p>
+            <p className="text-muted-foreground text-sm mb-3">{error}</p>
+            <Button onClick={() => fetchDataForView(selectedView)} className="mt-2">Retry</Button>
           </div>
-        ) : data.length === 0 ? (
-           <div className="flex items-center justify-center h-full">
-            <p className="text-muted-foreground">No data available for this view.</p>
+        ) : (!data || (Array.isArray(data) && data.length === 0) || ((selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs') && (!data || !(data as PairDataSchema).pairs || (data as PairDataSchema).pairs.length === 0))) ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-muted-foreground">No data available for this view or criteria.</p>
           </div>
         ) : (
           <Table>
@@ -213,34 +410,59 @@ const DexScreenerContent: React.FC = () => {
               {selectedView === 'profiles' && 'Latest token profiles from DEX Screener API.'}
               {selectedView === 'latestBoosts' && 'Latest boosted tokens from DEX Screener API.'}
               {selectedView === 'topBoosts' && 'Tokens with the most active boosts from DEX Screener API.'}
+              {selectedView === 'tokenOrders' && `Token orders for ${inputTokenAddress} on ${inputChainId}.`}
+              {/* Add captions for other views */}
             </TableCaption>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]">Icon</TableHead>
-                <TableHead>Name/Symbol</TableHead>
-                <TableHead>Chain</TableHead>
-                <TableHead className="min-w-[150px]">Address</TableHead>
-                {/* Removed Boost Amt. Header */}
-                {isBoostView && selectedView === 'latestBoosts' && <TableHead className="text-right">Total Boost</TableHead>}
-                <TableHead className="w-[60px] text-center">Info</TableHead>
-                <TableHead className="w-[100px] text-center">Links</TableHead>
+                {/* Conditional Headers for Profiles/Boosts */}
+                {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
+                  <>
+                    <TableHead className="w-[50px]">Icon</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Chain</TableHead>
+                    <TableHead className="min-w-[150px]">Address</TableHead>
+                    {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && <TableHead className="text-right">Boost Amt.</TableHead>}
+                    <TableHead className="w-[60px] text-center">Info</TableHead>
+                    <TableHead className="w-[100px] text-center">Links</TableHead>
+                  </>
+                )}
+                {/* Headers for Token Orders */}
+                {selectedView === 'tokenOrders' && (
+                  <>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Payment Date</TableHead>
+                  </>
+                )}
+                {/* Headers for Pair-related data */}
+                {(selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs' || selectedView === 'tokenPairPools' || selectedView === 'pairsByTokenAddresses') && (
+                   <>
+                    <TableHead className="w-[50px]">Icon</TableHead>
+                    <TableHead>Pair</TableHead>
+                    <TableHead className="text-right">Price (USD)</TableHead>
+                    <TableHead className="text-right">Volume (24h)</TableHead>
+                    <TableHead className="text-right">Liquidity (USD)</TableHead>
+                    <TableHead>Chain</TableHead>
+                    <TableHead>DEX ID</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((item, index) => (
+              {/* Rows for Profiles/Boosts */}
+              {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (data as (TokenProfileItem | TokenBoostItem)[]).map((item, index) => (
                 <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
                   <TableCell>
                     <Avatar className="h-8 w-8">
-                      <AvatarImage 
-                        src={item.icon ?? `https://placehold.co/32x32.png`} 
-                        alt={item.description || item.tokenAddress || 'Token icon'} 
-                      />
-                      <AvatarFallback>{(item.description || item.tokenAddress || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.name || item.description || item.tokenAddress || 'Token icon'} />
+                      <AvatarFallback>{(item.name || item.description || item.tokenAddress || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
                   <TableCell className="font-medium max-w-[150px] min-w-0">
-                     <div className="truncate" title={item.description || item.tokenAddress || "Unknown Token"}>
-                        {item.description || item.tokenAddress || "Unknown Token"}
+                     <div className="truncate" title={item.name || item.description || item.tokenAddress || "Unknown Token"}>
+                        {item.name || item.description || "Unknown Token"}
                      </div>
                   </TableCell>
                   <TableCell>{item.chainId}</TableCell>
@@ -249,27 +471,179 @@ const DexScreenerContent: React.FC = () => {
                       <span className="truncate" title={item.tokenAddress}>
                         {truncateAddress(item.tokenAddress)}
                       </span>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => item.tokenAddress && handleCopyAddress(item.tokenAddress)}>
+                      {item.tokenAddress && <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => item.tokenAddress && handleCopyAddress(item.tokenAddress)}>
                           <Copy className="h-3 w-3"/>
-                      </Button>
+                      </Button>}
                     </div>
                   </TableCell>
-                  {/* Removed Boost Amt. Cell */}
-                  {isBoostView && selectedView === 'latestBoosts' && 'totalAmount' in item && (
-                     <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
+                  {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && 'amount' in item && (
+                    <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
                   )}
                   <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
                   <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
+                </TableRow>
+              ))}
+              {/* Rows for Token Orders */}
+              {selectedView === 'tokenOrders' && (data as OrderInfoItem[]).map((order, index) => (
+                <TableRow key={`${order.type}-${order.paymentTimestamp}-${index}`}>
+                  <TableCell>{order.type}</TableCell>
+                  <TableCell>{order.status}</TableCell>
+                  <TableCell>{formatDateFromTimestamp(order.paymentTimestamp)}</TableCell>
+                </TableRow>
+              ))}
+              {/* Rows for Pair-related data */}
+              {(selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs' || selectedView === 'tokenPairPools' || selectedView === 'pairsByTokenAddresses') && getPairsArray(data, selectedView).map((pair) => (
+                <TableRow key={pair.pairAddress}>
+                  <TableCell>
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={pair.info?.imageUrl || pair.baseToken?.symbol /* Needs a real placeholder or logic */} alt={pair.baseToken?.name || 'Token'} />
+                      <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </TableCell>
+                  <TableCell className="font-medium max-w-[150px] truncate">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="truncate block">{`${pair.baseToken?.symbol || 'N/A'}/${pair.quoteToken?.symbol || 'N/A'}`}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{pair.baseToken?.name || 'Base'} / {pair.quoteToken?.name || 'Quote'}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell className="text-right">{formatCurrency(pair.priceUsd)}</TableCell>
+                  <TableCell className="text-right">{formatLargeNumber(pair.volume?.h24)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(pair.liquidity?.usd)}</TableCell>
+                  <TableCell>{pair.chainId}</TableCell>
+                  <TableCell className="truncate max-w-[100px]">{pair.dexId}</TableCell>
+                  <TableCell className="text-center">
+                    <Button variant="outline" size="sm" onClick={() => { setSelectedPairForDialog(pair); setIsPairDetailDialogOpen(true); }}>
+                      <Eye className="mr-1 h-3.5 w-3.5" /> View
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </CardContent>
+
+        {selectedPairForDialog && (
+        <Dialog open={isPairDetailDialogOpen} onOpenChange={setIsPairDetailDialogOpen}>
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center">
+                {selectedPairForDialog.info?.imageUrl && (
+                  <Avatar className="h-8 w-8 mr-2">
+                    <AvatarImage src={selectedPairForDialog.info.imageUrl} alt={`${selectedPairForDialog.baseToken?.name} icon`} />
+                    <AvatarFallback>{(selectedPairForDialog.baseToken?.symbol || 'P').substring(0,1)}</AvatarFallback>
+                  </Avatar>
+                )}
+                {selectedPairForDialog.baseToken?.name || 'N/A'} / {selectedPairForDialog.quoteToken?.name || 'N/A'}
+                <span className="ml-2 text-sm text-muted-foreground">({selectedPairForDialog.baseToken?.symbol}/{selectedPairForDialog.quoteToken?.symbol})</span>
+              </DialogTitle>
+              <DialogDescription>
+                Pair Address: {truncateAddress(selectedPairForDialog.pairAddress)} 
+                <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={() => handleCopyAddress(selectedPairForDialog.pairAddress)}>
+                    <Copy className="h-3 w-3" />
+                </Button>
+                 | Chain: {selectedPairForDialog.chainId} | DEX: {selectedPairForDialog.dexId}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="flex-grow overflow-y-auto pr-2 space-y-4 text-sm py-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                    <div className="p-2 border rounded-md bg-muted/50"><strong>Price USD:</strong> {formatCurrency(selectedPairForDialog.priceUsd)}</div>
+                    <div className="p-2 border rounded-md bg-muted/50"><strong>Price Native:</strong> {selectedPairForDialog.priceNative}</div>
+                    <div className="p-2 border rounded-md bg-muted/50"><strong>Liquidity:</strong> {formatCurrency(selectedPairForDialog.liquidity?.usd)}</div>
+                    <div className="p-2 border rounded-md bg-muted/50"><strong>FDV:</strong> {formatCurrency(selectedPairForDialog.fdv)}</div>
+                    <div className="p-2 border rounded-md bg-muted/50"><strong>Market Cap:</strong> {formatCurrency(selectedPairForDialog.marketCap)}</div>
+                    <div className="p-2 border rounded-md bg-muted/50"><strong>Created:</strong> {formatDateFromTimestamp(selectedPairForDialog.pairCreatedAt)}</div>
+                </div>
+
+                {selectedPairForDialog.txns && (
+                    <div>
+                        <h4 className="font-semibold mb-1 text-sm">Transactions:</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                            {Object.entries(selectedPairForDialog.txns).map(([period, {buys, sells}]) => (
+                                <div key={period} className="p-2 border rounded bg-muted/50">
+                                    <strong>{period.toUpperCase()}:</strong> Buys: {buys}, Sells: {sells}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {selectedPairForDialog.volume && (
+                     <div>
+                        <h4 className="font-semibold mb-1 text-sm">Volume:</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                            {Object.entries(selectedPairForDialog.volume).map(([period, vol]) => (
+                                <div key={period} className="p-2 border rounded bg-muted/50">
+                                    <strong>{period.toUpperCase()}:</strong> {formatCurrency(vol)}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {selectedPairForDialog.priceChange && (
+                     <div>
+                        <h4 className="font-semibold mb-1 text-sm">Price Change (%):</h4>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                            {Object.entries(selectedPairForDialog.priceChange).map(([period, change]) => (
+                                <div key={period} className={`p-2 border rounded bg-muted/50 ${change && change > 0 ? 'text-green-500' : change && change < 0 ? 'text-red-500' : ''}`}>
+                                    <strong>{period.toUpperCase()}:</strong> {change?.toFixed(2) ?? '-'}%
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {selectedPairForDialog.info?.websites && selectedPairForDialog.info.websites.length > 0 && (
+                    <div>
+                        <h4 className="font-semibold mb-1 text-sm">Websites:</h4>
+                        <ul className="list-disc list-inside text-xs space-y-1">
+                            {selectedPairForDialog.info.websites.map((site, idx) => (
+                                <li key={idx}><a href={site.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{site.label || site.url} <ExternalLinkIcon className="inline h-3 w-3"/></a></li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {selectedPairForDialog.info?.socials && selectedPairForDialog.info.socials.length > 0 && (
+                    <div>
+                        <h4 className="font-semibold mb-1 text-sm">Socials:</h4>
+                         <ul className="list-disc list-inside text-xs space-y-1">
+                            {selectedPairForDialog.info.socials.map((social, idx) => (
+                                <li key={idx}>
+                                    <a href={social.url || '#'} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                        {social.name || social.platform || social.handle}{social.handle && social.platform && ` (${social.platform})`} <ExternalLinkIcon className="inline h-3 w-3"/>
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                 {selectedPairForDialog.info?.description && (
+                    <div>
+                        <h4 className="font-semibold mb-1 text-sm">Description:</h4>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{selectedPairForDialog.info.description}</p>
+                    </div>
+                )}
+
+
+            </div>
+            <DialogFooter className="mt-auto pt-4 border-t">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">Close</Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
     </Card>
   );
 };
 
 export default DexScreenerContent;
-
-    
