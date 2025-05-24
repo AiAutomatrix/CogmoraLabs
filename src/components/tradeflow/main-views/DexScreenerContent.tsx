@@ -37,7 +37,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, Eye, PackageSearch, ReceiptText, Layers, Search, GitFork, ListFilter, TrendingUp } from 'lucide-react'; // Added TrendingUp
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, Eye, PackageSearch, ReceiptText, Layers, Search, GitFork, ListFilter, TrendingUp } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format, fromUnixTime } from 'date-fns';
@@ -237,7 +237,7 @@ const DexScreenerContent: React.FC = () => {
       {selectedPairForDialog && selectedPairForDialog.pairAddress === pair.pairAddress && (
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pair Details: {pair.baseToken.symbol}/{pair.quoteToken.symbol}</DialogTitle>
+            <DialogTitle>Pair Details: {pair.baseToken?.symbol}/{pair.quoteToken?.symbol}</DialogTitle>
             <DialogDescription>{pair.pairAddress}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4 text-sm">
@@ -276,7 +276,7 @@ const DexScreenerContent: React.FC = () => {
             )}
             {pair.info?.websites && pair.info.websites.length > 0 && (
               <div><strong>Websites:</strong>
-                <ul className="list-disc pl-5">{pair.info.websites.map(w => <li key={w.url}><a href={w.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{w.url}</a></li>)}</ul>
+                <ul className="list-disc pl-5">{pair.info.websites.map(w => <li key={w.url}><a href={w.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{w.label || w.url}</a></li>)}</ul>
               </div>
             )}
             {pair.info?.socials && pair.info.socials.length > 0 && (
@@ -340,7 +340,7 @@ const DexScreenerContent: React.FC = () => {
         </div>
       );
     }
-    if (!data || (Array.isArray(data) && data.length === 0) || (typeof data === 'object' && 'pairs' in data && (data as PairData).pairs.length === 0)) {
+    if (!data || (Array.isArray(data) && data.length === 0) || (data && typeof data === 'object' && 'pairs' in data && (data as PairData).pairs?.length === 0)) {
        return <div className="flex items-center justify-center h-full p-4"><p className="text-muted-foreground">No data available for this view or selection.</p></div>;
     }
 
@@ -444,12 +444,12 @@ const DexScreenerContent: React.FC = () => {
                 <TableRow key={`${pair.pairAddress}-${index}`}>
                   <TableCell>
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={pair.info?.imageUrl || pair.baseToken.symbol /* fallback needed */} alt={pair.baseToken.name} />
-                      <AvatarFallback>{pair.baseToken.symbol.substring(0, 2)}</AvatarFallback>
+                      <AvatarImage src={pair.info?.imageUrl ?? ''} alt={pair.baseToken?.name || 'Pair Image'} />
+                      <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
                   <TableCell className="font-medium text-xs">
-                     <Tooltip delayDuration={100}><TooltipTrigger asChild><div className="truncate" title={`${pair.baseToken.name} / ${pair.quoteToken.name}`}>{pair.baseToken.symbol}/{pair.quoteToken.symbol}</div></TooltipTrigger><TooltipContent><p>{pair.baseToken.name} / {pair.quoteToken.name}</p><p className="text-muted-foreground text-xs">{pair.pairAddress}</p></TooltipContent></Tooltip>
+                     <Tooltip delayDuration={100}><TooltipTrigger asChild><div className="truncate" title={`${pair.baseToken?.name || 'N/A'} / ${pair.quoteToken?.name || 'N/A'}`}>{pair.baseToken?.symbol || 'N/A'}/{pair.quoteToken?.symbol || 'N/A'}</div></TooltipTrigger><TooltipContent><p>{pair.baseToken?.name || 'N/A'} / {pair.quoteToken?.name || 'N/A'}</p><p className="text-muted-foreground text-xs">{pair.pairAddress}</p></TooltipContent></Tooltip>
                   </TableCell>
                   <TableCell className="text-xs">{pair.chainId}</TableCell>
                   <TableCell className="text-xs">{pair.dexId}</TableCell>
@@ -509,7 +509,7 @@ const DexScreenerContent: React.FC = () => {
         </RadioGroup>
          <div className="pt-3">{renderInputSection()}</div>
       </CardHeader>
-      <CardContent className="flex-grow overflow-y-auto p-1 bg-muted/20">
+      <CardContent className="flex-grow overflow-y-auto p-2 bg-muted/20">
         {renderTable()}
       </CardContent>
     </Card>
