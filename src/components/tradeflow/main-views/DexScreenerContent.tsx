@@ -37,7 +37,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, Eye, PackageSearch, ReceiptText, Layers, Search, GitFork, ListFilter } from 'lucide-react';
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, Eye, PackageSearch, ReceiptText, Layers, Search, GitFork, ListFilter, TrendingUp } from 'lucide-react'; // Added TrendingUp
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format, fromUnixTime } from 'date-fns';
@@ -281,7 +281,7 @@ const DexScreenerContent: React.FC = () => {
             )}
             {pair.info?.socials && pair.info.socials.length > 0 && (
                <div><strong>Socials:</strong>
-                <ul className="list-disc pl-5">{pair.info.socials.map(s => <li key={s.platform || s.type}>{s.platform || s.type}: {s.handle || s.url}</li>)}</ul>
+                <ul className="list-disc pl-5">{pair.info.socials.map(s => <li key={s.type || s.platform || s.url }><a href={s.url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{s.platform || s.type}: {s.handle || s.name || s.url}</a></li>)}</ul>
               </div>
             )}
           </div>
@@ -517,3 +517,5 @@ const DexScreenerContent: React.FC = () => {
 };
 
 export default DexScreenerContent;
+
+    
