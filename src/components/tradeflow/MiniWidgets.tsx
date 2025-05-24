@@ -55,3 +55,5 @@ const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange
 };
 
 export default MiniWidgets;
+
+    

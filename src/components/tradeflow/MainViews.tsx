@@ -4,19 +4,18 @@
 import React, { useMemo } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react'; // Added SearchCode
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
-import DexScreenerContent from './main-views/DexScreenerContent';
+import DexScreenerContent from './main-views/DexScreenerContent'; // Added import
 
+// Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
   currentSymbol: string;
 }
 
-const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
-
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full"; // Simplified: iframe will fill its parent TabsContent
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -54,16 +53,16 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartConfigObject = useMemo(() => ({
     container_id: "technical-analysis-chart-demo",
     width: "100%",
-    height: "97%",
+    height: "97%", 
     autosize: true,
-    symbol: currentSymbol,
+    symbol: currentSymbol, // Use the prop here
     interval: "180",
     timezone: "exchange",
     theme: "dark",
     style: "1",
     withdateranges: true,
     hide_side_toolbar: true,
-    allow_symbol_change: true,
+    allow_symbol_change: true, 
     save_image: false,
     studies: [
         "StochasticRSI@tv-basicstudies",
@@ -75,7 +74,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]);
+  }), [currentSymbol]); // Add currentSymbol to dependency array
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -151,7 +150,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock",
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -215,27 +214,27 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7"> {/* Removed mb-4 */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4"> {/* Adjusted to 7 cols */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
         <TabsTrigger value="heatmap"><Columns className="mr-2" />Heatmap</TabsTrigger>
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
-        <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
+        <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger> {/* Added DEX Screener Tab */}
       </TabsList>
 
-      <TabsContent value="blog" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}>
+      <TabsContent value="blog" className="flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}>
+      <TabsContent value="dashboard" className="flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
-          key={`adv-chart-iframe-${currentSymbol}`} // Key ensures iframe reloads on symbol change
+          key={`adv-chart-iframe-${currentSymbol}`} // Ensure iframe re-renders when symbol changes
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
           className={WIDGET_CONTAINER_CLASS}
@@ -244,7 +243,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className={TABS_CONTENT_BASE_CLASS}>
+      <TabsContent value="heatmap" className="flex-grow overflow-hidden">
         <iframe
           key="heatmap-iframe"
           srcDoc={heatmapSrcDoc}
@@ -255,33 +254,34 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      <TabsContent value="options_screener" className={TABS_CONTENT_BASE_CLASS}>
-        <div className="h-full w-full overflow-auto">
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+        <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none' }}
+              style={{ border: 'none', minHeight: '500px' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className={TABS_CONTENT_BASE_CLASS}>
-         <div className="h-full w-full overflow-auto">
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none' }}
+              style={{ border: 'none', minHeight: '500px' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
-      
-      <TabsContent value="dex_screener" className={TABS_CONTENT_BASE_CLASS}>
+
+      {/* Added DexScreenerContent Tab */}
+      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
@@ -289,3 +289,5 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
+
+    
