@@ -94,6 +94,7 @@ export const LiquiditySchema = z.object({
 export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
+  label: z.string().optional().nullable(), // Adding label as it can be part of API response
   url: z.string().url(),
 });
 export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
@@ -111,6 +112,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
+  description: z.string().optional().nullable(), // Description can be part of pair info
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -132,7 +134,7 @@ export const PairDetailSchema = z.object({
   marketCap: z.number().optional().nullable(),
   pairCreatedAt: z.number().optional().nullable(), // Timestamp
   info: PairInfoDetailsSchema.optional().nullable(),
-  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(),
+  boosts: z.object({ active: z.number().optional().nullable() }).optional().nullable(), // Added from potential API response
 });
 export type PairDetail = z.infer<typeof PairDetailSchema>;
 
@@ -140,3 +142,5 @@ export type PairDetail = z.infer<typeof PairDetailSchema>;
 export const PairDataSchema = z.object({
   schemaVersion: z.string(),
   pairs: z.array(PairDetailSchema),
+});
+export type PairData = z.infer<typeof PairDataSchema>;
