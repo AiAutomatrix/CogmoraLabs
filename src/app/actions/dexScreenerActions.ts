@@ -1,12 +1,12 @@
+
 'use server';
 
 import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairData, PairDetail } from '@/types';
 
 const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 
-// Helper function to fetch and parse data
-// This helper is designed to handle endpoints that return a single object
-// and wrap it in an array, or return an array directly.
+// Helper function to fetch and parse data that returns an array
+// Handles cases where API returns a single object (for /latest endpoints) by wrapping it in an array.
 async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
   try {
     const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
@@ -19,7 +19,8 @@ async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
     if (Array.isArray(data)) {
       return data as T[];
     } else if (data && typeof data === 'object') {
-      return [data as T]; // Wrap single object in an array
+      // API for /latest profiles and /latest boosts returns a single object
+      return [data as T]; 
     }
     return []; // Fallback for unexpected structure
   } catch (error) {
@@ -29,7 +30,7 @@ async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
   }
 }
 
-// Helper function for endpoints returning a single object (or null)
+// Helper function for endpoints returning a single object (or null) that contains a 'pairs' array
 async function fetchDataAsObjectOrNull<T>(endpoint: string): Promise<T | null> {
   try {
     const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
@@ -39,6 +40,7 @@ async function fetchDataAsObjectOrNull<T>(endpoint: string): Promise<T | null> {
       throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
     }
     const data = await response.json();
+    // Check if it's an object and NOT an array (which PairData is)
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       return data as T;
     }
@@ -47,6 +49,26 @@ async function fetchDataAsObjectOrNull<T>(endpoint: string): Promise<T | null> {
     console.error(`Error in fetchDataAsObjectOrNull for ${endpoint}:`, error);
     // throw error; // Re-throw to be caught by the caller, or return null
     return null; // Return null on error
+  }
+}
+
+// Helper function for endpoints that directly return an array of items (like PairDetail[])
+async function fetchDirectArrayData<T>(endpoint: string): Promise<T[]> {
+  try {
+    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`API Error (${response.status}) for ${endpoint}: ${errorBody}`);
+      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
+    }
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return data as T[];
+    }
+    return []; // Fallback if it's not an array as expected
+  } catch (error) {
+    console.error(`Error in fetchDirectArrayData for ${endpoint}:`, error);
+    return [];
   }
 }
 
@@ -67,7 +89,7 @@ export async function fetchTopBoostedTokens(): Promise<TokenBoostItem[]> {
 // New five functions
 export async function fetchTokenOrders(chainId: string, tokenAddress: string): Promise<OrderInfoItem[]> {
   if (!chainId || !tokenAddress) return [];
-  return fetchDataAsArray<OrderInfoItem>(`/orders/v1/${chainId}/${tokenAddress}`);
+  return fetchDirectArrayData<OrderInfoItem>(`/orders/v1/${chainId}/${tokenAddress}`);
 }
 
 export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairData | null> {
@@ -82,12 +104,9 @@ export async function searchPairs(query: string): Promise<PairData | null> {
 
 export async function fetchTokenPairPools(chainId: string, tokenAddress: string): Promise<PairDetail[]> {
   if (!chainId || !tokenAddress) return [];
-  // This endpoint directly returns an array of PairDetail-like objects according to docs.
-  return fetchDataAsArray<PairDetail>(`/token-pairs/v1/${chainId}/${tokenAddress}`);
+  return fetchDirectArrayData<PairDetail>(`/token-pairs/v1/${chainId}/${tokenAddress}`);
 }
 
 export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses: string): Promise<PairDetail[]> {
   if (!chainId || !tokenAddresses) return [];
-  // This endpoint directly returns an array of PairDetail-like objects according to docs.
-  return fetchDataAsArray<PairDetail>(`/tokens/v1/${chainId}/${tokenAddresses}`);
-}
+  return fetchDirectArrayData<PairDetail>(

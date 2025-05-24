@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 export const TradeSchema = z.object({
@@ -31,12 +30,12 @@ export const TokenProfileItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Kept for consistency, though not in direct API sample
+  name: z.string().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
-  // symbol field removed as it's not directly in the API for profiles/boosts
+  // No top-level symbol for profiles as per API doc
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
 
@@ -44,14 +43,14 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Kept for consistency
+  name: z.string().optional().nullable(), // Added for consistency, though API sample doesn't show it for boosts. Let component decide display.
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
-    // symbol field removed as it's not directly in the API for profiles/boosts
+   // No top-level symbol for boosts as per API doc
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
 
@@ -76,7 +75,6 @@ export const TxnsDetailSchema = z.object({
 });
 export type TxnsDetail = z.infer<typeof TxnsDetailSchema>;
 
-// Allows for dynamic keys like "m5", "h1", etc.
 export const TxnsSchema = z.record(z.string(), TxnsDetailSchema.optional()).optional().nullable();
 export type PairTxns = z.infer<typeof TxnsSchema>;
 
@@ -101,8 +99,8 @@ export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
   platform: z.string().optional().nullable(),
-  type: z.string().optional().nullable(), // Some APIs use 'type', some 'platform'
-  name: z.string().optional().nullable(), // For socials that might have a name property
+  type: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
   handle: z.string().optional().nullable(),
   url: z.string().url().optional().nullable(),
 });
@@ -142,4 +140,4 @@ export const PairDataSchema = z.object({
   schemaVersion: z.string(),
   pairs: z.array(PairDetailSchema),
 });
-export type PairData = z.infer<typeof PairDataSchema>; // Renamed to avoid conflict with schema name
+export type PairData = z.infer<typeof PairDataSchema>;
