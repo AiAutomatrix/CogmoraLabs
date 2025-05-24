@@ -221,7 +221,7 @@ const DexScreenerContent: React.FC = () => {
                 <TableHead>Chain</TableHead>
                 <TableHead className="min-w-[150px]">Address</TableHead>
                 {isBoostView && <TableHead className="text-right">Boost Amt.</TableHead>}
-                {/* Removed Total Boost Header */}
+                {isBoostView && <TableHead className="text-right">Total Boost</TableHead>}
                 <TableHead className="w-[60px] text-center">Info</TableHead>
                 <TableHead className="w-[100px] text-center">Links</TableHead>
               </TableRow>
@@ -257,7 +257,9 @@ const DexScreenerContent: React.FC = () => {
                   {isBoostView && 'amount' in item && (
                     <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
                   )}
-                  {/* Removed Total Boost Cell */}
+                  {isBoostView && 'totalAmount' in item && (
+                     <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
+                  )}
                   <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
                   <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
                 </TableRow>
@@ -271,3 +273,5 @@ const DexScreenerContent: React.FC = () => {
 };
 
 export default DexScreenerContent;
+
+    

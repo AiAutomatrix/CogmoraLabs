@@ -47,3 +47,5 @@ export async function fetchTopBoostedTokens(): Promise<TokenBoostItem[]> {
   const boosts = await fetchData<TokenBoostItem>('/token-boosts/top/v1');
   return boosts; // fetchData already wraps if single
 }
+
+    
