@@ -1,6 +1,4 @@
-// Placeholder for TokenBoostCard.tsx
-// This component will display a single token boost.
-// We will implement this in the next step.
+
 'use client';
 import type React from 'react';
 import type { TokenBoostItem } from '@/types';
@@ -22,8 +20,9 @@ const TokenBoostCard: React.FC<TokenBoostCardProps> = ({ boost }) => {
           <Image
             src={boost.header}
             alt={`${boost.description || 'Token'} header`}
-            layout="fill"
-            objectFit="cover"
+            fill // Changed from layout="fill" for Next.js v13+
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" // Optional: provide sizes
+            style={{ objectFit: 'cover' }} // Changed from objectFit="cover"
             className="rounded-t-lg"
             data-ai-hint="abstract background"
           />
@@ -34,32 +33,41 @@ const TokenBoostCard: React.FC<TokenBoostCardProps> = ({ boost }) => {
           <AvatarImage src={boost.icon ?? `https://placehold.co/64.png`} alt={boost.description || 'Token icon'} data-ai-hint="token logo" />
           <AvatarFallback>{(boost.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
         </Avatar>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0"> {/* Added min-w-0 for flex child to allow truncation/wrapping */}
           <CardTitle className="text-lg">
-             <a href={boost.url || '#'} target="_blank" rel="noopener noreferrer" className="hover:underline">
+             <a href={boost.url || '#'} target="_blank" rel="noopener noreferrer" className="hover:underline break-all">
               {boost.description || 'Unnamed Boost'}
             </a>
           </CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
-            {boost.chainId} - {boost.tokenAddress}
-          </CardDescription>
+          {boost.tokenAddress && ( // Ensure tokenAddress exists
+            <CardDescription className="text-xs text-muted-foreground truncate"> {/* Added truncate for long addresses */}
+              {boost.chainId} - {boost.tokenAddress}
+            </CardDescription>
+          )}
         </div>
       </CardHeader>
-      <CardContent className="text-sm space-y-2">
+      <CardContent className="text-sm space-y-3 pt-2"> {/* Added more space with space-y-3 and adjusted pt */}
         {boost.description && <p className="text-muted-foreground line-clamp-3">{boost.description}</p>}
-        <div className="flex items-center space-x-2 text-xs">
-            <Zap className="h-4 w-4 text-yellow-500" />
-            <span>Boost Amount: {boost.amount?.toLocaleString() ?? 'N/A'}</span>
-            <span>Total Amount: {boost.totalAmount?.toLocaleString() ?? 'N/A'}</span>
-        </div>
+        {(boost.amount !== null && boost.amount !== undefined) && ( // Check for null/undefined before displaying
+          <div className="flex items-center space-x-2 text-xs pt-1">
+              <Zap className="h-4 w-4 text-yellow-500" />
+              <span className="font-medium">Boost:</span>
+              <span>{boost.amount?.toLocaleString() ?? 'N/A'}</span>
+              { (boost.totalAmount !== null && boost.totalAmount !== undefined) && (<> {/* Check for null/undefined */}
+                <span className="font-medium ml-2">Total:</span>
+                <span>{boost.totalAmount?.toLocaleString() ?? 'N/A'}</span>
+              </>)}
+          </div>
+        )}
         {boost.links && boost.links.length > 0 && (
-          <div>
-            <h4 className="font-semibold mb-1 text-xs">Links:</h4>
+          <div className="pt-1"> {/* Added pt-1 for spacing */}
+            <h4 className="font-semibold mb-1.5 text-xs">Links:</h4> {/* Increased mb */}
             <div className="flex flex-wrap gap-2">
               {boost.links.map((link, index) => (
-                <Button key={index} variant="outline" size="sm" asChild>
-                  <a href={link.url} target="_blank" rel="noopener noreferrer">
-                    <Link2 className="mr-1 h-3 w-3" /> {link.label || link.type}
+                <Button key={index} variant="outline" size="sm" asChild className="overflow-hidden">
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center w-full px-1">
+                    <Link2 className="mr-1 h-3 w-3 flex-shrink-0" />
+                    <span className="truncate text-left">{link.label || link.type}</span>
                   </a>
                 </Button>
               ))}
