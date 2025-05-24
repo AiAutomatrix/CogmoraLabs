@@ -1,12 +1,11 @@
-
 'use server';
 
 import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairData, PairDetail } from '@/types';
 
 const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 
-// Helper function to fetch and parse data that returns an array
-// Handles cases where API returns a single object (for /latest endpoints) by wrapping it in an array.
+// Helper function for endpoints that return a single object, which we wrap in an array
+// This is used for the original 3 endpoints (profiles, latest boosts, top boosts)
 async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
   try {
     const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
@@ -16,13 +15,11 @@ async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
       throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
     }
     const data = await response.json();
-    if (Array.isArray(data)) {
-      return data as T[];
-    } else if (data && typeof data === 'object') {
-      // API for /latest profiles and /latest boosts returns a single object
-      return [data as T]; 
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      return [data as T]; // Wrap single object in an array
     }
-    return []; // Fallback for unexpected structure
+    // If it's already an array (though docs suggest single object), return as is or empty
+    return Array.isArray(data) ? (data as T[]) : [];
   } catch (error) {
     console.error(`Error in fetchDataAsArray for ${endpoint}:`, error);
     // throw error; // Re-throw to be caught by the caller, or return empty array
@@ -30,7 +27,24 @@ async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
   }
 }
 
-// Helper function for endpoints returning a single object (or null) that contains a 'pairs' array
+// Helper function for endpoints that return an array of items directly
+async function fetchDirectArrayData<T>(endpoint: string): Promise<T[]> {
+  try {
+    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error(`API Error (${response.status}) for ${endpoint}: ${errorBody}`);
+      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? (data as T[]) : [];
+  } catch (error) {
+    console.error(`Error in fetchDirectArrayData for ${endpoint}:`, error);
+    return [];
+  }
+}
+
+// Helper function for endpoints returning a single object (or null) that might contain a 'pairs' array
 async function fetchDataAsObjectOrNull<T>(endpoint: string): Promise<T | null> {
   try {
     const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
@@ -47,33 +61,12 @@ async function fetchDataAsObjectOrNull<T>(endpoint: string): Promise<T | null> {
     return null; // Fallback for unexpected structure or if API returns array where object expected
   } catch (error) {
     console.error(`Error in fetchDataAsObjectOrNull for ${endpoint}:`, error);
-    // throw error; // Re-throw to be caught by the caller, or return null
-    return null; // Return null on error
-  }
-}
-
-// Helper function for endpoints that directly return an array of items (like PairDetail[])
-async function fetchDirectArrayData<T>(endpoint: string): Promise<T[]> {
-  try {
-    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`API Error (${response.status}) for ${endpoint}: ${errorBody}`);
-      throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status}`);
-    }
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      return data as T[];
-    }
-    return []; // Fallback if it's not an array as expected
-  } catch (error) {
-    console.error(`Error in fetchDirectArrayData for ${endpoint}:`, error);
-    return [];
+    return null;
   }
 }
 
 
-// Original three functions
+// Original three functions - use fetchDataAsArray
 export async function fetchLatestTokenProfiles(): Promise<TokenProfileItem[]> {
   return fetchDataAsArray<TokenProfileItem>('/token-profiles/latest/v1');
 }

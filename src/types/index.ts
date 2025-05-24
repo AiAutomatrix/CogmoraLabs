@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 export const TradeSchema = z.object({
@@ -35,7 +36,6 @@ export const TokenProfileItemSchema = z.object({
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
-  // No top-level symbol for profiles as per API doc
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
 
@@ -43,14 +43,13 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(), // Added for consistency, though API sample doesn't show it for boosts. Let component decide display.
+  name: z.string().optional().nullable(), // Added for consistency
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
-   // No top-level symbol for boosts as per API doc
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
 
@@ -75,12 +74,15 @@ export const TxnsDetailSchema = z.object({
 });
 export type TxnsDetail = z.infer<typeof TxnsDetailSchema>;
 
+// Allows keys like "m5", "h1", "h6", "h24"
 export const TxnsSchema = z.record(z.string(), TxnsDetailSchema.optional()).optional().nullable();
 export type PairTxns = z.infer<typeof TxnsSchema>;
 
+// Allows keys like "h24", "h6", "h1", "m5"
 export const VolumeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
 export type PairVolume = z.infer<typeof VolumeSchema>;
 
+// Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
 export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
 
@@ -99,10 +101,10 @@ export type PairWebsite = z.infer<typeof PairInfoWebsiteSchema>;
 
 export const PairInfoSocialSchema = z.object({
   platform: z.string().optional().nullable(),
-  type: z.string().optional().nullable(),
-  name: z.string().optional().nullable(),
-  handle: z.string().optional().nullable(),
-  url: z.string().url().optional().nullable(),
+  type: z.string().optional().nullable(), // Added as some social objects might have type
+  name: z.string().optional().nullable(), // Added as some social objects might have name
+  handle: z.string().optional().nullable(), // For platforms like Twitter
+  url: z.string().url().optional().nullable(), // URL might be directly available
 });
 export type PairSocial = z.infer<typeof PairInfoSocialSchema>;
 
@@ -110,7 +112,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
-  description: z.string().optional().nullable(), 
+  description: z.string().optional().nullable(),
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -138,6 +140,6 @@ export type PairDetail = z.infer<typeof PairDetailSchema>;
 
 export const PairDataSchema = z.object({
   schemaVersion: z.string(),
-  pairs: z.array(PairDetailSchema),
+  pairs: z.array(PairDetailSchema).optional().nullable(), // Made optional and nullable based on potential API responses
 });
 export type PairData = z.infer<typeof PairDataSchema>;
