@@ -18,3 +18,35 @@ export interface ChatMessage {
   text: string;
   timestamp: Date;
 }
+
+// DEX Screener API Types
+export const DexLinkSchema = z.object({
+  type: z.string(),
+  label: z.string(),
+  url: z.string().url(),
+});
+export type DexLink = z.infer<typeof DexLinkSchema>;
+
+export const TokenProfileItemSchema = z.object({
+  url: z.string().url().optional().nullable(),
+  chainId: z.string(),
+  tokenAddress: z.string(),
+  icon: z.string().url().optional().nullable(),
+  header: z.string().url().optional().nullable(),
+  description: z.string().optional().nullable(),
+  links: z.array(DexLinkSchema).optional().nullable(),
+});
+export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
+
+export const TokenBoostItemSchema = z.object({
+  url: z.string().url().optional().nullable(),
+  chainId: z.string(),
+  tokenAddress: z.string(),
+  amount: z.number().optional().nullable(),
+  totalAmount: z.number().optional().nullable(),
+  icon: z.string().url().optional().nullable(),
+  header: z.string().url().optional().nullable(),
+  description: z.string().optional().nullable(),
+  links: z.array(DexLinkSchema).optional().nullable(),
+});
+export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
