@@ -46,7 +46,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog'; // Import Dialog components
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink as ExternalLinkIcon, SearchCode, TrendingUp, ListFilter, ReceiptText, Layers, Search, Network, ListCollapse, Eye, PackageSearch } from 'lucide-react';
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink as ExternalLinkIcon, SearchCode, TrendingUp, ListFilter, ReceiptText, Layers, Search, Network, ListCollapse, Eye, PackageSearch, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format } from 'date-fns'; // For date formatting
@@ -205,9 +205,12 @@ const DexScreenerContent: React.FC = () => {
   }, [toast, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
   useEffect(() => {
+    // Only auto-fetch for views that don't require specific inputs initially
     if (['profiles', 'latestBoosts', 'topBoosts'].includes(selectedView)) {
       fetchDataForView(selectedView);
     } else {
+      // For views requiring input, set loading to false and clear data/errors
+      // until the user explicitly clicks "Fetch View Data"
       const isObjectView = selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs';
       setData(isObjectView ? null : []);
       setIsLoading(false);
@@ -433,6 +436,7 @@ const DexScreenerContent: React.FC = () => {
                     <TableHead>Chain</TableHead>
                     <TableHead className="min-w-[150px]">Address</TableHead>
                     {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && <TableHead className="text-right">Boost Amt.</TableHead>}
+                    {selectedView === 'latestBoosts' && <TableHead className="text-right">Total Boost</TableHead>} 
                     <TableHead className="w-[60px] text-center">Info</TableHead>
                     <TableHead className="w-[100px] text-center">Links</TableHead>
                   </>
@@ -492,10 +496,11 @@ const DexScreenerContent: React.FC = () => {
                       </Button>}
                     </div>
                   </TableCell>
-                  {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
-                    <TableCell className="text-right">
-                      {'amount' in item ? ((item as TokenBoostItem).amount?.toLocaleString() ?? '-') : '-'}
-                    </TableCell>
+                  {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && 'amount' in item && (
+                    <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
+                  )}
+                   {selectedView === 'latestBoosts' && 'totalAmount' in item && (
+                     <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
                   )}
                   <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
                   <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
