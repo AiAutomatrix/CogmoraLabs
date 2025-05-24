@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -39,8 +40,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogClose, // Added DialogClose
-  DialogFooter, // Added DialogFooter
+  DialogClose,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -160,11 +161,15 @@ const DexScreenerContent: React.FC = () => {
           result = await fetchPairsByTokenAddresses(inputChainId, inputCommaSeparatedTokenAddresses);
           break;
         default:
-          // Exhaustive check for unhandled view types
           const _exhaustiveCheck: never = view;
           throw new Error(`Unknown view type: ${_exhaustiveCheck}`);
       }
-      setData(result);
+      // Ensure result is always an array for views expecting TokenProfileItem[] or TokenBoostItem[]
+      if ((view === 'profiles' || view === 'latestBoosts' || view === 'topBoosts') && result && !Array.isArray(result)) {
+        setData([result as any]);
+      } else {
+        setData(result);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       setError(errorMessage);
@@ -183,7 +188,7 @@ const DexScreenerContent: React.FC = () => {
     if (selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') {
       fetchDataForView(selectedView);
     } else {
-      setData(null); // Clear data if view requires input and hasn't fetched yet
+      setData(null); 
       setIsLoading(false); 
     }
   }, [selectedView, fetchDataForView]);
@@ -255,17 +260,15 @@ const DexScreenerContent: React.FC = () => {
     return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
   };
 
-  // Helper to get the array of pairs from data, regardless of which API endpoint it came from
   const getPairsArray = (rawData: DexScreenerData, viewType: DexScreenerViewType): PairDetail[] => {
     if (!rawData) return [];
     if (viewType === 'pairDetailsByPairAddress' || viewType === 'searchPairs') {
       return (rawData as PairDataSchema)?.pairs || [];
     }
     if (viewType === 'tokenPairPools' || viewType === 'pairsByTokenAddresses') {
-      // These endpoints return PairDetail[] directly
       return (rawData as PairDetail[]) || [];
     }
-    return []; // Should not happen for pair-related views
+    return [];
   };
   
   const renderInputFields = () => {
@@ -300,7 +303,7 @@ const DexScreenerContent: React.FC = () => {
               placeholder="Search Query (e.g., SOL/USDC)"
               value={inputSearchQuery}
               onChange={(e) => setInputSearchQuery(e.target.value)}
-              className="md:col-span-2" // Span across two columns if others are present or just full width
+              className="md:col-span-2"
             />
           )}
            {selectedView === 'pairsByTokenAddresses' && (
@@ -321,21 +324,20 @@ const DexScreenerContent: React.FC = () => {
   const renderTable = () => {
     if (!data) {
          if (viewRequiresInputs(selectedView)) {
-            // If data is null and it's a view that requires input, show prompt
             return (
                 <div className="flex items-center justify-center h-full p-6 text-center">
                     <p className="text-muted-foreground">Enter parameters above and click "Fetch View Data" to load this view.</p>
                 </div>
             );
         }
-        // If data is null and it's an auto-fetching view, loading/error state will cover it.
         return null;
     }
     
     if (selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') {
       const items = data as (TokenProfileItem | TokenBoostItem)[];
       if (items.length === 0) return <div className="flex items-center justify-center h-full"><p className="text-muted-foreground">No data for this view.</p></div>;
-      const isBoostView = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
+      const isProfileOrBoostView = true; // Helper for common columns
+      
       return (
         <Table>
           <TableCaption>
@@ -347,12 +349,15 @@ const DexScreenerContent: React.FC = () => {
             <TableRow>
               <TableHead className="w-[50px]">Icon</TableHead>
               <TableHead>Name</TableHead>
+              <TableHead>Symbol</TableHead>
               <TableHead>Chain</TableHead>
               <TableHead className="min-w-[150px]">Address</TableHead>
               {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
                 <TableHead className="text-right">Boost Amt.</TableHead>
               )}
-              {/* "Total Boost" column removed from all views based on user request */}
+              {selectedView === 'latestBoosts' && ( // Only for Latest Boosts
+                <TableHead className="text-right">Total Boost</TableHead>
+              )}
               <TableHead className="w-[60px] text-center">Info</TableHead>
               <TableHead className="w-[100px] text-center">Links</TableHead>
             </TableRow>
@@ -376,6 +381,7 @@ const DexScreenerContent: React.FC = () => {
                     <TooltipContent><p>{item.name || item.description || "Unknown Token"}</p></TooltipContent>
                   </Tooltip>
                 </TableCell>
+                <TableCell>N/A</TableCell>{/* Symbol column for profiles/boosts - was removed, keeping structure */}
                 <TableCell>{item.chainId}</TableCell>
                 <TableCell className="font-mono text-xs">
                   <div className="flex items-center gap-1">
@@ -386,7 +392,9 @@ const DexScreenerContent: React.FC = () => {
                 {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
                   <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
                 )}
-                {/* "Total Boost" cell removed */}
+                {selectedView === 'latestBoosts' && ( // Only for Latest Boosts
+                   <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
+                )}
                 <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
                 <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
               </TableRow>
@@ -451,7 +459,7 @@ const DexScreenerContent: React.FC = () => {
               <TableRow key={`${pair.pairAddress}-${pair.chainId}-${index}`}>
                 <TableCell>
                   <Avatar className="h-6 w-6">
-                    <AvatarImage src={pair.info?.imageUrl || pair.baseToken?.symbol /* Potential fallback for missing info */} alt={pair.baseToken?.name || 'Token'} />
+                    <AvatarImage src={pair.info?.imageUrl || pair.baseToken?.symbol } alt={pair.baseToken?.name || 'Token'} />
                     <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                 </TableCell>
@@ -481,7 +489,7 @@ const DexScreenerContent: React.FC = () => {
         </Table>
       );
     }
-    return null; // Should not be reached if selectedView is valid
+    return null;
   };
   
   const viewOptions = [
@@ -502,7 +510,6 @@ const DexScreenerContent: React.FC = () => {
           <SearchCode className="h-5 w-5 text-primary" />
           <CardTitle className="text-lg">DEX Screener</CardTitle>
         </div>
-        {/* RadioGroup for selecting views */}
         <RadioGroup
           value={selectedView}
           onValueChange={(value) => setSelectedView(value as DexScreenerViewType)}
@@ -522,16 +529,14 @@ const DexScreenerContent: React.FC = () => {
         </RadioGroup>
       </CardHeader>
 
-      {/* Conditional Input Section */}
       {renderInputFields()}
 
-      {/* Data Display Area */}
       <CardContent className="flex-grow overflow-y-auto p-0 bg-muted/20">
-        {isLoading && !viewRequiresInputs(selectedView) ? ( // Show skeleton for auto-fetching views
+        {isLoading && !viewRequiresInputs(selectedView) ? ( 
           <div className="space-y-2 p-4">
             {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
           </div>
-        ) : isLoading && viewRequiresInputs(selectedView) && data !== null ? ( // Show skeleton if fetching input-based view AFTER button click
+        ) : isLoading && viewRequiresInputs(selectedView) && data !== null ? ( 
             <div className="space-y-2 p-4">
             {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
             </div>
@@ -542,14 +547,13 @@ const DexScreenerContent: React.FC = () => {
             <p className="text-muted-foreground text-sm text-center">{error}</p>
             <Button onClick={() => fetchDataForView(selectedView)} className="mt-4">Retry</Button>
           </div>
-        ) : !data && viewRequiresInputs(selectedView) ? ( // Prompt for input if view requires it and no data/not loading
+        ) : !data && viewRequiresInputs(selectedView) ? (
            <div className="flex items-center justify-center h-full p-6 text-center">
             <p className="text-muted-foreground">Enter parameters above and click "Fetch View Data" to load this view.</p>
           </div>
         ) : (renderTable())}
       </CardContent>
       
-      {/* Pair Detail Dialog */}
       {selectedPairForDialog && (
         <Dialog open={isPairDetailDialogOpen} onOpenChange={setIsPairDetailDialogOpen}>
           <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
@@ -571,7 +575,6 @@ const DexScreenerContent: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="flex-grow overflow-y-auto pr-2 space-y-3 text-sm">
-                {/* Key Stats */}
                 <div className="grid grid-cols-2 gap-2">
                     <div><strong>Price USD:</strong> {formatCurrency(selectedPairForDialog.priceUsd)}</div>
                     <div><strong>Liquidity USD:</strong> {formatCurrency(selectedPairForDialog.liquidity?.usd)}</div>
@@ -581,7 +584,6 @@ const DexScreenerContent: React.FC = () => {
                     <div><strong>Created:</strong> {formatDateFromTimestamp(selectedPairForDialog.pairCreatedAt)}</div>
                 </div>
 
-                {/* Price Change */}
                 {selectedPairForDialog.priceChange && (
                     <div className="mt-2">
                         <h4 className="font-semibold mb-1">Price Change (%):</h4>
@@ -593,19 +595,17 @@ const DexScreenerContent: React.FC = () => {
                     </div>
                 )}
 
-                {/* Transactions */}
                 {selectedPairForDialog.txns && (
                      <div className="mt-2">
                         <h4 className="font-semibold mb-1">Transactions (Buys/Sells):</h4>
                         <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
-                            {Object.entries(selectedPairForDialog.txns).map(([key, value]) => value && ( // Check if value (e.g., m5 object) exists
+                            {Object.entries(selectedPairForDialog.txns).map(([key, value]) => value && ( 
                                 <div key={key}><strong>{key}:</strong> B:{value.buys ?? '-'} / S:{value.sells ?? '-'}</div>
                             ))}
                         </div>
                     </div>
                 )}
                 
-                {/* Websites */}
                 {selectedPairForDialog.info?.websites && selectedPairForDialog.info.websites.length > 0 && (
                     <div className="mt-2">
                         <h4 className="font-semibold mb-1">Websites:</h4>
@@ -617,19 +617,17 @@ const DexScreenerContent: React.FC = () => {
                     </div>
                 )}
 
-                {/* Socials */}
                 {selectedPairForDialog.info?.socials && selectedPairForDialog.info.socials.length > 0 && (
                      <div className="mt-2">
                         <h4 className="font-semibold mb-1">Socials:</h4>
                          <ul className="list-disc list-inside pl-1 space-y-0.5">
-                        {selectedPairForDialog.info.socials.map(social => social.url && ( // Ensure URL exists
+                        {selectedPairForDialog.info.socials.map(social => social.url && ( 
                             <li key={social.url}><a href={social.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{social.platform || social.type || social.name} <ExternalLinkIcon className="inline h-3 w-3 ml-0.5"/></a></li>
                         ))}
                         </ul>
                     </div>
                 )}
 
-                {/* Description */}
                 {selectedPairForDialog.info?.description && (
                      <div className="mt-2">
                         <h4 className="font-semibold mb-1">Description:</h4>
