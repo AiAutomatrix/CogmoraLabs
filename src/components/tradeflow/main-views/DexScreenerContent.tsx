@@ -79,7 +79,7 @@ const DexScreenerContent: React.FC = () => {
   const { toast } = useToast();
 
   // Input states
-  const [inputChainId, setInputChainId] = useState<string>('solana');
+  const [inputChainId, setInputChainId] = useState<string>('solana'); // Default chain
   const [inputTokenAddress, setInputTokenAddress] = useState<string>('');
   const [inputPairAddress, setInputPairAddress] = useState<string>('');
   const [inputSearchQuery, setInputSearchQuery] = useState<string>('');
@@ -89,12 +89,12 @@ const DexScreenerContent: React.FC = () => {
 
   const fetchDataForView = useCallback(async (view: DexScreenerViewType, forceFetch: boolean = false) => {
     if (!forceFetch && selectedView === view && data !== null && !['tokenOrders', 'pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(view)) {
-      return;
+      return; // Avoid re-fetch for static list views if data already exists
     }
 
     setIsLoading(true);
     setError(null);
-    setData(null); 
+    setData(null); // Clear previous data
     
     let result: DexScreenerData = null;
     try {
@@ -109,35 +109,35 @@ const DexScreenerContent: React.FC = () => {
           result = await fetchTopBoostedTokens();
           break;
         case 'tokenOrders':
-          if (!inputChainId || !inputTokenAddress) {
+          if (!inputChainId.trim() || !inputTokenAddress.trim()) {
             toast({ title: "Missing Input", description: "Chain ID and Token Address are required for Token Orders.", variant: "destructive" });
             setIsLoading(false); return;
           }
           result = await fetchTokenOrders(inputChainId, inputTokenAddress);
           break;
         case 'pairDetailsByPairAddress':
-          if (!inputChainId || !inputPairAddress) {
+          if (!inputChainId.trim() || !inputPairAddress.trim()) {
             toast({ title: "Missing Input", description: "Chain ID and Pair Address are required for Pair Details.", variant: "destructive" });
             setIsLoading(false); return;
           }
           result = await fetchPairDetailsByPairAddress(inputChainId, inputPairAddress);
           break;
         case 'searchPairs':
-          if (!inputSearchQuery) {
+          if (!inputSearchQuery.trim()) {
             toast({ title: "Missing Input", description: "Search query is required.", variant: "destructive" });
             setIsLoading(false); return;
           }
           result = await searchPairs(inputSearchQuery);
           break;
         case 'tokenPairPools':
-           if (!inputChainId || !inputTokenAddress) {
+           if (!inputChainId.trim() || !inputTokenAddress.trim()) {
             toast({ title: "Missing Input", description: "Chain ID and Token Address are required for Token Pair Pools.", variant: "destructive" });
             setIsLoading(false); return;
           }
           result = await fetchTokenPairPools(inputChainId, inputTokenAddress);
           break;
         case 'pairsByTokenAddresses':
-          if (!inputChainId || !inputCommaSeparatedTokenAddresses) {
+          if (!inputChainId.trim() || !inputCommaSeparatedTokenAddresses.trim()) {
             toast({ title: "Missing Input", description: "Chain ID and Token Addresses are required.", variant: "destructive" });
             setIsLoading(false); return;
           }
@@ -162,11 +162,13 @@ const DexScreenerContent: React.FC = () => {
   }, [selectedView, data, toast, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
   useEffect(() => {
+    // Fetch data automatically for views that don't require specific inputs
     if (!['tokenOrders', 'pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) {
       fetchDataForView(selectedView);
     } else {
+      // For views requiring input, clear data if inputs are not met or view changes
       setData(null); 
-      setIsLoading(false);
+      setIsLoading(false); // Ensure loading is false if we're not fetching
     }
   }, [selectedView, fetchDataForView]);
 
@@ -192,19 +194,19 @@ const DexScreenerContent: React.FC = () => {
     if (!description) return <span className="text-muted-foreground">-</span>;
     const truncated = description.length > 50 ? `${description.substring(0, 47)}...` : description;
     return (
-      <Popover>
-        <Tooltip delayDuration={100}>
-          <TooltipTrigger asChild>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4" /></Button>
             </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="top" align="center" className="max-w-xs z-50 bg-popover text-popover-foreground p-2 rounded shadow-md text-xs"><p>{truncated}</p></TooltipContent>
-        </Tooltip>
-        <PopoverContent className="w-80 max-h-60 overflow-y-auto text-sm z-[51] bg-popover text-popover-foreground p-3 rounded shadow-lg" side="top" align="center">
-          {description}
-        </PopoverContent>
-      </Popover>
+            <PopoverContent className="w-80 max-h-60 overflow-y-auto text-sm z-[51] bg-popover text-popover-foreground p-3 rounded shadow-lg" side="top" align="center">
+              {description}
+            </PopoverContent>
+          </Popover>
+        </TooltipTrigger>
+        <TooltipContent side="top" align="center" className="max-w-xs z-50 bg-popover text-popover-foreground p-2 rounded shadow-md text-xs"><p>{truncated}</p></TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -217,7 +219,7 @@ const DexScreenerContent: React.FC = () => {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto z-50">
           {links.map((link, index) => (
-            <DropdownMenuItem key={index} asChild>
+            <DropdownMenuItem key={`${link.url}-${index}`} asChild>
               <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between w-full text-xs">
                 {link.label || link.type || 'Link'} <ExternalLink className="ml-2 h-3 w-3 text-muted-foreground" />
               </a>
@@ -238,7 +240,7 @@ const DexScreenerContent: React.FC = () => {
       {selectedPairForDialog && selectedPairForDialog.pairAddress === pair.pairAddress && (
         <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pair: {selectedPairForDialog.baseToken?.symbol}/{selectedPairForDialog.quoteToken?.symbol}</DialogTitle>
+            <DialogTitle>Pair: {selectedPairForDialog.baseToken?.symbol || 'N/A'}/{selectedPairForDialog.quoteToken?.symbol || 'N/A'}</DialogTitle>
             <DialogDescription className="text-xs break-all">{selectedPairForDialog.pairAddress}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-4 text-sm max-h-[60vh] overflow-y-auto pr-2">
@@ -293,33 +295,42 @@ const DexScreenerContent: React.FC = () => {
 
   const renderInputSection = () => {
     const commonInputs = (
-      <>
-        <Input placeholder="Chain ID (e.g., solana)" value={inputChainId} onChange={e => setInputChainId(e.target.value)} className="h-9 text-xs" />
-        { (selectedView === 'tokenOrders' || selectedView === 'tokenPairPools') && 
-            <Input placeholder="Token Address" value={inputTokenAddress} onChange={e => setInputTokenAddress(e.target.value)} className="h-9 text-xs"/> }
-        { selectedView === 'pairDetailsByPairAddress' && 
-            <Input placeholder="Pair Address" value={inputPairAddress} onChange={e => setInputPairAddress(e.target.value)} className="h-9 text-xs"/> }
-        { selectedView === 'pairsByTokenAddresses' &&
-            <Input placeholder="Token Addresses (comma-separated)" value={inputCommaSeparatedTokenAddresses} onChange={e => setInputCommaSeparatedTokenAddresses(e.target.value)} className="h-9 text-xs"/> }
-      </>
+      <Input placeholder="Chain ID (e.g., solana)" value={inputChainId} onChange={e => setInputChainId(e.target.value)} className="h-9 text-xs" />
     );
 
-    if (selectedView === 'searchPairs') {
+    if (selectedView === 'tokenOrders' || selectedView === 'tokenPairPools') {
+      return (
+        <form onSubmit={(e) => { e.preventDefault(); fetchDataForView(selectedView, true);}} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-end mb-3">
+          {commonInputs}
+          <Input placeholder="Token Address" value={inputTokenAddress} onChange={e => setInputTokenAddress(e.target.value)} className="h-9 text-xs"/>
+          <Button type="submit" size="sm" className="h-9 text-xs md:col-start-3">Fetch</Button>
+        </form>
+      );
+    } else if (selectedView === 'pairDetailsByPairAddress') {
+       return (
+        <form onSubmit={(e) => { e.preventDefault(); fetchDataForView(selectedView, true);}} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-end mb-3">
+          {commonInputs}
+          <Input placeholder="Pair Address" value={inputPairAddress} onChange={e => setInputPairAddress(e.target.value)} className="h-9 text-xs"/>
+          <Button type="submit" size="sm" className="h-9 text-xs md:col-start-3">Fetch</Button>
+        </form>
+      );
+    } else if (selectedView === 'searchPairs') {
       return (
         <form onSubmit={(e) => { e.preventDefault(); fetchDataForView(selectedView, true);}} className="flex gap-2 items-center mb-3">
           <Input placeholder="Search pairs (e.g., WIF SOL)" value={inputSearchQuery} onChange={e => setInputSearchQuery(e.target.value)} className="h-9 text-xs flex-grow" />
           <Button type="submit" size="sm" className="h-9 text-xs">Fetch</Button>
         </form>
       );
-    } else if (['tokenOrders', 'pairDetailsByPairAddress', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) {
+    } else if (selectedView === 'pairsByTokenAddresses') {
       return (
         <form onSubmit={(e) => { e.preventDefault(); fetchDataForView(selectedView, true);}} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-end mb-3">
           {commonInputs}
-          <Button type="submit" size="sm" className="h-9 text-xs sm:col-span-2 md:col-span-1">Fetch</Button>
+          <Input placeholder="Token Addresses (comma-separated)" value={inputCommaSeparatedTokenAddresses} onChange={e => setInputCommaSeparatedTokenAddresses(e.target.value)} className="h-9 text-xs"/>
+          <Button type="submit" size="sm" className="h-9 text-xs md:col-start-3">Fetch</Button>
         </form>
       );
     }
-    return null;
+    return null; // No inputs for profiles/boosts views
   };
 
   const renderTable = () => {
@@ -342,8 +353,13 @@ const DexScreenerContent: React.FC = () => {
 
     // Render Profiles or Boosts
     if (selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') {
-      const items = data as (TokenProfileItem[] | TokenBoostItem[]);
+      const items = data as (TokenProfileItem[] | TokenBoostItem[]); // Safe cast after checks
       const isBoost = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
+      
+      if (!Array.isArray(items) || items.length === 0) {
+         return <div className="flex items-center justify-center h-full p-4"><p className="text-muted-foreground">No data available.</p></div>;
+      }
+
       return (
         <Table>
           <TableHeader>
@@ -361,7 +377,7 @@ const DexScreenerContent: React.FC = () => {
           </TableHeader>
           <TableBody>
             {items.map((item, index) => (
-              <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
+              <TableRow key={`${item.tokenAddress || 'item'}-${item.chainId || 'chain'}-${index}-${selectedView}`}>
                 <TableCell><Avatar className="h-6 w-6"><AvatarImage src={item.icon ?? undefined} alt={item.name || item.symbol || 'Token icon'} /><AvatarFallback>{(item.symbol || item.name || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback></Avatar></TableCell>
                 <TableCell className="font-medium max-w-[150px] min-w-0">
                   <Tooltip delayDuration={100}><TooltipTrigger asChild><div className="truncate" title={item.name || item.description || item.tokenAddress || "Unknown"}>{item.name || item.description || "Unknown Token"}</div></TooltipTrigger><TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent></Tooltip>
@@ -385,6 +401,9 @@ const DexScreenerContent: React.FC = () => {
     // Render Token Orders
     if (selectedView === 'tokenOrders') {
       const items = data as OrderInfoItem[];
+      if (!Array.isArray(items) || items.length === 0) {
+        return <div className="flex items-center justify-center h-full p-4"><p className="text-muted-foreground">No orders found for this token on the specified chain.</p></div>;
+      }
       return (
         <Table>
           <TableHeader>
@@ -410,6 +429,7 @@ const DexScreenerContent: React.FC = () => {
     // Render Pair Details (covers pairDetailsByPairAddress, searchPairs, tokenPairPools, pairsByTokenAddresses)
     if (['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) {
         let pairsArray: PairDetail[] = [];
+        // Handle both PairData (object with 'pairs' array) and PairDetail[] (direct array)
         if (data && 'pairs' in data && Array.isArray((data as PairData).pairs)) { 
             pairsArray = (data as PairData).pairs;
         } else if (data && Array.isArray(data)) { 
@@ -477,7 +497,7 @@ const DexScreenerContent: React.FC = () => {
     { value: 'pairDetailsByPairAddress', label: 'Pair by Address', icon: <Layers className="mr-2 h-4 w-4" /> },
     { value: 'searchPairs', label: 'Search Pairs', icon: <Search className="mr-2 h-4 w-4" /> },
     { value: 'tokenPairPools', label: 'Token Pools', icon: <GitFork className="mr-2 h-4 w-4" /> },
-    { value: 'pairsByTokenAddresses', label: 'Pairs by Tokens', icon: <PackageSearch className="mr-2 h-4 w-4" /> },
+    { value: 'pairsByTokenAddresses', label: 'Pairs by Tokens', icon: <PackageSearch className="mr-2 h-4 w-4" /> }, // Re-used PackageSearch icon, consider a different one
   ];
 
 
@@ -513,5 +533,3 @@ const DexScreenerContent: React.FC = () => {
 };
 
 export default DexScreenerContent;
-
-    

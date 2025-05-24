@@ -8,22 +8,23 @@ const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 // Generic helper function to fetch and parse data from Dex Screener API
 async function fetchApiData<T>(endpoint: string, isSingleObjectResponseToArray: boolean = false): Promise<T | null> {
   try {
-    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
+    const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`, { cache: 'no-store' }); // Disable caching for fresh data
     if (!response.ok) {
       const errorBody = await response.text();
       console.error(`DEX API Error (${response.status}) for ${endpoint}: ${errorBody}`);
-      // Consider throwing a more specific error or returning a structured error object
       throw new Error(`Failed to fetch data from ${endpoint}. Status: ${response.status} - ${errorBody}`);
     }
     const data = await response.json();
 
+    // The API docs for /latest/v1 for profiles and boosts show a single object response.
+    // We wrap it in an array to consistently handle it as a list in the UI.
     if (isSingleObjectResponseToArray && data && typeof data === 'object' && !Array.isArray(data)) {
-      return [data] as unknown as T; // Wrap single object in an array
+      return [data] as unknown as T; 
     }
+    // For endpoints that already return an array (like /orders), or object (like /pairs), return as is.
     return data as T;
   } catch (error) {
     console.error(`Error in fetchApiData for ${endpoint}:`, error);
-    // Depending on how you want to handle errors upstream, you might re-throw or return null/empty
     return null;
   }
 }
@@ -48,6 +49,7 @@ export async function fetchTokenOrders(chainId: string, tokenAddress: string): P
     console.error("fetchTokenOrders: chainId and tokenAddress are required.");
     return [];
   }
+  // This endpoint returns an array directly
   const data = await fetchApiData<OrderInfoItem[]>(`/orders/v1/${chainId}/${tokenAddress}`);
   return data || [];
 }
@@ -58,7 +60,7 @@ export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress
     console.error("fetchPairDetailsByPairAddress: chainId and pairAddress are required.");
     return null;
   }
-  // The API path is /latest/dex/pairs/{chainId}/{pairId} - assuming pairAddress is used as pairId
+  // This endpoint returns an object containing a 'pairs' array
   return fetchApiData<PairData>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
 }
 
@@ -67,6 +69,7 @@ export async function searchPairs(query: string): Promise<PairData | null> {
     console.error("searchPairs: query is required.");
     return null;
   }
+  // This endpoint returns an object containing a 'pairs' array
   return fetchApiData<PairData>(`/latest/dex/search?q=${encodeURIComponent(query)}`);
 }
 
@@ -89,4 +92,3 @@ export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses
   const data = await fetchApiData<PairDetail[]>(`/tokens/v1/${chainId}/${tokenAddresses}`);
   return data || [];
 }
-
