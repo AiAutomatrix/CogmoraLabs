@@ -220,8 +220,8 @@ const DexScreenerContent: React.FC = () => {
                 <TableHead>Name/Symbol</TableHead>
                 <TableHead>Chain</TableHead>
                 <TableHead className="min-w-[150px]">Address</TableHead>
-                {isBoostView && <TableHead className="text-right">Boost Amt.</TableHead>}
-                {isBoostView && <TableHead className="text-right">Total Boost</TableHead>}
+                {/* Removed Boost Amt. Header */}
+                {isBoostView && selectedView === 'latestBoosts' && <TableHead className="text-right">Total Boost</TableHead>}
                 <TableHead className="w-[60px] text-center">Info</TableHead>
                 <TableHead className="w-[100px] text-center">Links</TableHead>
               </TableRow>
@@ -254,10 +254,8 @@ const DexScreenerContent: React.FC = () => {
                       </Button>
                     </div>
                   </TableCell>
-                  {isBoostView && 'amount' in item && (
-                    <TableCell className="text-right">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>
-                  )}
-                  {isBoostView && 'totalAmount' in item && (
+                  {/* Removed Boost Amt. Cell */}
+                  {isBoostView && selectedView === 'latestBoosts' && 'totalAmount' in item && (
                      <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
                   )}
                   <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
