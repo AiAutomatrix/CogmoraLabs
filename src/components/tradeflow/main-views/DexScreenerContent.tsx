@@ -5,6 +5,7 @@ import {
   fetchLatestTokenProfiles,
   fetchLatestBoostedTokens,
   fetchTopBoostedTokens,
+  // Import new actions
   fetchTokenOrders,
   fetchPairDetailsByPairAddress,
   searchPairs,
@@ -66,7 +67,7 @@ type DexScreenerData =
   | OrderInfoItem[]
   | PairDataSchema // For single pair details by address and search results
   | PairDetail[]   // For token pair pools and pairs by token addresses
-  | null; // Allow null for initial state or errors for object types
+  | null; 
 
 
 // Helper functions for formatting
@@ -98,7 +99,7 @@ const formatDateFromTimestamp = (timestamp?: number | null) => {
 
 const DexScreenerContent: React.FC = () => {
   const [selectedView, setSelectedView] = useState<DexScreenerViewType>('profiles');
-  const [data, setData] = useState<DexScreenerData>([]); // Initialize to empty array for views that expect arrays
+  const [data, setData] = useState<DexScreenerData>([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -118,10 +119,16 @@ const DexScreenerContent: React.FC = () => {
   const fetchDataForView = useCallback(async (view: DexScreenerViewType) => {
     setIsLoading(true);
     setError(null);
-    setData(null); 
+    
+    let initialDataState: DexScreenerData = [];
+    if (view === 'pairDetailsByPairAddress' || view === 'searchPairs') {
+        initialDataState = null; 
+    }
+    setData(initialDataState);
 
     try {
       let result: DexScreenerData = null; 
+      // Set appropriate initial type for result based on view expecting array or object
       if (['profiles', 'latestBoosts', 'topBoosts', 'tokenOrders', 'tokenPairPools', 'pairsByTokenAddresses'].includes(view)) {
         result = [];
       }
@@ -169,15 +176,7 @@ const DexScreenerContent: React.FC = () => {
         result = await fetchPairsByTokenAddresses(inputChainId, inputCommaSeparatedTokenAddresses);
       }
       
-      if (view === 'profiles' || view === 'latestBoosts' || view === 'topBoosts') {
-        if (result && !Array.isArray(result)) {
-          setData([result as any]);
-        } else {
-          setData(result || []);
-        }
-      } else {
-        setData(result);
-      }
+      setData(result);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
@@ -188,20 +187,33 @@ const DexScreenerContent: React.FC = () => {
         description: `Could not fetch data for ${view}. ${errorMessage}`,
         variant: "destructive",
       });
-      setData(null); 
+      if (view === 'pairDetailsByPairAddress' || view === 'searchPairs') {
+        setData(null);
+      } else {
+        setData([]);
+      }
     } finally {
       setIsLoading(false);
     }
   }, [toast, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
   useEffect(() => {
+    // Fetch data for default views or views that don't require input on initial load
     if (['profiles', 'latestBoosts', 'topBoosts'].includes(selectedView)) {
       fetchDataForView(selectedView);
     } else {
-      setData(null);
+      // For views requiring input, clear data and loading state until user fetches
+      setData(null); // Or [] depending on if it's an object or array view
+      if (selectedView === 'pairDetailsByPairAddress' || selectedView === 'searchPairs') {
+         setData(null);
+      } else {
+         setData([]);
+      }
       setIsLoading(false);
+      setError(null);
     }
   }, [selectedView, fetchDataForView]);
+
 
   const handleManualFetch = () => {
     fetchDataForView(selectedView);
@@ -276,6 +288,7 @@ const DexScreenerContent: React.FC = () => {
     return `${address.substring(0, startChars)}...${address.substring(address.length - endChars)}`;
   };
 
+  // Helper to get pairs array safely
   const getPairsArray = (rawData: DexScreenerData, viewType: DexScreenerViewType): PairDetail[] => {
     if (!rawData) return [];
     if (viewType === 'pairDetailsByPairAddress' || viewType === 'searchPairs') {
@@ -413,12 +426,12 @@ const DexScreenerContent: React.FC = () => {
                 {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
                   <>
                     <TableHead className="w-[50px]">Icon</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Symbol</TableHead>
+                    <TableHead>Name/Symbol</TableHead>
                     <TableHead>Chain</TableHead>
                     <TableHead className="min-w-[150px]">Address</TableHead>
-                    {selectedView === 'latestBoosts' && <TableHead className="text-right">Boost Amt.</TableHead>}
-                    {selectedView === 'topBoosts' && <TableHead className="text-right">Boost Amt.</TableHead>}
+                    {/* Boost Amt. for both latest and top boosts */}
+                    {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && <TableHead className="text-right">Boost Amt.</TableHead>}
+                    {/* Total Boost only for latestBoosts */}
                     {selectedView === 'latestBoosts' && <TableHead className="text-right">Total Boost</TableHead>}
                     <TableHead className="w-[60px] text-center">Info</TableHead>
                     <TableHead className="w-[100px] text-center">Links</TableHead>
@@ -449,7 +462,8 @@ const DexScreenerContent: React.FC = () => {
             </TableHeader>
             <TableBody>
               {/* Rows for Profiles/Boosts */}
-              {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (data as (TokenProfileItem | TokenBoostItem)[]).map((item, index) => (
+              {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && 
+                (data as (TokenProfileItem | TokenBoostItem)[]).map((item, index) => (
                 <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
                   <TableCell>
                     <Avatar className="h-8 w-8">
@@ -467,7 +481,6 @@ const DexScreenerContent: React.FC = () => {
                         <TooltipContent><p>{item.name || item.description || item.tokenAddress}</p></TooltipContent>
                      </Tooltip>
                   </TableCell>
-                  <TableCell>{item.symbol || 'N/A'}</TableCell>
                   <TableCell>{item.chainId}</TableCell>
                   <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-1">
