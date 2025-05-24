@@ -19,7 +19,7 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-// DEX Screener API Types
+// DEX Screener API Types - Original
 export const DexLinkSchema = z.object({
   type: z.string().optional().nullable(),
   label: z.string().optional().nullable(),
@@ -31,11 +31,12 @@ export const TokenProfileItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(),
+  name: z.string().optional().nullable(), // Kept for consistency, though not in direct API sample
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
+  // symbol field removed as it's not directly in the API for profiles/boosts
 });
 export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
 
@@ -43,13 +44,14 @@ export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
   tokenAddress: z.string(),
-  name: z.string().optional().nullable(),
+  name: z.string().optional().nullable(), // Kept for consistency
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),
   icon: z.string().url().optional().nullable(),
   header: z.string().url().optional().nullable(),
   description: z.string().optional().nullable(),
   links: z.array(DexLinkSchema).optional().nullable(),
+    // symbol field removed as it's not directly in the API for profiles/boosts
 });
 export type TokenBoostItem = z.infer<typeof TokenBoostItemSchema>;
 
@@ -110,7 +112,7 @@ export const PairInfoDetailsSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   websites: z.array(PairInfoWebsiteSchema).optional().nullable(),
   socials: z.array(PairInfoSocialSchema).optional().nullable(),
-  description: z.string().optional().nullable(), // Adding description here
+  description: z.string().optional().nullable(), 
 });
 export type PairInfo = z.infer<typeof PairInfoDetailsSchema>;
 
@@ -140,4 +142,4 @@ export const PairDataSchema = z.object({
   schemaVersion: z.string(),
   pairs: z.array(PairDetailSchema),
 });
-export type PairDataSchema = z.infer<typeof PairDataSchema>;
+export type PairData = z.infer<typeof PairDataSchema>; // Renamed to avoid conflict with schema name

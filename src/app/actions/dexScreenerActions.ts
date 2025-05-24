@@ -1,10 +1,12 @@
 'use server';
 
-import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairDataSchema, PairDetail } from '@/types';
+import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairData, PairDetail } from '@/types';
 
 const DEX_API_BASE_URL = 'https://api.dexscreener.com';
 
-// Helper function for endpoints returning an array or single object to be wrapped in array
+// Helper function to fetch and parse data
+// This helper is designed to handle endpoints that return a single object
+// and wrap it in an array, or return an array directly.
 async function fetchDataAsArray<T>(endpoint: string): Promise<T[]> {
   try {
     const response = await fetch(`${DEX_API_BASE_URL}${endpoint}`);
@@ -68,14 +70,14 @@ export async function fetchTokenOrders(chainId: string, tokenAddress: string): P
   return fetchDataAsArray<OrderInfoItem>(`/orders/v1/${chainId}/${tokenAddress}`);
 }
 
-export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairDataSchema | null> {
+export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairData | null> {
   if (!chainId || !pairAddress) return null;
-  return fetchDataAsObjectOrNull<PairDataSchema>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
+  return fetchDataAsObjectOrNull<PairData>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
 }
 
-export async function searchPairs(query: string): Promise<PairDataSchema | null> {
+export async function searchPairs(query: string): Promise<PairData | null> {
   if (!query) return null;
-  return fetchDataAsObjectOrNull<PairDataSchema>(`/latest/dex/search?q=${encodeURIComponent(query)}`);
+  return fetchDataAsObjectOrNull<PairData>(`/latest/dex/search?q=${encodeURIComponent(query)}`);
 }
 
 export async function fetchTokenPairPools(chainId: string, tokenAddress: string): Promise<PairDetail[]> {
