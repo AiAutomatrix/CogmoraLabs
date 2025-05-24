@@ -48,9 +48,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, TrendingUp, ListFilter, 
-  ReceiptText, Layers, Search, Network, Users, Eye, Coins, BarChartBig, Zap, CalendarClock
-} from 'lucide-react'; // Added more icons
+  AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode, 
+  TrendingUp, ListFilter, Layers, Search, Network, Users, Eye, PackageSearch, ReceiptText, BarChartBig, CalendarClock, Zap
+} from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import Image from 'next/image';
 import { format } from 'date-fns'; // For date formatting
@@ -132,15 +132,14 @@ const DexScreenerContent: React.FC = () => {
       }
 
       // Adjusting data setting logic based on expected response types
-      if (currentView === 'profiles' || currentView === 'latestBoosts' || currentView === 'topBoosts' || currentView === 'tokenOrders' || currentView === 'tokenPairPools' || currentView === 'pairsByTokenAddresses') {
-        // These views expect an array, or a single object wrapped in an array by the action
-        if (result && !Array.isArray(result) && typeof result === 'object' && result !== null) {
-             // This case should ideally be handled by the actions for profiles/boosts if they always return one item
-            setData([result as any]); // Fallback if action didn't wrap
-        } else {
-            setData(result as any[] || []);
-        }
-      } else if (currentView === 'pairDetailsByPairAddress' || currentView === 'searchPairs') {
+      if (['profiles', 'latestBoosts', 'topBoosts'].includes(currentView)) {
+         // These views expect TokenProfileItem[] or TokenBoostItem[]
+         // The actions already wrap single objects in an array.
+         setData(result as TokenProfileItem[] | TokenBoostItem[] || []);
+      } else if (['tokenOrders', 'tokenPairPools', 'pairsByTokenAddresses'].includes(currentView)) {
+        // These views expect OrderInfoItem[] or PairDetail[]
+        setData(result as OrderInfoItem[] | PairDetail[] || []);
+      } else if (['pairDetailsByPairAddress', 'searchPairs'].includes(currentView)) {
         // These views expect PairData | null
         setData(result as PairData | null);
       } else {
@@ -161,12 +160,12 @@ const DexScreenerContent: React.FC = () => {
     }
   }, [toast, selectedView, inputChainId, inputTokenAddress, inputPairAddress, inputSearchQuery, inputCommaSeparatedTokenAddresses]);
 
-  // Initial fetch for default view
+  // Initial fetch for default view or when inputs change for relevant views
   useEffect(() => {
-    if (selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') {
+    if (['profiles', 'latestBoosts', 'topBoosts'].includes(selectedView)) {
         fetchDataForView(selectedView);
     }
-    // For other views, fetch is triggered by button click after inputs
+    // For other views, fetch is triggered by button click after inputs are provided
   }, [selectedView, fetchDataForView]);
 
   const handleCopyAddress = (address: string) => {
@@ -275,12 +274,13 @@ const DexScreenerContent: React.FC = () => {
     }
 
     return (
-      <div className="p-4 border-b bg-card space-y-3">
+      <div className="p-4 border-t border-border bg-card space-y-3 mt-3">
         {(needsChainAndToken || needsChainAndPair || needsChainAndTokens) && (
           <Input
             placeholder="Chain ID (e.g., solana)"
             value={inputChainId}
-            onChange={(e) => setInputChainId(e.target.value)}
+            onChange={(e) => setInputChainId(e.target.value.toLowerCase())}
+            className="h-9 text-sm"
           />
         )}
         {(needsChainAndToken) && (
@@ -288,6 +288,7 @@ const DexScreenerContent: React.FC = () => {
             placeholder="Token Address"
             value={inputTokenAddress}
             onChange={(e) => setInputTokenAddress(e.target.value)}
+            className="h-9 text-sm"
           />
         )}
         {(needsChainAndPair) && (
@@ -295,6 +296,7 @@ const DexScreenerContent: React.FC = () => {
             placeholder="Pair Address"
             value={inputPairAddress}
             onChange={(e) => setInputPairAddress(e.target.value)}
+            className="h-9 text-sm"
           />
         )}
         {needsSearchQuery && (
@@ -302,6 +304,7 @@ const DexScreenerContent: React.FC = () => {
             placeholder="Search Query (e.g., ETH/USDC)"
             value={inputSearchQuery}
             onChange={(e) => setInputSearchQuery(e.target.value)}
+            className="h-9 text-sm"
           />
         )}
         {needsChainAndTokens && (
@@ -309,15 +312,16 @@ const DexScreenerContent: React.FC = () => {
             placeholder="Token Addresses (comma-separated)"
             value={inputCommaSeparatedTokenAddresses}
             onChange={(e) => setInputCommaSeparatedTokenAddresses(e.target.value)}
+            className="h-9 text-sm"
           />
         )}
-        <Button onClick={() => fetchDataForView()} className="w-full sm:w-auto">Fetch View Data</Button>
+        <Button onClick={() => fetchDataForView()} className="w-full sm:w-auto h-9">Fetch View Data</Button>
       </div>
     );
   };
   
   const viewOptions = [
-    { value: 'profiles', label: 'Latest Profiles', icon: <SearchCode className="mr-2 h-4 w-4" /> }, // PackageSearch was not defined, using SearchCode
+    { value: 'profiles', label: 'Latest Profiles', icon: <PackageSearch className="mr-2 h-4 w-4" /> },
     { value: 'latestBoosts', label: 'Latest Boosts', icon: <TrendingUp className="mr-2 h-4 w-4" /> },
     { value: 'topBoosts', label: 'Top Boosts', icon: <ListFilter className="mr-2 h-4 w-4" /> },
     { value: 'tokenOrders', label: 'Token Orders', icon: <ReceiptText className="mr-2 h-4 w-4" /> },
@@ -327,11 +331,13 @@ const DexScreenerContent: React.FC = () => {
     { value: 'pairsByTokenAddresses', label: 'Pairs by Tokens', icon: <Users className="mr-2 h-4 w-4" /> },
   ];
 
+  const isBoostView = selectedView === 'latestBoosts' || selectedView === 'topBoosts';
+
   return (
     <Card className="h-full flex flex-col overflow-hidden">
       <CardHeader className="border-b px-4 py-3">
         <div className="flex items-center gap-2 mb-3">
-          <Zap className="h-6 w-6 text-primary" /> {/* Main Icon for DEX Screener */}
+          <Zap className="h-6 w-6 text-primary" />
           <CardTitle className="text-xl font-semibold">DEX Screener Deluxe</CardTitle>
         </div>
         <RadioGroup
@@ -366,67 +372,76 @@ const DexScreenerContent: React.FC = () => {
             <p className="text-sm text-muted-foreground mb-3">{error}</p>
             <Button onClick={() => fetchDataForView(selectedView)} className="mt-2">Retry</Button>
           </div>
-        ) : (!data || (Array.isArray(data) && data.length === 0) || ('pairs' in data && data.pairs && data.pairs.length === 0)) ? (
+        ) : (!data || (Array.isArray(data) && data.length === 0) || (typeof data === 'object' && data !== null && 'pairs' in data && (data as PairData).pairs && (data as PairData).pairs.length === 0)) ? (
            <div className="flex items-center justify-center h-full p-4">
             <p className="text-muted-foreground text-lg">No data available for this view or parameters.</p>
           </div>
         ) : (
-          <Table className="min-w-full">
+          <Table className="min-w-full text-xs">
             <TableCaption className="py-2 text-xs">
               {selectedView === 'profiles' && 'Latest token profiles from DEX Screener.'}
               {selectedView === 'latestBoosts' && 'Latest boosted tokens from DEX Screener.'}
               {selectedView === 'topBoosts' && 'Tokens with the most active boosts from DEX Screener.'}
-              {selectedView === 'tokenOrders' && 'Token order history.'}
-              {selectedView === 'pairDetailsByPairAddress' && 'Details for the specified pair address.'}
-              {selectedView === 'searchPairs' && 'Search results for pairs.'}
-              {selectedView === 'tokenPairPools' && 'Pools for the specified token.'}
-              {selectedView === 'pairsByTokenAddresses' && 'Pairs associated with the specified token addresses.'}
+              {selectedView === 'tokenOrders' && `Token order history for ${inputTokenAddress} on ${inputChainId}.`}
+              {selectedView === 'pairDetailsByPairAddress' && `Details for pair ${inputPairAddress} on ${inputChainId}.`}
+              {selectedView === 'searchPairs' && `Search results for "${inputSearchQuery}".`}
+              {selectedView === 'tokenPairPools' && `Pools for token ${inputTokenAddress} on ${inputChainId}.`}
+              {selectedView === 'pairsByTokenAddresses' && `Pairs for tokens on ${inputChainId}.`}
             </TableCaption>
             <TableHeader>
               <TableRow>
                 {/* Conditional Headers based on selectedView */}
                 {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (
                   <>
-                    <TableHead className="w-[50px] px-2 py-2 text-xs">Icon</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">Name/Symbol</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">Chain</TableHead>
-                    <TableHead className="min-w-[150px] px-2 py-2 text-xs">Address</TableHead>
-                    {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && <TableHead className="text-right px-2 py-2 text-xs">Boost Amt.</TableHead>}
-                    {selectedView === 'latestBoosts' && <TableHead className="text-right px-2 py-2 text-xs">Total Boost</TableHead>}
-                    <TableHead className="w-[60px] text-center px-2 py-2 text-xs">Info</TableHead>
-                    <TableHead className="w-[100px] text-center px-2 py-2 text-xs">Links</TableHead>
+                    <TableHead className="w-[50px] px-2 py-2">Icon</TableHead>
+                    <TableHead className="px-2 py-2">Name</TableHead>
+                    <TableHead className="px-2 py-2">Chain</TableHead>
+                    <TableHead className="min-w-[150px] px-2 py-2">Address</TableHead>
+                    {isBoostView && <TableHead className="text-right px-2 py-2">Boost Amt.</TableHead>}
+                    <TableHead className="w-[60px] text-center px-2 py-2">Info</TableHead>
+                    <TableHead className="w-[100px] text-center px-2 py-2">Links</TableHead>
                   </>
                 )}
                 {selectedView === 'tokenOrders' && (
                   <>
-                    <TableHead className="px-2 py-2 text-xs">Type</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">Status</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">Payment Date</TableHead>
+                    <TableHead className="px-2 py-2">Type</TableHead>
+                    <TableHead className="px-2 py-2">Status</TableHead>
+                    <TableHead className="px-2 py-2">Payment Date</TableHead>
                   </>
                 )}
                 {(['pairDetailsByPairAddress', 'searchPairs', 'tokenPairPools', 'pairsByTokenAddresses'].includes(selectedView)) && (
                   <>
-                    <TableHead className="w-[40px] px-1 py-2 text-xs">Icon</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">Pair</TableHead>
-                    <TableHead className="text-right px-2 py-2 text-xs">Price (USD)</TableHead>
-                    <TableHead className="text-right px-2 py-2 text-xs">Volume (24h)</TableHead>
-                    <TableHead className="text-right px-2 py-2 text-xs">Liquidity (USD)</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">Chain</TableHead>
-                    <TableHead className="px-2 py-2 text-xs">DEX</TableHead>
-                    <TableHead className="w-[80px] text-center px-2 py-2 text-xs">Actions</TableHead>
+                    <TableHead className="w-[40px] px-1 py-2">Icon</TableHead>
+                    <TableHead className="px-2 py-2">Pair</TableHead>
+                    <TableHead className="text-right px-2 py-2">Price (USD)</TableHead>
+                    <TableHead className="text-right px-2 py-2">Volume (24h)</TableHead>
+                    <TableHead className="text-right px-2 py-2">Liquidity (USD)</TableHead>
+                    <TableHead className="px-2 py-2">Chain</TableHead>
+                    <TableHead className="px-2 py-2">DEX</TableHead>
+                    <TableHead className="w-[80px] text-center px-2 py-2">Actions</TableHead>
                   </>
                 )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {/* Rows for Profiles and Boosts */}
-              {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && (data as (TokenProfileItem | TokenBoostItem)[]).map((item, index) => (
+              {(selectedView === 'profiles' || selectedView === 'latestBoosts' || selectedView === 'topBoosts') && Array.isArray(data) && (data as (TokenProfileItem | TokenBoostItem)[]).map((item, index) => (
                 <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`} className="text-xs">
                   <TableCell className="px-2 py-1.5">
-                    <Avatar className="h-7 w-7"><AvatarImage src={item.icon ?? undefined} alt={item.name || item.description || 'Token icon'} /><AvatarFallback>{(item.name || item.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                    <Avatar className="h-7 w-7">
+                        <AvatarImage src={item.icon ?? undefined} alt={item.name || item.description || 'Token icon'} />
+                        <AvatarFallback>{(item.name || item.description || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
+                    </Avatar>
                   </TableCell>
                   <TableCell className="font-medium max-w-[150px] min-w-0 px-2 py-1.5">
-                     <div className="truncate" title={item.name || item.description || item.tokenAddress || "Unknown Token"}>{item.name || item.description || item.tokenAddress || "Unknown Token"}</div>
+                     <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="truncate" title={item.name || item.description || item.tokenAddress || "Unknown Token"}>
+                                {item.name || item.description || item.tokenAddress || "Unknown Token"}
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent><p>{item.name || item.description || item.tokenAddress || "Unknown Token"}</p></TooltipContent>
+                     </Tooltip>
                   </TableCell>
                   <TableCell className="px-2 py-1.5">{item.chainId}</TableCell>
                   <TableCell className="font-mono text-xs px-2 py-1.5">
@@ -435,15 +450,18 @@ const DexScreenerContent: React.FC = () => {
                       <Button variant="ghost" size="icon" className="h-5 w-5 flex-shrink-0" onClick={() => item.tokenAddress && handleCopyAddress(item.tokenAddress)}><Copy className="h-3 w-3"/></Button>
                     </div>
                   </TableCell>
-                  {(selectedView === 'latestBoosts' || selectedView === 'topBoosts') && <TableCell className="text-right px-2 py-1.5">{(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}</TableCell>}
-                  {selectedView === 'latestBoosts' && <TableCell className="text-right px-2 py-1.5">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>}
+                  {isBoostView && (
+                    <TableCell className="text-right px-2 py-1.5">
+                      {(item as TokenBoostItem).amount?.toLocaleString() ?? '-'}
+                    </TableCell>
+                  )}
                   <TableCell className="text-center px-2 py-1.5">{renderDescriptionInteraction(item.description)}</TableCell>
                   <TableCell className="text-center px-2 py-1.5">{renderLinksDropdown(item.links)}</TableCell>
                 </TableRow>
               ))}
               {/* Rows for Token Orders */}
-              {selectedView === 'tokenOrders' && (data as OrderInfoItem[]).map((order, index) => (
-                <TableRow key={index} className="text-xs">
+              {selectedView === 'tokenOrders' && Array.isArray(data) && (data as OrderInfoItem[]).map((order, index) => (
+                <TableRow key={`${order.type}-${order.paymentTimestamp}-${index}`} className="text-xs">
                   <TableCell className="px-2 py-1.5">{order.type}</TableCell>
                   <TableCell className="px-2 py-1.5">{order.status}</TableCell>
                   <TableCell className="px-2 py-1.5">{formatDateFromTimestamp(order.paymentTimestamp)}</TableCell>
@@ -454,17 +472,17 @@ const DexScreenerContent: React.FC = () => {
                 <TableRow key={pair.pairAddress} className="text-xs">
                   <TableCell className="px-1 py-1.5">
                     <Avatar className="h-6 w-6">
-                      <AvatarImage src={pair.baseToken?.info?.imageUrl || pair.info?.imageUrl || undefined} alt={pair.baseToken?.name || 'Token'} />
+                      <AvatarImage src={pair.info?.imageUrl || pair.baseToken?.info?.imageUrl || undefined} alt={pair.baseToken?.name || 'Token'} />
                       <AvatarFallback>{(pair.baseToken?.symbol || 'P').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
                   <TableCell className="font-medium px-2 py-1.5">
                     <Tooltip>
                         <TooltipTrigger asChild>
-                           <div className="truncate max-w-[120px]">{pair.baseToken?.symbol}/{pair.quoteToken?.symbol}</div>
+                           <div className="truncate max-w-[120px]">{pair.baseToken?.symbol || '?'}/{pair.quoteToken?.symbol || '?'}</div>
                         </TooltipTrigger>
                         <TooltipContent>
-                           <p>{pair.baseToken?.name} / {pair.quoteToken?.name}</p>
+                           <p>{pair.baseToken?.name || 'Unknown'} / {pair.quoteToken?.name || 'Unknown'}</p>
                            <p className="text-xs text-muted-foreground">{pair.pairAddress}</p>
                         </TooltipContent>
                     </Tooltip>
@@ -490,22 +508,22 @@ const DexScreenerContent: React.FC = () => {
           <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center">
-                {selectedPairForDialog.info?.imageUrl && (
+                {(selectedPairForDialog.info?.imageUrl || selectedPairForDialog.baseToken?.info?.imageUrl) && (
                     <Avatar className="h-8 w-8 mr-2">
-                        <AvatarImage src={selectedPairForDialog.info.imageUrl} alt={selectedPairForDialog.baseToken.name} />
-                        <AvatarFallback>{selectedPairForDialog.baseToken.symbol.substring(0,2)}</AvatarFallback>
+                        <AvatarImage src={selectedPairForDialog.info?.imageUrl || selectedPairForDialog.baseToken?.info?.imageUrl} alt={selectedPairForDialog.baseToken?.name || ''} />
+                        <AvatarFallback>{(selectedPairForDialog.baseToken?.symbol || 'P').substring(0,2)}</AvatarFallback>
                     </Avatar>
                 )}
-                {selectedPairForDialog.baseToken.name} / {selectedPairForDialog.quoteToken.name}
+                {selectedPairForDialog.baseToken?.name || 'Base'} / {selectedPairForDialog.quoteToken?.name || 'Quote'}
               </DialogTitle>
               <DialogDescription>
-                Pair: {selectedPairForDialog.pairAddress} on {selectedPairForDialog.chainId} ({selectedPairForDialog.dexId})
+                Pair: {selectedPairForDialog.pairAddress} on {selectedPairForDialog.chainId} ({selectedPairForDialog.dexId || 'N/A'})
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 py-3 text-sm">
               <div className="grid grid-cols-2 gap-2">
                 <div><strong>Price USD:</strong> {formatCurrency(selectedPairForDialog.priceUsd)}</div>
-                <div><strong>Price Native:</strong> {selectedPairForDialog.priceNative}</div>
+                <div><strong>Price Native:</strong> {selectedPairForDialog.priceNative || '-'}</div>
                 <div><strong>FDV:</strong> {formatCurrency(selectedPairForDialog.fdv)}</div>
                 <div><strong>Market Cap:</strong> {formatCurrency(selectedPairForDialog.marketCap)}</div>
                 <div><strong>Liquidity USD:</strong> {formatCurrency(selectedPairForDialog.liquidity?.usd)}</div>
@@ -516,38 +534,38 @@ const DexScreenerContent: React.FC = () => {
               )}
               <div className="grid grid-cols-2 gap-2">
                  <div>
-                    <h4 className="font-semibold mb-1 text-xs">Volume</h4>
-                    <p className="text-xs">5m: {formatLargeNumber(selectedPairForDialog.volume?.m5)}</p>
-                    <p className="text-xs">1h: {formatLargeNumber(selectedPairForDialog.volume?.h1)}</p>
-                    <p className="text-xs">6h: {formatLargeNumber(selectedPairForDialog.volume?.h6)}</p>
-                    <p className="text-xs">24h: {formatLargeNumber(selectedPairForDialog.volume?.h24)}</p>
+                    <h4 className="font-semibold mb-1 text-xs flex items-center"><BarChartBig className="h-3 w-3 mr-1 text-muted-foreground"/>Volume</h4>
+                    <p className="text-xs pl-4">5m: {formatLargeNumber(selectedPairForDialog.volume?.m5)}</p>
+                    <p className="text-xs pl-4">1h: {formatLargeNumber(selectedPairForDialog.volume?.h1)}</p>
+                    <p className="text-xs pl-4">6h: {formatLargeNumber(selectedPairForDialog.volume?.h6)}</p>
+                    <p className="text-xs pl-4">24h: {formatLargeNumber(selectedPairForDialog.volume?.h24)}</p>
                  </div>
                  <div>
-                    <h4 className="font-semibold mb-1 text-xs">Price Change</h4>
-                    <p className="text-xs">5m: {selectedPairForDialog.priceChange?.m5?.toFixed(2)}%</p>
-                    <p className="text-xs">1h: {selectedPairForDialog.priceChange?.h1?.toFixed(2)}%</p>
-                    <p className="text-xs">6h: {selectedPairForDialog.priceChange?.h6?.toFixed(2)}%</p>
-                    <p className="text-xs">24h: {selectedPairForDialog.priceChange?.h24?.toFixed(2)}%</p>
+                    <h4 className="font-semibold mb-1 text-xs flex items-center"><TrendingUp className="h-3 w-3 mr-1 text-muted-foreground"/>Price Change</h4>
+                    <p className="text-xs pl-4">5m: {selectedPairForDialog.priceChange?.m5?.toFixed(2) ?? '-'}%</p>
+                    <p className="text-xs pl-4">1h: {selectedPairForDialog.priceChange?.h1?.toFixed(2) ?? '-'}%</p>
+                    <p className="text-xs pl-4">6h: {selectedPairForDialog.priceChange?.h6?.toFixed(2) ?? '-'}%</p>
+                    <p className="text-xs pl-4">24h: {selectedPairForDialog.priceChange?.h24?.toFixed(2) ?? '-'}%</p>
                  </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                    <h4 className="font-semibold mb-1 text-xs">Transactions (Buys/Sells)</h4>
-                    <p className="text-xs">5m: {selectedPairForDialog.txns?.m5?.buys}/{selectedPairForDialog.txns?.m5?.sells}</p>
-                    <p className="text-xs">1h: {selectedPairForDialog.txns?.h1?.buys}/{selectedPairForDialog.txns?.h1?.sells}</p>
-                    <p className="text-xs">6h: {selectedPairForDialog.txns?.h6?.buys}/{selectedPairForDialog.txns?.h6?.sells}</p>
-                    <p className="text-xs">24h: {selectedPairForDialog.txns?.h24?.buys}/{selectedPairForDialog.txns?.h24?.sells}</p>
+                    <h4 className="font-semibold mb-1 text-xs flex items-center"><ReceiptText className="h-3 w-3 mr-1 text-muted-foreground"/>Transactions</h4>
+                    <p className="text-xs pl-4">5m (B/S): {selectedPairForDialog.txns?.m5?.buys ?? 0}/{selectedPairForDialog.txns?.m5?.sells ?? 0}</p>
+                    <p className="text-xs pl-4">1h (B/S): {selectedPairForDialog.txns?.h1?.buys ?? 0}/{selectedPairForDialog.txns?.h1?.sells ?? 0}</p>
+                    <p className="text-xs pl-4">6h (B/S): {selectedPairForDialog.txns?.h6?.buys ?? 0}/{selectedPairForDialog.txns?.h6?.sells ?? 0}</p>
+                    <p className="text-xs pl-4">24h (B/S): {selectedPairForDialog.txns?.h24?.buys ?? 0}/{selectedPairForDialog.txns?.h24?.sells ?? 0}</p>
                 </div>
                  <div>
-                    <h4 className="font-semibold mb-1 text-xs">Boosts</h4>
-                    <p className="text-xs">Active: {selectedPairForDialog.boosts?.active ?? 0}</p>
+                    <h4 className="font-semibold mb-1 text-xs flex items-center"><Zap className="h-3 w-3 mr-1 text-muted-foreground"/>Boosts</h4>
+                    <p className="text-xs pl-4">Active: {selectedPairForDialog.boosts?.active ?? 0}</p>
                 </div>
               </div>
 
               {selectedPairForDialog.info?.websites && selectedPairForDialog.info.websites.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mb-1 text-xs">Websites</h4>
-                  <ul className="list-disc list-inside text-xs">
+                  <h4 className="font-semibold mb-1 text-xs flex items-center"><LinkIcon className="h-3 w-3 mr-1 text-muted-foreground"/>Websites</h4>
+                  <ul className="list-disc list-inside text-xs pl-4">
                     {selectedPairForDialog.info.websites.map(site => (
                       <li key={site.url}><a href={site.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{site.label || site.url}</a></li>
                     ))}
@@ -556,10 +574,10 @@ const DexScreenerContent: React.FC = () => {
               )}
               {selectedPairForDialog.info?.socials && selectedPairForDialog.info.socials.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mb-1 text-xs">Socials</h4>
-                  <ul className="list-disc list-inside text-xs">
+                  <h4 className="font-semibold mb-1 text-xs flex items-center"><Users className="h-3 w-3 mr-1 text-muted-foreground"/>Socials</h4>
+                  <ul className="list-disc list-inside text-xs pl-4">
                     {selectedPairForDialog.info.socials.map(social => (
-                      <li key={social.url || social.handle}>
+                      <li key={social.url || social.handle || social.name}>
                         {social.url ? <a href={social.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{social.name || social.platform || social.handle}</a> : <span>{social.name || social.platform || social.handle}</span>}
                       </li>
                     ))}
@@ -568,14 +586,20 @@ const DexScreenerContent: React.FC = () => {
               )}
               {selectedPairForDialog.labels && selectedPairForDialog.labels.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mb-1 text-xs">Labels</h4>
-                  <div className="flex flex-wrap gap-1">
+                  <h4 className="font-semibold mb-1 text-xs flex items-center"><ListFilter className="h-3 w-3 mr-1 text-muted-foreground"/>Labels</h4>
+                  <div className="flex flex-wrap gap-1 pl-4">
                     {selectedPairForDialog.labels.map(label => (
                         <span key={label} className="text-xs bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded-sm">{label}</span>
                     ))}
                   </div>
                 </div>
               )}
+               {selectedPairForDialog.pairCreatedAt && (
+                 <div>
+                    <h4 className="font-semibold mb-1 text-xs flex items-center"><CalendarClock className="h-3 w-3 mr-1 text-muted-foreground"/>Pair Created</h4>
+                    <p className="text-xs pl-4">{formatDateFromTimestamp(selectedPairForDialog.pairCreatedAt)}</p>
+                 </div>
+               )}
             </div>
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose>
