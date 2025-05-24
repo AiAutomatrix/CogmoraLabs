@@ -1,14 +1,16 @@
-import type {Metadata} from 'next';
-import { Geist, Geist_Mono } from 'next/font/google'; // Corrected import name
-import './globals.css';
-import { Toaster } from "@/components/ui/toaster"; // Added Toaster
 
-const geistSans = Geist({ // Corrected usage
+import type {Metadata} from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import './globals.css';
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip"; // Added TooltipProvider
+
+const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
 });
 
-const geistMono = Geist_Mono({ // Corrected usage
+const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
 });
@@ -26,8 +28,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        <Toaster />
+        <TooltipProvider> {/* Added TooltipProvider */}
+          {children}
+          <Toaster />
+        </TooltipProvider>
       </body>
     </html>
   );

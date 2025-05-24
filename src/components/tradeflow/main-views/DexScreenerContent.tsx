@@ -28,9 +28,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink } from 'lucide-react'; // Added Copy icon
-import { useToast } from "@/hooks/use-toast"; // Added useToast
+import { AlertCircle, Info, Link as LinkIcon, Copy, ExternalLink, SearchCode } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import Image from 'next/image';
+
 
 type DexScreenerViewType = 'profiles' | 'latestBoosts' | 'topBoosts';
 type DexScreenerData = TokenProfileItem[] | TokenBoostItem[];
@@ -40,12 +43,12 @@ const DexScreenerContent: React.FC = () => {
   const [data, setData] = useState<DexScreenerData>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast();
 
   const fetchDataForView = useCallback(async (view: DexScreenerViewType) => {
     setIsLoading(true);
     setError(null);
-    setData([]); // Clear previous data
+    setData([]);
     try {
       let result: DexScreenerData = [];
       if (view === 'profiles') {
@@ -68,7 +71,7 @@ const DexScreenerContent: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]); // Added toast to dependencies, though not strictly necessary if its identity is stable
+  }, [toast]);
 
   useEffect(() => {
     fetchDataForView(selectedView);
@@ -91,16 +94,32 @@ const DexScreenerContent: React.FC = () => {
     });
   };
 
-  const renderDescriptionPopover = (description?: string | null) => {
+  const renderDescriptionInteraction = (description?: string | null) => {
     if (!description) return <span className="text-muted-foreground">-</span>;
+    
+    const truncatedDescription = description.length > 100 ? description.substring(0, 97) + "..." : description;
+
     return (
       <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-6 w-6">
-            <Info className="h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80 max-h-60 overflow-y-auto text-sm">
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <Info className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent 
+            side="top" 
+            align="center" 
+            className="max-w-xs z-50 bg-popover text-popover-foreground p-2 rounded shadow-md text-xs"
+          >
+            <p>{truncatedDescription}</p>
+          </TooltipContent>
+        </Tooltip>
+        <PopoverContent 
+          className="w-80 max-h-60 overflow-y-auto text-sm z-[51] bg-popover text-popover-foreground p-3 rounded shadow-lg"
+        >
           {description}
         </PopoverContent>
       </Popover>
@@ -116,7 +135,7 @@ const DexScreenerContent: React.FC = () => {
             Links <LinkIcon className="ml-2 h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto">
+        <DropdownMenuContent align="end" className="max-h-60 overflow-y-auto z-50">
           {links.map((link, index) => (
             <DropdownMenuItem key={index} asChild>
               <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between w-full">
@@ -134,7 +153,10 @@ const DexScreenerContent: React.FC = () => {
   return (
     <Card className="h-full flex flex-col overflow-hidden">
       <CardHeader className="border-b px-4 py-3">
-        <CardTitle className="text-lg">DEX Screener Insights</CardTitle>
+        <div className="flex items-center gap-2">
+          <SearchCode className="h-5 w-5 text-primary" />
+          <CardTitle className="text-lg">DEX Screener</CardTitle>
+        </div>
         <div className="pt-2">
           <RadioGroup
             defaultValue="profiles"
@@ -159,7 +181,7 @@ const DexScreenerContent: React.FC = () => {
       <CardContent className="flex-grow overflow-y-auto p-2 bg-muted/20">
         {isLoading ? (
           <div className="space-y-2 p-4">
-            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-full p-4">
@@ -175,16 +197,16 @@ const DexScreenerContent: React.FC = () => {
         ) : (
           <Table>
             <TableCaption>
-              {selectedView === 'profiles' && 'Latest token profiles.'}
-              {selectedView === 'latestBoosts' && 'Latest boosted tokens.'}
-              {selectedView === 'topBoosts' && 'Tokens with the most active boosts.'}
+              {selectedView === 'profiles' && 'Latest token profiles from DEX Screener API.'}
+              {selectedView === 'latestBoosts' && 'Latest boosted tokens from DEX Screener API.'}
+              {selectedView === 'topBoosts' && 'Tokens with the most active boosts from DEX Screener API.'}
             </TableCaption>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]">Icon</TableHead>
                 <TableHead>Name/Symbol</TableHead>
                 <TableHead>Chain</TableHead>
-                <TableHead>Address</TableHead>
+                <TableHead className="min-w-[180px]">Address</TableHead>
                 {isBoostView && <TableHead className="text-right">Boost Amt.</TableHead>}
                 {isBoostView && <TableHead className="text-right">Total Boost</TableHead>}
                 <TableHead className="w-[80px] text-center">Info</TableHead>
@@ -193,18 +215,20 @@ const DexScreenerContent: React.FC = () => {
             </TableHeader>
             <TableBody>
               {data.map((item, index) => (
-                <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}`}> {/* Ensure key uniqueness */}
+                <TableRow key={`${item.tokenAddress}-${item.chainId}-${index}-${selectedView}`}>
                   <TableCell>
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.description || 'Token icon'} data-ai-hint="token logo" />
+                      <AvatarImage src={item.icon ?? `https://placehold.co/32x32.png`} alt={item.description || item.tokenAddress || 'Token icon'} data-ai-hint="token crypto" />
                       <AvatarFallback>{(item.description || item.tokenAddress || 'NA').substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </TableCell>
-                  <TableCell className="font-medium max-w-[150px] min-w-0 truncate" title={item.description || item.tokenAddress}>
-                    {item.description || item.tokenAddress}
+                  <TableCell className="font-medium max-w-[150px] min-w-0">
+                     <div className="truncate" title={item.description || item.tokenAddress || "Unknown Token"}>
+                        {item.description || item.tokenAddress || "Unknown Token"}
+                     </div>
                   </TableCell>
                   <TableCell>{item.chainId}</TableCell>
-                  <TableCell className="max-w-[150px] min-w-0 font-mono text-xs">
+                  <TableCell className="font-mono text-xs">
                     <div className="flex items-center gap-1">
                       <span className="truncate" title={item.tokenAddress}>{item.tokenAddress}</span>
                       <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => handleCopyAddress(item.tokenAddress)}>
@@ -218,7 +242,7 @@ const DexScreenerContent: React.FC = () => {
                   {isBoostView && 'totalAmount' in item && (
                      <TableCell className="text-right">{(item as TokenBoostItem).totalAmount?.toLocaleString() ?? '-'}</TableCell>
                   )}
-                  <TableCell className="text-center">{renderDescriptionPopover(item.description)}</TableCell>
+                  <TableCell className="text-center">{renderDescriptionInteraction(item.description)}</TableCell>
                   <TableCell className="text-center">{renderLinksDropdown(item.links)}</TableCell>
                 </TableRow>
               ))}
@@ -231,5 +255,3 @@ const DexScreenerContent: React.FC = () => {
 };
 
 export default DexScreenerContent;
-
-    
