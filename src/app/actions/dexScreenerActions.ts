@@ -109,4 +109,5 @@ export async function fetchTokenPairPools(chainId: string, tokenAddress: string)
 
 export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses: string): Promise<PairDetail[]> {
   if (!chainId || !tokenAddresses) return [];
-  return fetchDirectArrayData<PairDetail>(
+  return fetchDirectArrayData<PairDetail>(`/tokens/v1/${chainId}/${tokenAddresses}`);
+}
