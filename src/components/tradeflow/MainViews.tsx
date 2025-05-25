@@ -18,13 +18,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; 
+} from "@/components/ui/dropdown-menu"; // Added for Heatmap dropdown
 
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
 
-// Import heatmap components
+// Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
 import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
@@ -119,6 +119,22 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </body>
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
+
+  // This heatmapConfigObject and heatmapSrcDoc are for the original single heatmap in user's example.
+  // It will be superseded by the selectedHeatmapView logic, but keeping definitions from user's example.
+  const heatmapConfigObject = useMemo(() => ({
+    dataSource: "Crypto",
+    blockSize: "market_cap_calc",
+    blockColor: "change",
+    locale: "en",
+    symbolUrl: "",
+    colorTheme: "dark",
+    hasTransparentBackground: true,
+    width: "100%",
+    height: "100%"
+  }), []);
+
+  // const heatmapSrcDoc = useMemo(() => `...`, [heatmapConfigObject, tvWidgetBaseStyle]); // Not directly used if using selectedHeatmapView
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
@@ -255,8 +271,9 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
+      {/* Updated Heatmap Tab Content */}
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0"> {/* This div ensures content fills the space */}
+        <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -265,7 +282,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      {/* Corrected Options Screener Tab */}
+      {/* Options Screener Tab - As per user's working example */}
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
         <div className="h-full w-full overflow-auto"> 
             <iframe
@@ -279,7 +296,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      {/* Corrected Crypto Screener Tab */}
+      {/* Crypto Screener Tab - As per user's working example */}
       <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
          <div className="h-full w-full overflow-auto"> 
             <iframe
@@ -301,3 +318,5 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
+
+    
