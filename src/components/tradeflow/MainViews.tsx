@@ -1,10 +1,10 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react'; // Added useState
+import React, { useMemo, useState } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
@@ -197,11 +197,11 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4"> {/* Adjusted to 7 cols */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
-        <TabsTrigger value="heatmap"><Columns className="mr-2" />Heatmaps</TabsTrigger> {/* Changed label */}
+        <TabsTrigger value="heatmap"><Columns className="mr-2" />Heatmaps</TabsTrigger>
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
@@ -226,19 +226,17 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow flex flex-col overflow-hidden"> {/* Changed class */}
-        <div className="p-2 border-b border-border">
-          <Select onValueChange={setSelectedHeatmapView} defaultValue={selectedHeatmapView}>
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder="Select Heatmap Type" />
-            </SelectTrigger>
-            <SelectContent>
-              {heatmapViewOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <TabsContent value="heatmap" className="flex-grow flex flex-col overflow-hidden p-2 gap-2">
+        <Select onValueChange={setSelectedHeatmapView} defaultValue={selectedHeatmapView}>
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="Select Heatmap Type" />
+          </SelectTrigger>
+          <SelectContent>
+            {heatmapViewOptions.map(option => (
+              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
