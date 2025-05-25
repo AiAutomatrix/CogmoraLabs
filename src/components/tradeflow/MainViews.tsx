@@ -1,16 +1,25 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react'; // Added useState for heatmap dropdown
+import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+import { 
+  Newspaper, 
+  LayoutDashboard, 
+  LineChart, 
+  Columns, 
+  ListFilter, 
+  Settings2, 
+  SearchCode 
+} from 'lucide-react';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
+
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
@@ -21,7 +30,6 @@ import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
-
 
 // Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
@@ -67,7 +75,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartConfigObject = useMemo(() => ({
     container_id: "technical-analysis-chart-demo",
     width: "100%",
-    height: "97%",
+    height: "97%", 
     autosize: true,
     symbol: currentSymbol, // Use the prop here
     interval: "180",
@@ -76,7 +84,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     style: "1",
     withdateranges: true,
     hide_side_toolbar: true,
-    allow_symbol_change: true,
+    allow_symbol_change: true, 
     save_image: false,
     studies: [
         "StochasticRSI@tv-basicstudies",
@@ -88,7 +96,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]); // Add currentSymbol to dependency array
+  }), [currentSymbol]); 
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -113,12 +121,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
 
-  // Note: heatmapConfigObject and heatmapSrcDoc from the user's example are for a single Crypto Coins heatmap.
-  // These are not directly used for rendering the Heatmap tab anymore as it's now a dropdown.
-  // However, individual heatmap components (like CryptoCoinsHeatmap.tsx) use similar logic.
-
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle}
+    ${tvWidgetBaseStyle} 
     html, body {
       overflow: auto !important; /* Allow scrolling for screeners */
     }
@@ -134,7 +138,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock",
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -197,7 +201,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
   const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
-
   const heatmapViewOptions = [
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
     { value: 'stock_market', label: 'Stock Market Heatmap' },
@@ -263,20 +266,20 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto">
+        <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              style={{ border: 'none', minHeight: '500px' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
       <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto">
+         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
