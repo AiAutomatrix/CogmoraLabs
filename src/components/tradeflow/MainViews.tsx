@@ -29,8 +29,7 @@ interface MainViewsProps {
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
-  // Simplified WIDGET_CONTAINER_CLASS for iframes to fill their parent
-  const WIDGET_CONTAINER_CLASS = "w-full h-full";
+  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -38,21 +37,22 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: #222222; 
+      background-color: #222222; /* Match app's dark background */
       box-sizing: border-box;
-      overflow: hidden; 
+      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
     }
     *, *::before, *::after { box-sizing: inherit; }
-    .tradingview-widget-container { 
+    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
       width: 100%;
       height: 100%;
       position: relative;
     }
-    .tradingview-widget-container__widget { 
+    .tradingview-widget-container__widget { /* Used by embed scripts */
       width: 100% !important;
       height: 100% !important;
       overflow: hidden;
     }
+    /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
     ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
@@ -67,16 +67,16 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartConfigObject = useMemo(() => ({
     container_id: "technical-analysis-chart-demo",
     width: "100%",
-    height: "97%", 
+    height: "97%",
     autosize: true,
-    symbol: currentSymbol,
+    symbol: currentSymbol, // Use the prop here
     interval: "180",
     timezone: "exchange",
     theme: "dark",
     style: "1",
     withdateranges: true,
     hide_side_toolbar: true,
-    allow_symbol_change: true, 
+    allow_symbol_change: true,
     save_image: false,
     studies: [
         "StochasticRSI@tv-basicstudies",
@@ -88,7 +88,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]); 
+  }), [currentSymbol]); // Add currentSymbol to dependency array
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -113,14 +113,14 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
 
-  // Note: heatmapConfigObject and heatmapSrcDoc from the example are for a single Crypto Coins heatmap.
-  // Our Heatmap tab is now a dropdown, so these specific variables aren't directly rendered by the main Heatmap tab.
-  // They are effectively replaced by the individual heatmap components.
+  // Note: heatmapConfigObject and heatmapSrcDoc from the user's example are for a single Crypto Coins heatmap.
+  // These are not directly used for rendering the Heatmap tab anymore as it's now a dropdown.
+  // However, individual heatmap components (like CryptoCoinsHeatmap.tsx) use similar logic.
 
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle} 
+    ${tvWidgetBaseStyle}
     html, body {
-      overflow: auto !important; 
+      overflow: auto !important; /* Allow scrolling for screeners */
     }
     ::-webkit-scrollbar { width: 24px !important; height: 24px !important; }
     ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
@@ -134,7 +134,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", 
+    screener_type: "stock",
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -205,16 +205,13 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
     { value: 'forex_heatmap', label: 'Forex Heatmap' },
   ];
-  
-  const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      {/* Removed mb-4 from TabsList to make content touch it */}
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7"> 
-        <TabsTrigger value="blog"><Newspaper className="mr-2 h-4 w-4" />Blog</TabsTrigger>
-        <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
-        <TabsTrigger value="chart"><LineChart className="mr-2 h-4 w-4" />Chart</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
+        <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
+        <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
+        <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -231,32 +228,32 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
           </DropdownMenuContent>
         </DropdownMenu>
         
-        <TabsTrigger value="options_screener"><Settings2 className="mr-2 h-4 w-4" />Options</TabsTrigger>
-        <TabsTrigger value="crypto_screener"><ListFilter className="mr-2 h-4 w-4" />Crypto</TabsTrigger>
-        <TabsTrigger value="dex_screener"><SearchCode className="mr-2 h-4 w-4" />DEX</TabsTrigger>
+        <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
+        <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
+        <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}> {/* Blog needs overflow-auto */}
+      <TabsContent value="blog" className="flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}> {/* Dashboard needs overflow-auto */}
+      <TabsContent value="dashboard" className="flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
-          className={WIDGET_CONTAINER_CLASS} // Now w-full h-full
+          className={WIDGET_CONTAINER_CLASS}
           style={{ border: 'none' }}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className={TABS_CONTENT_BASE_CLASS}>
-        <div className="flex-grow overflow-hidden min-h-0"> {/* This div stays for heatmap's conditional rendering */}
+      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -265,31 +262,33 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      {/* Options Screener - direct iframe child of TabsContent */}
-      <TabsContent value="options_screener" className={TABS_CONTENT_BASE_CLASS}>
-        <iframe
-          key="options-screener-iframe"
-          srcDoc={optionsScreenerSrcDoc}
-          title="TradingView Options/Stock Screener"
-          className={WIDGET_CONTAINER_CLASS} // Now w-full h-full
-          style={{ border: 'none' }} 
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+        <div className="h-full w-full overflow-auto">
+            <iframe
+              key="options-screener-iframe"
+              srcDoc={optionsScreenerSrcDoc}
+              title="TradingView Options/Stock Screener"
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+        </div>
       </TabsContent>
 
-      {/* Crypto Screener - direct iframe child of TabsContent */}
-      <TabsContent value="crypto_screener" className={TABS_CONTENT_BASE_CLASS}>
-        <iframe
-          key="crypto-screener-iframe"
-          srcDoc={cryptoScreenerSrcDoc}
-          title="TradingView Crypto Screener"
-          className={WIDGET_CONTAINER_CLASS} // Now w-full h-full
-          style={{ border: 'none' }}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+         <div className="h-full w-full overflow-auto">
+            <iframe
+              key="crypto-screener-iframe"
+              srcDoc={cryptoScreenerSrcDoc}
+              title="TradingView Crypto Screener"
+              className={WIDGET_CONTAINER_CLASS}
+              style={{ border: 'none', minHeight: '500px' }}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+        </div>
       </TabsContent>
-      
-      <TabsContent value="dex_screener" className={TABS_CONTENT_BASE_CLASS}>
+
+      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
