@@ -202,7 +202,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7"> {/* Removed mb-4 */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7">
         <TabsTrigger value="blog"><Newspaper className="mr-2 h-4 w-4" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2 h-4 w-4" />Chart</TabsTrigger>
@@ -246,7 +246,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      {/* Heatmap Dropdown Tab Content */}
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -258,29 +257,25 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto"> 
-            <iframe
-              key="options-screener-iframe"
-              srcDoc={optionsScreenerSrcDoc}
-              title="TradingView Options/Stock Screener"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }} 
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            />
-        </div>
+        <iframe
+          key="options-screener-iframe"
+          srcDoc={optionsScreenerSrcDoc}
+          title="TradingView Options/Stock Screener"
+          className={WIDGET_CONTAINER_CLASS}
+          style={{ border: 'none' }} 
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
       </TabsContent>
 
       <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto"> 
-            <iframe
-              key="crypto-screener-iframe"
-              srcDoc={cryptoScreenerSrcDoc}
-              title="TradingView Crypto Screener"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            />
-        </div>
+        <iframe
+          key="crypto-screener-iframe"
+          srcDoc={cryptoScreenerSrcDoc}
+          title="TradingView Crypto Screener"
+          className={WIDGET_CONTAINER_CLASS}
+          style={{ border: 'none' }}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
       </TabsContent>
       
       <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden">
