@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react'; // Added useState for heatmap dropdown
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -23,12 +23,14 @@ import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
 
 
+// Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
   currentSymbol: string;
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
+  // Simplified WIDGET_CONTAINER_CLASS for iframes to fill their parent
+  const WIDGET_CONTAINER_CLASS = "w-full h-full";
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -110,6 +112,10 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </body>
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
+
+  // Note: heatmapConfigObject and heatmapSrcDoc from the example are for a single Crypto Coins heatmap.
+  // Our Heatmap tab is now a dropdown, so these specific variables aren't directly rendered by the main Heatmap tab.
+  // They are effectively replaced by the individual heatmap components.
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
@@ -199,10 +205,13 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
     { value: 'forex_heatmap', label: 'Forex Heatmap' },
   ];
+  
+  const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
+      {/* Removed mb-4 from TabsList to make content touch it */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7"> 
         <TabsTrigger value="blog"><Newspaper className="mr-2 h-4 w-4" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2 h-4 w-4" />Chart</TabsTrigger>
@@ -227,27 +236,27 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2 h-4 w-4" />DEX</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="flex-grow overflow-auto"> {/* Default mt-2 applies */}
+      <TabsContent value="blog" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}> {/* Blog needs overflow-auto */}
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="flex-grow overflow-auto"> {/* Default mt-2 applies */}
+      <TabsContent value="dashboard" className={`${TABS_CONTENT_BASE_CLASS} overflow-auto`}> {/* Dashboard needs overflow-auto */}
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden"> {/* Default mt-2 applies */}
+      <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
-          className={WIDGET_CONTAINER_CLASS}
+          className={WIDGET_CONTAINER_CLASS} // Now w-full h-full
           style={{ border: 'none' }}
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0"> {/* Special mt-0 for dropdown */}
-        <div className="flex-grow overflow-hidden min-h-0">
+      <TabsContent value="heatmap" className={TABS_CONTENT_BASE_CLASS}>
+        <div className="flex-grow overflow-hidden min-h-0"> {/* This div stays for heatmap's conditional rendering */}
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -256,33 +265,31 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden"> {/* Default mt-2 applies */}
-        <div className="h-full w-full overflow-auto"> 
-            <iframe
-              key="options-screener-iframe"
-              srcDoc={optionsScreenerSrcDoc}
-              title="TradingView Options/Stock Screener"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }} 
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            />
-        </div>
+      {/* Options Screener - direct iframe child of TabsContent */}
+      <TabsContent value="options_screener" className={TABS_CONTENT_BASE_CLASS}>
+        <iframe
+          key="options-screener-iframe"
+          srcDoc={optionsScreenerSrcDoc}
+          title="TradingView Options/Stock Screener"
+          className={WIDGET_CONTAINER_CLASS} // Now w-full h-full
+          style={{ border: 'none' }} 
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden"> {/* Default mt-2 applies */}
-         <div className="h-full w-full overflow-auto"> 
-            <iframe
-              key="crypto-screener-iframe"
-              srcDoc={cryptoScreenerSrcDoc}
-              title="TradingView Crypto Screener"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            />
-        </div>
+      {/* Crypto Screener - direct iframe child of TabsContent */}
+      <TabsContent value="crypto_screener" className={TABS_CONTENT_BASE_CLASS}>
+        <iframe
+          key="crypto-screener-iframe"
+          srcDoc={cryptoScreenerSrcDoc}
+          title="TradingView Crypto Screener"
+          className={WIDGET_CONTAINER_CLASS} // Now w-full h-full
+          style={{ border: 'none' }}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
       </TabsContent>
       
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden"> {/* Default mt-2 applies */}
+      <TabsContent value="dex_screener" className={TABS_CONTENT_BASE_CLASS}>
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
@@ -290,6 +297,5 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
-    
-    
 
+    
