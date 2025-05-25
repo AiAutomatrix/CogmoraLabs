@@ -244,7 +244,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden"> {/* Using flex-grow and overflow-hidden as per example for iframe tabs */}
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
@@ -265,7 +265,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden"> {/* As per user example */}
+      {/* Corrected Options Screener Tab */}
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
@@ -278,7 +279,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden"> {/* As per user example */}
+      {/* Corrected Crypto Screener Tab */}
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
          <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
@@ -291,7 +293,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
       
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden"> {/* Consistent styling for full height */}
+      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
