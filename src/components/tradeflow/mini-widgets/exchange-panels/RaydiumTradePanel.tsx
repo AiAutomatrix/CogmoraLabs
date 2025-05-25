@@ -11,16 +11,16 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, TrendingDown, Zap, Settings, Replace } from 'lucide-react'; // Using Replace as a placeholder for Raydium icon
+import { TrendingUp, TrendingDown, Replace } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { Trade } from '@/types';
 
 // Using a simplified schema for Raydium, focusing on spot trades
 const raydiumTradeSchema = z.object({
   symbol: z.string().min(3, "Symbol must be at least 3 characters (e.g., SOL/USDC)").toUpperCase(),
-  // tradeType: z.literal('spot').default('spot'), // Raydium is primarily spot
   orderType: z.enum(['market', 'limit'], { required_error: "Please select an order type." }),
   side: z.enum(['buy', 'sell'], { required_error: "Please select a side (buy/sell)." }),
-  price: z.coerce.number().optional(),
+  price: z.coerce.number().optional(), // Price is optional for market orders
   amount: z.coerce.number().positive("Amount must be a positive number."),
 }).refine(data => data.orderType === 'limit' ? data.price !== undefined && data.price > 0 : true, {
   message: "Price is required for limit orders and must be positive.",
@@ -31,29 +31,67 @@ type RaydiumTradeFormData = z.infer<typeof raydiumTradeSchema>;
 
 const RaydiumTradePanel: React.FC = () => {
   const { toast } = useToast();
-  const formHook = useForm<RaydiumTradeFormData>({ 
+  const formHook = useForm<RaydiumTradeFormData>({
     resolver: zodResolver(raydiumTradeSchema),
     defaultValues: {
       symbol: '',
       orderType: undefined,
       side: undefined,
-      amount: undefined,
-      price: undefined,
+      amount: '', // Initialize as empty string for controlled input
+      price: '',  // Initialize as empty string for controlled input
     },
   });
 
   const watchedOrderType = formHook.watch('orderType');
 
   const onSubmit: SubmitHandler<RaydiumTradeFormData> = (data) => {
-    toast({
-      title: "Raydium Order Placed (Simulated)",
-      description: (
-        <pre className="mt-2 w-[340px] rounded-md bg-card-foreground/10 p-4">
-          <code className="text-foreground">{JSON.stringify(data, null, 2)}</code>
-        </pre>
-      ),
-    });
-    console.log("Raydium Trade Data:", data);
+     try {
+      const existingTradesString = localStorage.getItem('tradeflow_trades');
+      const existingTrades: Trade[] = existingTradesString ? JSON.parse(existingTradesString) : [];
+
+      const entryPrice = data.orderType === 'limit' ? data.price : 1; // Use 1 as placeholder for market orders
+      if (data.orderType === 'limit' && (data.price === undefined || data.price <= 0)) {
+        toast({ title: "Invalid Price", description: "Price must be a positive number for limit orders.", variant: "destructive"});
+        return;
+      }
+
+
+      const newTrade: Trade = {
+        id: crypto.randomUUID(),
+        symbol: data.symbol,
+        entryPrice: entryPrice!, // entryPrice will be defined or placeholder 1
+        quantity: data.amount,
+        tradeType: data.side,
+        leverage: null, // Raydium is spot
+        status: 'open',
+        createdAt: new Date(),
+        exitPrice: null,
+        pnl: null,
+        roiPercent: null,
+        closedAt: null,
+      };
+
+      const updatedTrades = [...existingTrades, newTrade];
+      localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
+
+      toast({
+        title: "Raydium Order Logged (Simulated)",
+        description: (
+          <pre className="mt-2 w-[340px] rounded-md bg-card-foreground/10 p-4">
+            <code className="text-foreground">{JSON.stringify(newTrade, null, 2)}</code>
+          </pre>
+        ),
+      });
+      console.log("Raydium Trade Data Logged:", newTrade);
+      // formHook.reset(); // Optionally reset form
+    } catch (error) {
+      console.error("Error logging Raydium trade:", error);
+      toast({
+        title: "Logging Error",
+        description: "Could not log Raydium trade. See console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -63,7 +101,7 @@ const RaydiumTradePanel: React.FC = () => {
         <CardDescription className="text-xs">Place spot orders on Raydium (simulated).</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="flex-grow p-3 min-h-0"> 
+        <ScrollArea className="flex-grow p-3 min-h-0">
           <Form {...formHook}>
             <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField
@@ -121,7 +159,7 @@ const RaydiumTradePanel: React.FC = () => {
                   </FormItem>
                 )}
               />
-              
+
               {watchedOrderType === 'limit' && (
                 <FormField
                   control={formHook.control}
@@ -151,7 +189,7 @@ const RaydiumTradePanel: React.FC = () => {
                   </FormItem>
                 )}
               />
-              
+
               <Button type="submit" className="w-full h-9" disabled={formHook.formState.isSubmitting}>
                 {formHook.formState.isSubmitting ? "Placing Order..." : "Place Order"}
               </Button>

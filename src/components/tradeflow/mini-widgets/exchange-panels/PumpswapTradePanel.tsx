@@ -11,8 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, TrendingDown, Rocket } from 'lucide-react'; // Using Rocket as a placeholder for Pumpswap icon
+import { TrendingUp, TrendingDown, Rocket } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { Trade } from '@/types';
 
 // Simplified schema for Pumpswap (like pump.fun)
 const pumpswapTradeSchema = z.object({
@@ -25,25 +26,56 @@ type PumpswapTradeFormData = z.infer<typeof pumpswapTradeSchema>;
 
 const PumpswapTradePanel: React.FC = () => {
   const { toast } = useToast();
-  const formHook = useForm<PumpswapTradeFormData>({ 
+  const formHook = useForm<PumpswapTradeFormData>({
     resolver: zodResolver(pumpswapTradeSchema),
     defaultValues: {
       tokenAddress: '',
       side: undefined,
-      amountSol: undefined,
+      amountSol: '', // Initialize as empty string for controlled input
     },
   });
 
   const onSubmit: SubmitHandler<PumpswapTradeFormData> = (data) => {
-    toast({
-      title: "Pumpswap Trade Placed (Simulated)",
-      description: (
-        <pre className="mt-2 w-[340px] rounded-md bg-card-foreground/10 p-4">
-          <code className="text-foreground">{JSON.stringify(data, null, 2)}</code>
-        </pre>
-      ),
-    });
-    console.log("Pumpswap Trade Data:", data);
+    try {
+      const existingTradesString = localStorage.getItem('tradeflow_trades');
+      const existingTrades: Trade[] = existingTradesString ? JSON.parse(existingTradesString) : [];
+
+      const newTrade: Trade = {
+        id: crypto.randomUUID(),
+        symbol: data.tokenAddress,
+        entryPrice: 1, // Placeholder for Pumpswap, as it's a market buy/sell
+        quantity: data.amountSol,
+        tradeType: data.side,
+        leverage: null, // Pumpswap is spot
+        status: 'open',
+        createdAt: new Date(),
+        exitPrice: null,
+        pnl: null,
+        roiPercent: null,
+        closedAt: null,
+      };
+
+      const updatedTrades = [...existingTrades, newTrade];
+      localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
+
+      toast({
+        title: "Pumpswap Trade Logged (Simulated)",
+        description: (
+          <pre className="mt-2 w-[340px] rounded-md bg-card-foreground/10 p-4">
+            <code className="text-foreground">{JSON.stringify(newTrade, null, 2)}</code>
+          </pre>
+        ),
+      });
+      console.log("Pumpswap Trade Data Logged:", newTrade);
+      // formHook.reset(); // Optionally reset form
+    } catch (error) {
+      console.error("Error logging Pumpswap trade:", error);
+      toast({
+        title: "Logging Error",
+        description: "Could not log Pumpswap trade. See console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -53,7 +85,7 @@ const PumpswapTradePanel: React.FC = () => {
         <CardDescription className="text-xs">Trade new tokens on Pumpswap (simulated).</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="flex-grow p-3 min-h-0"> 
+        <ScrollArea className="flex-grow p-3 min-h-0">
           <Form {...formHook}>
             <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField
@@ -103,7 +135,7 @@ const PumpswapTradePanel: React.FC = () => {
                   </FormItem>
                 )}
               />
-              
+
               <Button type="submit" className="w-full h-9" disabled={formHook.formState.isSubmitting}>
                 {formHook.formState.isSubmitting ? "Processing..." : "Execute Trade"}
               </Button>

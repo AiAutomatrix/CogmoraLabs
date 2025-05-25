@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react'; // Corrected React import
+import React from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { Coins, TrendingUp, TrendingDown, Zap, Settings } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { Trade } from '@/types';
 
 const kucoinTradeSchema = z.object({
   symbol: z.string().min(3, "Symbol must be at least 3 characters (e.g., BTC/USDT)").toUpperCase(),
@@ -34,15 +35,15 @@ type KucoinTradeFormData = z.infer<typeof kucoinTradeSchema>;
 
 const KucoinTradePanel: React.FC = () => {
   const { toast } = useToast();
-  const formHook = useForm<KucoinTradeFormData>({ 
+  const formHook = useForm<KucoinTradeFormData>({
     resolver: zodResolver(kucoinTradeSchema),
     defaultValues: {
       symbol: '',
       tradeType: undefined,
       orderType: undefined,
       side: undefined,
-      amount: undefined,
-      price: undefined,
+      amount: '', // Initialize as empty string
+      price: '',  // Initialize as empty string
       leverage: 1,
     },
   });
@@ -51,15 +52,57 @@ const KucoinTradePanel: React.FC = () => {
   const watchedOrderType = formHook.watch('orderType');
 
   const onSubmit: SubmitHandler<KucoinTradeFormData> = (data) => {
-    toast({
-      title: "Kucoin Order Placed (Simulated)",
-      description: (
-        <pre className="mt-2 w-[340px] rounded-md bg-card-foreground/10 p-4">
-          <code className="text-foreground">{JSON.stringify(data, null, 2)}</code>
-        </pre>
-      ),
-    });
-    console.log("Kucoin Trade Data:", data);
+    try {
+      const existingTradesString = localStorage.getItem('tradeflow_trades');
+      const existingTrades: Trade[] = existingTradesString ? JSON.parse(existingTradesString) : [];
+
+      const entryPrice = data.orderType === 'limit' ? data.price : 1; // Use 1 as placeholder for market orders
+      if (data.orderType === 'limit' && (data.price === undefined || data.price <= 0)) {
+        toast({ title: "Invalid Price", description: "Price must be a positive number for limit orders.", variant: "destructive"});
+        return;
+      }
+      if (data.tradeType === 'futures' && (data.leverage === undefined || data.leverage <1)) {
+         toast({ title: "Invalid Leverage", description: "Leverage must be at least 1 for futures.", variant: "destructive"});
+        return;
+      }
+
+
+      const newTrade: Trade = {
+        id: crypto.randomUUID(),
+        symbol: data.symbol,
+        entryPrice: entryPrice!,
+        quantity: data.amount,
+        tradeType: data.side,
+        leverage: data.tradeType === 'futures' ? data.leverage : null,
+        status: 'open',
+        createdAt: new Date(),
+        exitPrice: null,
+        pnl: null,
+        roiPercent: null,
+        closedAt: null,
+      };
+
+      const updatedTrades = [...existingTrades, newTrade];
+      localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
+
+      toast({
+        title: "Kucoin Order Logged (Simulated)",
+        description: (
+          <pre className="mt-2 w-[340px] rounded-md bg-card-foreground/10 p-4">
+            <code className="text-foreground">{JSON.stringify(newTrade, null, 2)}</code>
+          </pre>
+        ),
+      });
+      console.log("Kucoin Trade Data Logged:", newTrade);
+      // formHook.reset(); // Optionally reset form
+    } catch (error) {
+      console.error("Error logging Kucoin trade:", error);
+      toast({
+        title: "Logging Error",
+        description: "Could not log Kucoin trade. See console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -70,7 +113,7 @@ const KucoinTradePanel: React.FC = () => {
         <CardDescription className="text-xs">Place spot & futures orders (simulated).</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="flex-grow p-3 min-h-0"> 
+        <ScrollArea className="flex-grow p-3 min-h-0">
           <Form {...formHook}>
             <form onSubmit={formHook.handleSubmit(onSubmit)} className="space-y-3">
               <FormField
@@ -153,7 +196,7 @@ const KucoinTradePanel: React.FC = () => {
                   </FormItem>
                 )}
               />
-              
+
               {watchedOrderType === 'limit' && (
                 <FormField
                   control={formHook.control}
@@ -199,7 +242,7 @@ const KucoinTradePanel: React.FC = () => {
                   )}
                 />
               )}
-              
+
               <Button type="submit" className="w-full h-9" disabled={formHook.formState.isSubmitting}>
                 {formHook.formState.isSubmitting ? "Placing Order..." : "Place Order"}
               </Button>
