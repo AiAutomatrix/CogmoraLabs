@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react'; // Added useState for heatmap dropdown
+import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -227,15 +227,15 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2 h-4 w-4" />DEX</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="mt-0 flex-grow overflow-auto"> {/* Added mt-0 */}
+      <TabsContent value="blog" className="mt-0 flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="mt-0 flex-grow overflow-auto"> {/* Added mt-0 */}
+      <TabsContent value="dashboard" className="mt-0 flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
+      <TabsContent value="chart" className="mt-0 flex-grow overflow-hidden">
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
@@ -257,7 +257,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
+      <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden">
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
@@ -270,7 +270,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden">
          <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
@@ -283,7 +283,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
       
-      <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
+      <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
