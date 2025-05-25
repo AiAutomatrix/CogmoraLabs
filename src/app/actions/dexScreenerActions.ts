@@ -1,3 +1,4 @@
+
 'use server';
 
 import type { TokenProfileItem, TokenBoostItem, OrderInfoItem, PairData, PairDetail } from '@/types';
@@ -79,15 +80,10 @@ export async function fetchTopBoostedTokens(): Promise<TokenBoostItem[]> {
   return fetchDataAsArray<TokenBoostItem>('/token-boosts/top/v1');
 }
 
-// New five functions
+// Remaining new functions
 export async function fetchTokenOrders(chainId: string, tokenAddress: string): Promise<OrderInfoItem[]> {
   if (!chainId || !tokenAddress) return [];
   return fetchDirectArrayData<OrderInfoItem>(`/orders/v1/${chainId}/${tokenAddress}`);
-}
-
-export async function fetchPairDetailsByPairAddress(chainId: string, pairAddress: string): Promise<PairData | null> {
-  if (!chainId || !pairAddress) return null;
-  return fetchDataAsObjectOrNull<PairData>(`/latest/dex/pairs/${chainId}/${pairAddress}`);
 }
 
 export async function searchPairs(query: string): Promise<PairData | null> {
@@ -98,9 +94,4 @@ export async function searchPairs(query: string): Promise<PairData | null> {
 export async function fetchTokenPairPools(chainId: string, tokenAddress: string): Promise<PairDetail[]> {
   if (!chainId || !tokenAddress) return [];
   return fetchDirectArrayData<PairDetail>(`/token-pairs/v1/${chainId}/${tokenAddress}`);
-}
-
-export async function fetchPairsByTokenAddresses(chainId: string, tokenAddresses: string): Promise<PairDetail[]> {
-  if (!chainId || !tokenAddresses) return [];
-  return fetchDirectArrayData<PairDetail>(`/tokens/v1/${chainId}/${tokenAddresses}`);
 }
