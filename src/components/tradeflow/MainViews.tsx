@@ -4,7 +4,6 @@
 import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Keep for other potential uses, or remove if truly unused elsewhere in this file
 import { 
   Newspaper, 
   LayoutDashboard, 
@@ -19,7 +18,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; // Added DropdownMenu components
+} from "@/components/ui/dropdown-menu"; 
 
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
@@ -219,15 +218,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            {/* The TabsTrigger will act as the dropdown trigger. 
-                It still needs a value to be selectable by Tabs component, 
-                but its primary interaction will be opening the dropdown.
-                We can style it to look like other tabs. 
-                It might need specific styling if data-[state=active] interferes.
-            */}
             <TabsTrigger value="heatmap" className="flex items-center data-[state=active]:text-foreground">
               <Columns className="mr-2 h-4 w-4" />Heatmap
-              {/* Optionally add a ChevronDown icon here for better UX */}
             </TabsTrigger>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -252,7 +244,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
+      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
@@ -263,8 +255,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      {/* This TabsContent is for the "heatmap" tab value. 
-          Its content is determined by selectedHeatmapView state. */}
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -275,33 +265,33 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto"> 
+      <TabsContent value="options_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className="flex-grow overflow-hidden min-h-0"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }} 
+              style={{ border: 'none' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto"> 
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+         <div className="flex-grow overflow-hidden min-h-0"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              style={{ border: 'none' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
       
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="dex_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
@@ -309,5 +299,3 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
-
-    
