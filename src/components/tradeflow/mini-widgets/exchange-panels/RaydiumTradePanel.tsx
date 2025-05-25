@@ -15,12 +15,11 @@ import { TrendingUp, TrendingDown, Replace } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Trade } from '@/types';
 
-// Using a simplified schema for Raydium, focusing on spot trades
 const raydiumTradeSchema = z.object({
   symbol: z.string().min(3, "Symbol must be at least 3 characters (e.g., SOL/USDC)").toUpperCase(),
   orderType: z.enum(['market', 'limit'], { required_error: "Please select an order type." }),
   side: z.enum(['buy', 'sell'], { required_error: "Please select a side (buy/sell)." }),
-  price: z.coerce.number().optional(), // Price is optional for market orders
+  price: z.coerce.number().optional(),
   amount: z.coerce.number().positive("Amount must be a positive number."),
 }).refine(data => data.orderType === 'limit' ? data.price !== undefined && data.price > 0 : true, {
   message: "Price is required for limit orders and must be positive.",
@@ -37,8 +36,8 @@ const RaydiumTradePanel: React.FC = () => {
       symbol: '',
       orderType: undefined,
       side: undefined,
-      amount: '', // Initialize as empty string for controlled input
-      price: '',  // Initialize as empty string for controlled input
+      amount: '',
+      price: '',
     },
   });
 
@@ -49,17 +48,19 @@ const RaydiumTradePanel: React.FC = () => {
       const existingTradesString = localStorage.getItem('tradeflow_trades');
       const existingTrades: Trade[] = existingTradesString ? JSON.parse(existingTradesString) : [];
 
-      const entryPrice = data.orderType === 'limit' ? data.price : 1; // Use 1 as placeholder for market orders
-      if (data.orderType === 'limit' && (data.price === undefined || data.price <= 0)) {
-        toast({ title: "Invalid Price", description: "Price must be a positive number for limit orders.", variant: "destructive"});
-        return;
+      let entryPrice = 1; // Default for market orders
+      if (data.orderType === 'limit') {
+         if (data.price === undefined || data.price <= 0) {
+            toast({ title: "Invalid Price", description: "Price must be a positive number for limit orders.", variant: "destructive", duration: 3000 });
+            return;
+        }
+        entryPrice = data.price;
       }
-
 
       const newTrade: Trade = {
         id: crypto.randomUUID(),
         symbol: data.symbol,
-        entryPrice: entryPrice!, // entryPrice will be defined or placeholder 1
+        entryPrice: entryPrice,
         quantity: data.amount,
         tradeType: data.side,
         leverage: null, // Raydium is spot
@@ -73,6 +74,9 @@ const RaydiumTradePanel: React.FC = () => {
 
       const updatedTrades = [...existingTrades, newTrade];
       localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
+      
+      // Dispatch a storage event manually for same-page updates if needed
+      window.dispatchEvent(new StorageEvent('storage', { key: 'tradeflow_trades' }));
 
       toast({
         title: "Raydium Order Logged (Simulated)",
@@ -81,15 +85,17 @@ const RaydiumTradePanel: React.FC = () => {
             <code className="text-foreground">{JSON.stringify(newTrade, null, 2)}</code>
           </pre>
         ),
+        duration: 3000,
       });
       console.log("Raydium Trade Data Logged:", newTrade);
-      // formHook.reset(); // Optionally reset form
+      // formHook.reset();
     } catch (error) {
       console.error("Error logging Raydium trade:", error);
       toast({
         title: "Logging Error",
         description: "Could not log Raydium trade. See console for details.",
         variant: "destructive",
+        duration: 3000,
       });
     }
   };

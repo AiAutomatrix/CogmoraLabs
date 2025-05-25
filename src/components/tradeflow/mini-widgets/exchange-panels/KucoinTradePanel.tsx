@@ -42,8 +42,8 @@ const KucoinTradePanel: React.FC = () => {
       tradeType: undefined,
       orderType: undefined,
       side: undefined,
-      amount: '', // Initialize as empty string
-      price: '',  // Initialize as empty string
+      amount: '',
+      price: '',
       leverage: 1,
     },
   });
@@ -56,24 +56,32 @@ const KucoinTradePanel: React.FC = () => {
       const existingTradesString = localStorage.getItem('tradeflow_trades');
       const existingTrades: Trade[] = existingTradesString ? JSON.parse(existingTradesString) : [];
 
-      const entryPrice = data.orderType === 'limit' ? data.price : 1; // Use 1 as placeholder for market orders
-      if (data.orderType === 'limit' && (data.price === undefined || data.price <= 0)) {
-        toast({ title: "Invalid Price", description: "Price must be a positive number for limit orders.", variant: "destructive"});
-        return;
+      let entryPrice = 1; // Default for market orders
+      if (data.orderType === 'limit') {
+        if (data.price === undefined || data.price <= 0) {
+          toast({ title: "Invalid Price", description: "Price must be a positive number for limit orders.", variant: "destructive", duration: 3000 });
+          return;
+        }
+        entryPrice = data.price;
       }
-      if (data.tradeType === 'futures' && (data.leverage === undefined || data.leverage <1)) {
-         toast({ title: "Invalid Leverage", description: "Leverage must be at least 1 for futures.", variant: "destructive"});
-        return;
+      
+      let leverageValue = null;
+      if (data.tradeType === 'futures') {
+        if (data.leverage === undefined || data.leverage < 1) {
+          toast({ title: "Invalid Leverage", description: "Leverage must be at least 1 for futures.", variant: "destructive", duration: 3000 });
+          return;
+        }
+        leverageValue = data.leverage;
       }
 
 
       const newTrade: Trade = {
         id: crypto.randomUUID(),
         symbol: data.symbol,
-        entryPrice: entryPrice!,
+        entryPrice: entryPrice,
         quantity: data.amount,
         tradeType: data.side,
-        leverage: data.tradeType === 'futures' ? data.leverage : null,
+        leverage: leverageValue,
         status: 'open',
         createdAt: new Date(),
         exitPrice: null,
@@ -85,6 +93,10 @@ const KucoinTradePanel: React.FC = () => {
       const updatedTrades = [...existingTrades, newTrade];
       localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
 
+      // Dispatch a storage event manually for same-page updates if needed, though TradeTracker should listen
+      window.dispatchEvent(new StorageEvent('storage', { key: 'tradeflow_trades' }));
+
+
       toast({
         title: "Kucoin Order Logged (Simulated)",
         description: (
@@ -92,21 +104,22 @@ const KucoinTradePanel: React.FC = () => {
             <code className="text-foreground">{JSON.stringify(newTrade, null, 2)}</code>
           </pre>
         ),
+        duration: 3000,
       });
       console.log("Kucoin Trade Data Logged:", newTrade);
-      // formHook.reset(); // Optionally reset form
+      // formHook.reset(); 
     } catch (error) {
       console.error("Error logging Kucoin trade:", error);
       toast({
         title: "Logging Error",
         description: "Could not log Kucoin trade. See console for details.",
         variant: "destructive",
+        duration: 3000,
       });
     }
   };
 
   return (
-    // Card takes h-full from its parent div in MiniWidgets
     <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
       <CardHeader className="px-3 pt-1 pb-2 border-b">
         <CardTitle className="flex items-center text-lg"><Coins className="mr-2 h-5 w-5 text-green-500" />Kucoin Trade</CardTitle>

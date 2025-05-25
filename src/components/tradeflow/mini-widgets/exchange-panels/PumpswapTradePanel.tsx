@@ -15,11 +15,10 @@ import { TrendingUp, TrendingDown, Rocket } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Trade } from '@/types';
 
-// Simplified schema for Pumpswap (like pump.fun)
 const pumpswapTradeSchema = z.object({
-  tokenAddress: z.string().min(32, "Token address must be valid (e.g., Solana address)").max(44, "Token address too long"), // Typical Solana address length
+  tokenAddress: z.string().min(32, "Token address must be valid (e.g., Solana address)").max(44, "Token address too long"),
   side: z.enum(['buy', 'sell'], { required_error: "Please select a side (buy/sell)." }),
-  amountSol: z.coerce.number().positive("Amount (in SOL) must be a positive number."), // Assuming trades are in SOL
+  amountSol: z.coerce.number().positive("Amount (in SOL) must be a positive number."),
 });
 
 type PumpswapTradeFormData = z.infer<typeof pumpswapTradeSchema>;
@@ -31,7 +30,7 @@ const PumpswapTradePanel: React.FC = () => {
     defaultValues: {
       tokenAddress: '',
       side: undefined,
-      amountSol: '', // Initialize as empty string for controlled input
+      amountSol: '',
     },
   });
 
@@ -42,9 +41,9 @@ const PumpswapTradePanel: React.FC = () => {
 
       const newTrade: Trade = {
         id: crypto.randomUUID(),
-        symbol: data.tokenAddress,
-        entryPrice: 1, // Placeholder for Pumpswap, as it's a market buy/sell
-        quantity: data.amountSol,
+        symbol: data.tokenAddress, // Using tokenAddress as symbol for Pumpswap
+        entryPrice: 1, // Placeholder entry price for Pumpswap simulation
+        quantity: data.amountSol, // Amount is in SOL
         tradeType: data.side,
         leverage: null, // Pumpswap is spot
         status: 'open',
@@ -58,6 +57,9 @@ const PumpswapTradePanel: React.FC = () => {
       const updatedTrades = [...existingTrades, newTrade];
       localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
 
+      // Dispatch a storage event manually for same-page updates if needed
+      window.dispatchEvent(new StorageEvent('storage', { key: 'tradeflow_trades' }));
+
       toast({
         title: "Pumpswap Trade Logged (Simulated)",
         description: (
@@ -65,15 +67,17 @@ const PumpswapTradePanel: React.FC = () => {
             <code className="text-foreground">{JSON.stringify(newTrade, null, 2)}</code>
           </pre>
         ),
+        duration: 3000, 
       });
       console.log("Pumpswap Trade Data Logged:", newTrade);
-      // formHook.reset(); // Optionally reset form
+      // formHook.reset(); 
     } catch (error) {
       console.error("Error logging Pumpswap trade:", error);
       toast({
         title: "Logging Error",
         description: "Could not log Pumpswap trade. See console for details.",
         variant: "destructive",
+        duration: 3000,
       });
     }
   };
