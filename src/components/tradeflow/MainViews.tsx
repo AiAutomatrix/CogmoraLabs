@@ -9,7 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; // Added for Heatmap dropdown
+} from "@/components/ui/dropdown-menu";
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
@@ -202,7 +202,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7"> {/* Removed mb-4 */}
         <TabsTrigger value="blog"><Newspaper className="mr-2 h-4 w-4" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2 h-4 w-4" />Chart</TabsTrigger>
@@ -227,15 +227,15 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2 h-4 w-4" />DEX</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="flex-grow overflow-auto">
+      <TabsContent value="blog" className="mt-0 flex-grow overflow-auto"> {/* Added mt-0 */}
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="flex-grow overflow-auto">
+      <TabsContent value="dashboard" className="mt-0 flex-grow overflow-auto"> {/* Added mt-0 */}
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
+      <TabsContent value="chart" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
@@ -257,8 +257,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      {/* Options Screener Tab - As per user's working example */}
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
@@ -271,8 +270,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      {/* Crypto Screener Tab - As per user's working example */}
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
          <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
@@ -285,7 +283,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
       
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden"> {/* Added mt-0 */}
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
