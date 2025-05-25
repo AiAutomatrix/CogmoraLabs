@@ -1,13 +1,13 @@
 
 'use client';
-import React, { useState } from 'react'; // Corrected React import
-import type { FC } from 'react';
+import React, { useState } from 'react'; // Corrected: import React for FC and JSX
+import type { FC } from 'react'; // Keep type import for FC if preferred
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'; // Added Card imports
-import { Combine, TrendingUp, MessageCircle, ClipboardList, Coins } from 'lucide-react';
+import { Combine, TrendingUp, MessageCircle, ClipboardList, Coins, GripVertical } from 'lucide-react'; // Added necessary icons
 
-// Import all mini-widget components with corrected paths
+// Import all five mini-widget components
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
 import TradingViewTechAnalysisWidget from './mini-widgets/TradingViewTechAnalysisWidget';
 import AiWebchat from './mini-widgets/AiWebchat';
@@ -24,13 +24,14 @@ interface MiniWidgetsProps {
 
 type SelectedExchangeType = 'kucoin' | 'raydium' | 'pumpswap';
 
+
 const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
   const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full";
   const [selectedExchange, setSelectedExchange] = useState<SelectedExchangeType>('kucoin');
 
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-5 mb-4"> {/* 5 tabs: Overview, Analysis, AI Chat, Log, Trade */}
+      <TabsList className="grid w-full grid-cols-5"> {/* Removed mb-4 */}
         <TabsTrigger value="tech_overview"><Combine className="mr-1 h-4 w-4 sm:mr-2" />Overview</TabsTrigger>
         <TabsTrigger value="tech_analysis"><TrendingUp className="mr-1 h-4 w-4 sm:mr-2" />Analysis</TabsTrigger>
         <TabsTrigger value="ai_chat"><MessageCircle className="mr-1 h-4 w-4 sm:mr-2" />AI Chat</TabsTrigger>
@@ -38,23 +39,23 @@ const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange
         <TabsTrigger value="trade_panels"><Coins className="mr-1 h-4 w-4 sm:mr-2" />Trade</TabsTrigger> 
       </TabsList>
 
-      <TabsContent value="tech_overview" className={`flex-grow overflow-auto ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="tech_overview" className={`mt-0 flex-grow overflow-auto ${WIDGET_CONTAINER_CLASS}`}>
         <TechWidgetContent />
       </TabsContent>
 
-      <TabsContent value="tech_analysis" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="tech_analysis" className="mt-0 flex-grow overflow-hidden w-full h-[825px]">
         <TradingViewTechAnalysisWidget symbol={currentSymbol} />
       </TabsContent>
 
-      <TabsContent value="ai_chat" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="ai_chat" className="mt-0 flex-grow overflow-hidden w-full h-[825px]">
         <AiWebchat onSymbolSubmit={onSymbolChange} />
       </TabsContent>
 
-      <TabsContent value="trade_log" className={`flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="trade_log" className={`mt-0 flex-grow overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
         <TradeTracker />
       </TabsContent>
       
-      <TabsContent value="trade_panels" className={`flex-grow flex flex-col overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
+      <TabsContent value="trade_panels" className={`mt-0 flex-grow flex flex-col overflow-hidden ${WIDGET_CONTAINER_CLASS}`}>
         <div className="p-2 border-b border-border">
           <Select onValueChange={(value) => setSelectedExchange(value as SelectedExchangeType)} defaultValue="kucoin">
             <SelectTrigger className="h-9">
