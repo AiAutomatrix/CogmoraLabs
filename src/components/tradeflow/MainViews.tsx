@@ -4,40 +4,42 @@
 import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Newspaper, 
-  LayoutDashboard, 
-  LineChart, 
-  Columns, 
-  ListFilter, 
-  Settings2, 
-  SearchCode 
-} from 'lucide-react';
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
 
-// Import individual heatmap components
+// Import Heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
 import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
 
-// Props for MainViews - expecting currentSymbol for the chart
+// Import DropdownMenu components
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 interface MainViewsProps {
   currentSymbol: string;
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
+
+  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
+
+  const heatmapViewOptions = [
+    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
+    { value: 'stock_market', label: 'Stock Market Heatmap' },
+    { value: 'etf_heatmap', label: 'ETF Heatmap' },
+    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
+    { value: 'forex_heatmap', label: 'Forex Heatmap' },
+  ];
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -77,7 +79,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "97%", 
     autosize: true,
-    symbol: currentSymbol, // Use the prop here
+    symbol: currentSymbol,
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -96,7 +98,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]); 
+  }), [currentSymbol]);
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -120,6 +122,9 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </body>
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
+
+  // Note: The original heatmapConfigObject and heatmapSrcDoc for a single crypto heatmap are removed
+  // as this logic is now handled by the dropdown and individual heatmap components.
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
@@ -200,15 +205,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
-  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
-  const heatmapViewOptions = [
-    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
-    { value: 'stock_market', label: 'Stock Market Heatmap' },
-    { value: 'etf_heatmap', label: 'ETF Heatmap' },
-    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
-    { value: 'forex_heatmap', label: 'Forex Heatmap' },
-  ];
-
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
       <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
@@ -230,7 +226,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        
+
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
@@ -299,5 +295,3 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
-
-    
