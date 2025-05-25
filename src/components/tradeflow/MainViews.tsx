@@ -244,7 +244,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="chart" className="flex-grow overflow-hidden"> {/* Using flex-grow and overflow-hidden as per example for iframe tabs */}
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
@@ -256,7 +256,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0">
+        <div className="flex-grow overflow-hidden min-h-0"> {/* This div ensures content fills the space */}
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -265,33 +265,33 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0"> 
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden"> {/* As per user example */}
+        <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none' }} 
+              style={{ border: 'none', minHeight: '500px' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-         <div className="flex-grow overflow-hidden min-h-0"> 
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden"> {/* As per user example */}
+         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none' }}
+              style={{ border: 'none', minHeight: '500px' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
       
-      <TabsContent value="dex_screener" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="dex_screener" className="flex-grow overflow-hidden"> {/* Consistent styling for full height */}
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
