@@ -1,15 +1,23 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react'; // Added SearchCode
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
-import DexScreenerContent from './main-views/DexScreenerContent'; // Added import
+import DexScreenerContent from './main-views/DexScreenerContent';
 
-// Props for MainViews - expecting currentSymbol for the chart
+// Import new heatmap components
+import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
+import StockHeatmap from './main-views/heatmaps/StockHeatmap';
+import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
+import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
+import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
+
+
 interface MainViewsProps {
   currentSymbol: string;
 }
@@ -23,22 +31,21 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: #222222; /* Match app's dark background */
+      background-color: #222222; 
       box-sizing: border-box;
-      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
+      overflow: hidden; 
     }
     *, *::before, *::after { box-sizing: inherit; }
-    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
+    .tradingview-widget-container { 
       width: 100%;
       height: 100%;
       position: relative;
     }
-    .tradingview-widget-container__widget { /* Used by embed scripts */
+    .tradingview-widget-container__widget { 
       width: 100% !important;
       height: 100% !important;
       overflow: hidden;
     }
-    /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
     ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
@@ -55,7 +62,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "97%", 
     autosize: true,
-    symbol: currentSymbol, // Use the prop here
+    symbol: currentSymbol,
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -74,7 +81,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]); // Add currentSymbol to dependency array
+  }), [currentSymbol]); 
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -99,44 +106,10 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
 
-  const heatmapConfigObject = useMemo(() => ({
-    dataSource: "Crypto",
-    blockSize: "market_cap_calc",
-    blockColor: "change",
-    locale: "en",
-    symbolUrl: "",
-    colorTheme: "dark",
-    hasTransparentBackground: true,
-    width: "100%",
-    height: "100%"
-  }), []);
-
-  const heatmapSrcDoc = useMemo(() => `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${tvWidgetBaseStyle}</style>
-    </head>
-    <body>
-      <div class="tradingview-widget-container">
-        <div class="tradingview-widget-container__widget"></div>
-         <div class="tradingview-widget-copyright">
-            <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
-        </div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-crypto-coins-heatmap.js" async>
-          ${JSON.stringify(heatmapConfigObject)}
-        </script>
-      </div>
-    </body>
-    </html>
-  `, [heatmapConfigObject, tvWidgetBaseStyle]);
-
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
     html, body {
-      overflow: auto !important; /* Allow scrolling for screeners */
+      overflow: auto !important; 
     }
     ::-webkit-scrollbar { width: 24px !important; height: 24px !important; }
     ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
@@ -212,16 +185,26 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
+  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
+
+  const heatmapViewOptions = [
+    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
+    { value: 'stock_market', label: 'Stock Market Heatmap' },
+    { value: 'etf_heatmap', label: 'ETF Heatmap' },
+    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
+    { value: 'forex_heatmap', label: 'Forex Heatmap' },
+  ];
+
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
       <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4"> {/* Adjusted to 7 cols */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
-        <TabsTrigger value="heatmap"><Columns className="mr-2" />Heatmap</TabsTrigger>
+        <TabsTrigger value="heatmap"><Columns className="mr-2" />Heatmaps</TabsTrigger> {/* Changed label */}
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
-        <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger> {/* Added DEX Screener Tab */}
+        <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
       </TabsList>
 
       <TabsContent value="blog" className="flex-grow overflow-auto">
@@ -234,7 +217,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
       <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
-          key={`adv-chart-iframe-${currentSymbol}`} // Ensure iframe re-renders when symbol changes
+          key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
           className={WIDGET_CONTAINER_CLASS}
@@ -243,15 +226,26 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-hidden">
-        <iframe
-          key="heatmap-iframe"
-          srcDoc={heatmapSrcDoc}
-          title="TradingView Crypto Heatmap"
-          className={WIDGET_CONTAINER_CLASS}
-          style={{ border: 'none' }}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
+      <TabsContent value="heatmap" className="flex-grow flex flex-col overflow-hidden"> {/* Changed class */}
+        <div className="p-2 border-b border-border">
+          <Select onValueChange={setSelectedHeatmapView} defaultValue={selectedHeatmapView}>
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Select Heatmap Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {heatmapViewOptions.map(option => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex-grow overflow-hidden min-h-0">
+          {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
+          {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
+          {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
+          {selectedHeatmapView === 'forex_cross_rates' && <ForexCrossRatesWidget tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
+          {selectedHeatmapView === 'forex_heatmap' && <ForexHeatmapWidget tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
+        </div>
       </TabsContent>
 
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
@@ -279,8 +273,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
             />
         </div>
       </TabsContent>
-
-      {/* Added DexScreenerContent Tab */}
+      
       <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
@@ -289,5 +282,3 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
-
-    
