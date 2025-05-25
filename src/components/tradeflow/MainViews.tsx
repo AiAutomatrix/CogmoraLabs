@@ -1,25 +1,16 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react'; // Added useState
+import React, { useMemo, useState } from 'react'; // Added useState for heatmap dropdown
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Newspaper, 
-  LayoutDashboard, 
-  LineChart, 
-  Columns, 
-  ListFilter, 
-  Settings2, 
-  SearchCode 
-} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"; // Added for Heatmap dropdown
-
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
@@ -119,22 +110,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </body>
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
-
-  // This heatmapConfigObject and heatmapSrcDoc are for the original single heatmap in user's example.
-  // It will be superseded by the selectedHeatmapView logic, but keeping definitions from user's example.
-  const heatmapConfigObject = useMemo(() => ({
-    dataSource: "Crypto",
-    blockSize: "market_cap_calc",
-    blockColor: "change",
-    locale: "en",
-    symbolUrl: "",
-    colorTheme: "dark",
-    hasTransparentBackground: true,
-    width: "100%",
-    height: "100%"
-  }), []);
-
-  // const heatmapSrcDoc = useMemo(() => `...`, [heatmapConfigObject, tvWidgetBaseStyle]); // Not directly used if using selectedHeatmapView
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
@@ -271,7 +246,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      {/* Updated Heatmap Tab Content */}
+      {/* Heatmap Dropdown Tab Content */}
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
         <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -318,5 +293,5 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
-
+    
     
