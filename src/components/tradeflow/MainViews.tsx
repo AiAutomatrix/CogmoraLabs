@@ -4,19 +4,15 @@
 import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
-import BlogContent from './main-views/BlogContent';
-import DashboardContent from './main-views/DashboardContent';
-import DexScreenerContent from './main-views/DexScreenerContent';
-
-// Import Heatmap components
-import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
-import StockHeatmap from './main-views/heatmaps/StockHeatmap';
-import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
-import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
-import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
-
-// Import DropdownMenu components
+import { 
+  Newspaper, 
+  LayoutDashboard, 
+  LineChart, 
+  Columns, 
+  ListFilter, 
+  Settings2, 
+  SearchCode 
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +20,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import BlogContent from './main-views/BlogContent';
+import DashboardContent from './main-views/DashboardContent';
+import DexScreenerContent from './main-views/DexScreenerContent';
+
+// Import heatmap components
+import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
+import StockHeatmap from './main-views/heatmaps/StockHeatmap';
+import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
+import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
+import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
+
+
+// Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
   currentSymbol: string;
 }
@@ -32,7 +41,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
   const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
-
   const heatmapViewOptions = [
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
     { value: 'stock_market', label: 'Stock Market Heatmap' },
@@ -79,7 +87,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "97%", 
     autosize: true,
-    symbol: currentSymbol,
+    symbol: currentSymbol, // Use the prop here
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -98,7 +106,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]);
+  }), [currentSymbol]); 
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -122,9 +130,6 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </body>
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
-
-  // Note: The original heatmapConfigObject and heatmapSrcDoc for a single crypto heatmap are removed
-  // as this logic is now handled by the dropdown and individual heatmap components.
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle} 
@@ -242,7 +247,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
       <TabsContent value="chart" className="flex-grow overflow-hidden">
         <iframe
-          key={`adv-chart-iframe-${currentSymbol}`}
+          key={`adv-chart-iframe-${currentSymbol}`} 
           srcDoc={chartSrcDoc}
           title="TradingView Advanced Chart"
           className={WIDGET_CONTAINER_CLASS}
@@ -252,6 +257,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        {/* The div below is important to ensure the conditionally rendered heatmap takes full height */}
         <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
