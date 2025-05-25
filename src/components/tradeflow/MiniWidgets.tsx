@@ -4,8 +4,7 @@ import React, { useState } from 'react'; // Corrected: import React for FC and J
 import type { FC } from 'react'; // Keep type import for FC if preferred
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'; // Added Card imports
-import { Combine, TrendingUp, MessageCircle, ClipboardList, Coins, GripVertical } from 'lucide-react'; // Added necessary icons
+import { Combine, TrendingUp, MessageCircle, ClipboardList, Coins } from 'lucide-react'; // Added necessary icons
 
 // Import all five mini-widget components
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
@@ -15,6 +14,7 @@ import TradeTracker from './mini-widgets/TradeTracker';
 import KucoinTradePanel from './mini-widgets/exchange-panels/KucoinTradePanel';
 import RaydiumTradePanel from './mini-widgets/exchange-panels/RaydiumTradePanel';
 import PumpswapTradePanel from './mini-widgets/exchange-panels/PumpswapTradePanel';
+
 
 // Props for MiniWidgets - expecting currentSymbol and onSymbolChange
 interface MiniWidgetsProps {
