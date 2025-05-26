@@ -1,28 +1,17 @@
 
-import { useEffect, useRef, useState, useMemo, useCallback } from "react"; // Added useCallback
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import type {
   IncomingKucoinWebSocketMessage,
   DisplayTickerData,
-  KucoinRawTickerData,
   KucoinSubscribeMessage,
   KucoinPingMessage,
+  WebSocketStatus,
 } from "@/types/websocket";
 
-// Placeholder: In a real app, these would come from the /api/v1/bullet-public response
-const PLACEHOLDER_WS_URL = "wss://ws-api-spot.kucoin.com/"; // Public Spot WS URL
-const SIMULATED_PING_INTERVAL = 18000; 
-const SIMULATED_PING_TIMEOUT = 10000; 
-
-export type WebSocketStatus =
-  | 'idle'
-  | 'connecting_token' 
-  | 'connecting_ws'
-  | 'connected_ws' 
-  | 'welcomed'       
-  | 'subscribing'
-  | 'subscribed'
-  | 'disconnected'
-  | 'error';
+const PLACEHOLDER_WS_URL = "wss://ws-api-spot.kucoin.com/";
+const SIMULATED_PING_INTERVAL = 18000;
+const SIMULATED_PING_TIMEOUT = 10000;
+const RECONNECT_DELAY = 5000;
 
 export function useKucoinAllTickersSocket() {
   const [tickers, setTickers] = useState<{ [symbol: string]: DisplayTickerData }>({});
@@ -44,26 +33,25 @@ export function useKucoinAllTickersSocket() {
     }
 
     console.log("Attempting to connect to KuCoin WebSocket for all tickers...");
-    // In a real app, fetch token from /api/v1/bullet-public first
+    // TODO: Implement actual token fetching from KuCoin's /api/v1/bullet-public
+    // For now, using placeholder URL.
     // const wsUrl = actualEndpoint + "?token=" + actualToken + "&connectId=" + Date.now();
-    // For this example, we use the public spot WebSocket URL directly for /market/ticker:all
-    // Note: For production, ensure you handle token fetching and secure WebSocket connections.
-    const wsUrl = PLACEHOLDER_WS_URL; 
+    const wsUrl = PLACEHOLDER_WS_URL;
     setWebsocketStatus('connecting_ws');
 
     try {
       socketRef.current = new WebSocket(wsUrl);
     } catch (e) {
-        console.error("WebSocket instantiation error:", e);
-        setWebsocketStatus('error');
-        scheduleReconnect();
-        return;
+      console.error("WebSocket instantiation error:", e);
+      setWebsocketStatus('error');
+      scheduleReconnect();
+      return;
     }
 
     socketRef.current.onopen = () => {
       console.log("WebSocket connection opened.");
-      setWebsocketStatus('connected_ws'); 
-      // Wait for "welcome" message before subscribing
+      setWebsocketStatus('connected_ws'); // Indicates WS is open, waiting for welcome
+      // Welcome message from server will trigger subscription
     };
 
     socketRef.current.onmessage = (event) => {
@@ -80,7 +68,7 @@ export function useKucoinAllTickersSocket() {
               const subscribeMsg: KucoinSubscribeMessage = {
                 id: currentSubscriptionId.current,
                 type: "subscribe",
-                topic: "/market/ticker:all", // Subscribe to all tickers
+                topic: "/market/ticker:all",
                 response: true,
               };
               socketRef.current.send(JSON.stringify(subscribeMsg));
@@ -91,11 +79,11 @@ export function useKucoinAllTickersSocket() {
             break;
 
           case "ack":
-            if (String(message.id) === String(currentSubscriptionId.current)) { // Ensure ID matches
+             if (message.id && String(message.id) === String(currentSubscriptionId.current)) {
                 console.log("Subscription ACK received for /market/ticker:all");
                 setWebsocketStatus('subscribed');
             } else {
-                console.warn("Received ACK for unknown ID:", message);
+                console.warn("Received ACK for unknown or mismatched ID:", message);
             }
             break;
 
@@ -107,8 +95,8 @@ export function useKucoinAllTickersSocket() {
             break;
 
           case "message":
-            if (message.topic === "/market/ticker:all" && message.subject) {
-              const symbol = message.subject; // Symbol is in the 'subject' field for :all topic
+            if (message.topic === "/market/ticker:all" && message.subject && message.data) {
+              const symbol = message.subject;
               const rawData = message.data;
               setTickers((prevTickers) => ({
                 ...prevTickers,
@@ -126,10 +114,10 @@ export function useKucoinAllTickersSocket() {
               }));
             }
             break;
-          
+
           case "error":
-            console.error("KuCoin WebSocket Error Message:", message);
-            setWebsocketStatus('error'); // Potentially handle specific error codes
+            console.error("KuCoin WebSocket Error Message Received:", message);
+            setWebsocketStatus('error');
             break;
 
           default:
@@ -142,7 +130,7 @@ export function useKucoinAllTickersSocket() {
     };
 
     socketRef.current.onerror = (event: Event) => {
-      console.error("WebSocket error event:", event.type, event);
+      console.error(`WebSocket error event of type: ${event.type}. Check network tab or WebSocket connection details for more info.`);
       setWebsocketStatus('error');
       // Connection will likely close, onclose will handle reconnect
     };
@@ -151,24 +139,24 @@ export function useKucoinAllTickersSocket() {
       console.warn(`WebSocket closed. Code: ${event.code}, Reason: "${event.reason || 'No reason'}". WasClean: ${event.wasClean}`);
       setWebsocketStatus('disconnected');
       stopPingPong();
-      if (!event.wasClean) { 
+      if (!event.wasClean && event.code !== 1000 /* 1000 is normal closure */) {
         scheduleReconnect();
       }
     };
-  }, []); // Empty dependency array ensures connect is called once on mount
+  }, []);
 
   const scheduleReconnect = () => {
     if (reconnectTimeoutId.current) {
-        clearTimeout(reconnectTimeoutId.current);
+      clearTimeout(reconnectTimeoutId.current);
     }
-    console.log("Scheduling reconnect in 5s...");
+    console.log(`Scheduling reconnect in ${RECONNECT_DELAY / 1000}s...`);
     reconnectTimeoutId.current = setTimeout(() => {
-        connect();
-    }, 5000); 
-  }
+      connect();
+    }, RECONNECT_DELAY);
+  };
 
   const startPingPong = () => {
-    stopPingPong(); 
+    stopPingPong();
     pingIntervalId.current = setInterval(() => {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         const pingMsg: KucoinPingMessage = { id: Date.now(), type: "ping" };
@@ -177,7 +165,7 @@ export function useKucoinAllTickersSocket() {
         if (pingTimeoutId.current) clearTimeout(pingTimeoutId.current);
         pingTimeoutId.current = setTimeout(() => {
           console.warn("Ping timeout! No pong received. Closing WebSocket.");
-          socketRef.current?.close(1000, "Ping timeout"); 
+          socketRef.current?.close(1000, "Ping timeout");
         }, SIMULATED_PING_TIMEOUT);
       }
     }, SIMULATED_PING_INTERVAL);
@@ -197,21 +185,27 @@ export function useKucoinAllTickersSocket() {
   useEffect(() => {
     connect(); // Initial connection attempt
     return () => {
-      console.log("Closing WebSocket connection from useEffect cleanup.");
+      console.log("Cleaning up KuCoinAllTickersSocket: Closing WebSocket and clearing timers.");
       stopPingPong();
       if (reconnectTimeoutId.current) {
         clearTimeout(reconnectTimeoutId.current);
+        reconnectTimeoutId.current = null;
       }
       if (socketRef.current) {
-        socketRef.current.close(1000, "Component unmounting");
+        socketRef.current.onopen = null;
+        socketRef.current.onmessage = null;
+        socketRef.current.onerror = null;
+        socketRef.current.onclose = null; // Prevent onclose from trying to reconnect after deliberate close
+        if (socketRef.current.readyState < WebSocket.CLOSING) {
+            socketRef.current.close(1000, "Component unmounting");
+        }
         socketRef.current = null;
       }
       setWebsocketStatus('idle');
     };
-  }, [connect]); // connect is now stable due to useCallback
+  }, [connect]);
 
-  // Memoize the transformation of tickers object to array for performance
-  const processedTickers = useMemo(() => Object.values(tickers).sort((a,b) => a.symbol.localeCompare(b.symbol)), [tickers]);
+  const processedTickers = useMemo(() => Object.values(tickers).sort((a, b) => a.symbol.localeCompare(b.symbol)), [tickers]);
 
   return { processedTickers, websocketStatus };
 }
