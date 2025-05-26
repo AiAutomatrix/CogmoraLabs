@@ -1,15 +1,15 @@
 
 'use client';
 
-import React, { useMemo, useState } // Added useState
-  from 'react';
+import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Added
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity } from 'lucide-react'; // Added Activity
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
+import LiveOpportunitiesDashboard from './main-views/LiveOpportunitiesDashboard'; // Added import
 
 // Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
@@ -18,6 +18,8 @@ import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
 
+
+// Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
   currentSymbol: string;
 }
@@ -72,7 +74,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "97%",
     autosize: true,
-    symbol: currentSymbol,
+    symbol: currentSymbol, // Use the prop here
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -91,7 +93,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  }), [currentSymbol]);
+  }), [currentSymbol]); // Add currentSymbol to dependency array
 
   const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
@@ -116,7 +118,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
 
-  // Old heatmapConfigObject and heatmapSrcDoc removed as logic is now in specific heatmap components
+  // Note: heatmapConfigObject and heatmapSrcDoc are no longer directly used here if heatmap is a dropdown.
+  // They are encapsulated within the individual heatmap components.
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle}
@@ -199,7 +202,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8 mb-4"> {/* Adjusted to 8 cols */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
@@ -222,6 +225,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
+        <TabsTrigger value="live_ops"><Activity className="mr-2" />Live Ops</TabsTrigger> {/* Added Live Ops Tab */}
       </TabsList>
 
       <TabsContent value="blog" className="flex-grow overflow-auto">
@@ -243,8 +247,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-hidden"> {/* Keep existing className from working example */}
-        <div className="h-full w-full"> {/* This div allows the selected heatmap to take full space */}
+      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -282,10 +286,13 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
+
+      {/* Added LiveOpsDashboard Tab Content */}
+      <TabsContent value="live_ops" className="flex-grow overflow-hidden">
+        <LiveOpportunitiesDashboard />
+      </TabsContent>
     </Tabs>
   );
 };
 
 export default MainViews;
-
-    
