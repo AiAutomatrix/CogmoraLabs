@@ -9,7 +9,7 @@ import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, 
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
-import LiveOpportunitiesDashboard from './main-views/LiveOpportunitiesDashboard'; // Added import
+import AllTickersScreener from './main-views/AllTickersScreener'; // Changed from LiveOpportunitiesDashboard
 
 // Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
@@ -26,15 +26,6 @@ interface MainViewsProps {
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
-
-  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
-  const heatmapViewOptions = [
-    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
-    { value: 'stock_market', label: 'Stock Market Heatmap' },
-    { value: 'etf_heatmap', label: 'ETF Heatmap' },
-    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
-    { value: 'forex_heatmap', label: 'Forex Heatmap' },
-  ];
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -118,8 +109,16 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [chartConfigObject, tvWidgetBaseStyle]);
 
-  // Note: heatmapConfigObject and heatmapSrcDoc are no longer directly used here if heatmap is a dropdown.
-  // They are encapsulated within the individual heatmap components.
+  // Heatmap dropdown state and options
+  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
+  const heatmapViewOptions = [
+    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
+    { value: 'stock_market', label: 'Stock Market Heatmap' },
+    { value: 'etf_heatmap', label: 'ETF Heatmap' },
+    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
+    { value: 'forex_heatmap', label: 'Forex Heatmap' },
+  ];
+
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle}
@@ -202,7 +201,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8 mb-4"> {/* Adjusted to 8 cols */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8"> {/* Adjusted to 8 cols */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
@@ -225,7 +224,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
-        <TabsTrigger value="live_ops"><Activity className="mr-2" />Live Ops</TabsTrigger> {/* Added Live Ops Tab */}
+        <TabsTrigger value="live_ops"><Activity className="mr-2" />All Tickers</TabsTrigger> {/* Changed label */}
       </TabsList>
 
       <TabsContent value="blog" className="flex-grow overflow-auto">
@@ -236,7 +235,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
+      <TabsContent value="chart" className="mt-0 flex-grow overflow-hidden"> {/* Ensure mt-0 for consistency */}
         <iframe
           key={`adv-chart-iframe-${currentSymbol}`}
           srcDoc={chartSrcDoc}
@@ -257,7 +256,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden"> {/* Ensure mt-0 */}
         <div className="h-full w-full overflow-auto">
             <iframe
               key="options-screener-iframe"
@@ -270,7 +269,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden"> {/* Ensure mt-0 */}
          <div className="h-full w-full overflow-auto">
             <iframe
               key="crypto-screener-iframe"
@@ -283,13 +282,12 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden"> {/* Ensure mt-0 */}
         <DexScreenerContent />
       </TabsContent>
 
-      {/* Added LiveOpsDashboard Tab Content */}
-      <TabsContent value="live_ops" className="flex-grow overflow-hidden">
-        <LiveOpportunitiesDashboard />
+      <TabsContent value="live_ops" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0"> {/* Ensure mt-0 and flex structure */}
+        <AllTickersScreener />
       </TabsContent>
     </Tabs>
   );
