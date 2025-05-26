@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useKucoinAllTickersSocket } from "@/hooks/useKucoinAllTickersSocket";
-import type { DisplayTickerData } from "@/types/websocket"; // Ensure this is correct
+import type { DisplayTickerData, WebSocketStatus } from "@/types/websocket";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,16 +35,17 @@ export function AllTickersScreener() {
 
   const formatPrice = (price: number | null) => {
     if (price === null) return '-';
+    // More precise formatting based on price magnitude
     if (price > 10) return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (price > 0.001) return price.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
     return price.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 8 });
   };
 
-  const formatPercentage = (rate: number | null) => {
+  const formatChangeRate = (rate: number | null) => {
     if (rate === null) return '-';
     return `${(rate * 100).toFixed(2)}%`;
   };
-
+  
   const formatVolume = (volume: number | null) => {
     if (volume === null) return '-';
     return volume.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -67,7 +68,7 @@ export function AllTickersScreener() {
       case 'disconnected':
         return <span className="text-xs text-red-500 flex items-center"><WifiOff className="h-3 w-3 mr-1" /> Disconnected</span>;
       case 'error':
-        return <span className="text-xs text-red-700 font-semibold flex items-center"><ServerCrash className="h-3 w-3 mr-1" /> Connection Error</span>; // Changed icon
+        return <span className="text-xs text-red-700 font-semibold flex items-center"><ServerCrash className="h-3 w-3 mr-1" /> Connection Error</span>;
       default:
         return <span className="text-xs text-muted-foreground">{websocketStatus}</span>;
     }
@@ -97,7 +98,7 @@ export function AllTickersScreener() {
             {[...Array(15)].map((_, i) => (
               <Skeleton key={i} className="h-8 w-full rounded" />
             ))}
-            <TableCaption className="py-2 text-xs">Attempting to connect to KuCoin WebSocket...</TableCaption>
+            <p className="py-2 text-xs text-muted-foreground text-center">Attempting to connect to KuCoin WebSocket...</p>
           </div>
         ) : websocketStatus === 'error' || websocketStatus === 'disconnected' ? (
             <div className="flex flex-col items-center justify-center h-full text-destructive p-4">
@@ -111,14 +112,18 @@ export function AllTickersScreener() {
                     {websocketStatus === 'error' && "Could not establish WebSocket connection. Check console for details."}
                 </p>
             </div>
-        ) : !isLoadingOrConnecting && filteredTickers.length === 0 ? (
+        ) : !isLoadingOrConnecting && filteredTickers.length === 0 && filterTerm ? (
           <div className="flex items-center justify-center h-full text-muted-foreground p-4">
-            <p>{filterTerm ? 'No tickers matching your filter.' : 'No ticker data received yet or all filtered out.'}</p>
+            <p>No tickers matching your filter: "{filterTerm}"</p>
+          </div>
+        ): !isLoadingOrConnecting && filteredTickers.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground p-4">
+            <p>No ticker data received yet. Status: {websocketStatus}</p>
           </div>
         ) : (
           <Table className="min-w-full">
             <TableCaption className="py-2 text-xs">
-              Live ticker data from KuCoin via WebSocket. Updates approximately every 100ms.
+              Live ticker data from KuCoin via WebSocket.
               {filterTerm && ` (Filtered by "${filterTerm}")`}
             </TableCaption>
             <TableHeader className="sticky top-0 bg-card z-10">
@@ -141,16 +146,16 @@ export function AllTickersScreener() {
                   <TableCell className="py-1.5 px-3 font-mono font-medium">{ticker.symbol}</TableCell>
                   <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.lastPrice)}</TableCell>
                   <TableCell className={`py-1.5 px-3 font-mono text-right ${ticker.changeRate24h === null ? '' : ticker.changeRate24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {formatPercentage(ticker.changeRate24h)}
+                    {formatChangeRate(ticker.changeRate24h)}
                   </TableCell>
                   <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.changePrice24h)}</TableCell>
                   <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.high24h)}</TableCell>
                   <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.low24h)}</TableCell>
                   <TableCell className="py-1.5 px-3 font-mono text-right">{formatVolume(ticker.volume24h)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right text-green-500">{formatPrice(ticker.buyPrice)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right text-red-500">{formatPrice(ticker.sellPrice)}</TableCell>
+                  <TableCell className="py-1.5 px-3 font-mono text-right text-green-500">{formatPrice(ticker.bestBid)}</TableCell>
+                  <TableCell className="py-1.5 px-3 font-mono text-right text-red-500">{formatPrice(ticker.bestAsk)}</TableCell>
                   <TableCell className="py-1.5 px-3 font-mono text-right text-muted-foreground">
-                    {format(ticker.lastUpdate, 'HH:mm:ss.SSS')}
+                    {ticker.lastUpdate ? format(ticker.lastUpdate, 'HH:mm:ss.SSS') : '-'}
                   </TableCell>
                 </TableRow>
               ))}
@@ -163,3 +168,4 @@ export function AllTickersScreener() {
 }
 
 export default AllTickersScreener;
+
