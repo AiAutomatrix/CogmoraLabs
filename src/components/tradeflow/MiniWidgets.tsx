@@ -1,17 +1,14 @@
-
 'use client';
 import React, { useState } from 'react'; // Corrected: import React for FC and JSX
 import type { FC } from 'react'; 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select imports
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combine, TrendingUp, MessageCircle, ClipboardList, Coins } from 'lucide-react'; 
 
-// Import all five mini-widget components
+// Import all mini-widget components
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
 import TradingViewTechAnalysisWidget from './mini-widgets/TradingViewTechAnalysisWidget';
-// AiWebchat is now an iframe host for Botpress, or your custom chat if you revert AiWebchat.tsx
-// For this step, assuming we are embedding Botpress via iframe.
-// import AiWebchat from './mini-widgets/AiWebchat'; // Original custom chat
+import AiWebchat from './mini-widgets/AiWebchat'; // This will now render the Botpress iframe
 import TradeTracker from './mini-widgets/TradeTracker';
 
 // Import exchange panel components
@@ -50,15 +47,9 @@ const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange
         <TradingViewTechAnalysisWidget symbol={currentSymbol} />
       </TabsContent>
 
-      {/* AI Chat Tab now renders an iframe pointing to /botpress-iframe */}
-      <TabsContent value="ai_chat" className={`mt-0 flex-grow flex flex-col overflow-hidden min-h-0 ${FIXED_HEIGHT_CLASS}`}>
-        <iframe
-          src="/botpress-iframe"
-          className="w-full h-full border-0"
-          title="Botpress Webchat"
-          allow="microphone" // Optional: if your bot uses microphone
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-        />
+      <TabsContent value="ai_chat" className={`mt-0 flex-grow overflow-hidden ${FIXED_HEIGHT_CLASS}`}>
+        {/* AiWebchat component now renders the Botpress iframe, no onSymbolSubmit needed */}
+        <AiWebchat />
       </TabsContent>
 
       <TabsContent value="trade_log" className={`mt-0 flex-grow overflow-auto ${WIDGET_CONTAINER_CLASS}`}>
