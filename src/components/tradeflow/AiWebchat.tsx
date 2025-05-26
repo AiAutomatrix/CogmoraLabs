@@ -1,7 +1,16 @@
-
 'use client';
-import type React from 'react';
-import { useState, useRef, useEffect } from 'react';
+
+declare global {
+  interface Window {
+    botpressWebChat?: {
+      init: (config: any) => void;
+      open: () => void;
+      onEvent?: (callback: (event: any) => void) => void;
+    };
+  }
+}
+
+import React, { useState, useRef, useEffect } from 'react';
 import { marketAnalysisQuery, type MarketAnalysisQueryInput } from '@/ai/flows/market-analysis-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +20,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Bot, User, Loader2 } from 'lucide-react';
 import type { ChatMessage } from '@/types';
 import { useToast } from "@/hooks/use-toast";
-
 
 const AiWebchat: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -34,15 +42,43 @@ const AiWebchat: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Initialize and open Botpress WebChat
+  useEffect(() => {
+    const initBotpressWebChat = () => {
+      if (window.botpressWebChat) {
+        // Optional: Add event listeners if needed
+        if (window.botpressWebChat.onEvent) {
+          window.botpressWebChat.onEvent((event: any) => {
+            console.log('Botpress event:', event);
+          });
+        }
+        
+        // Open the chat immediately
+        window.botpressWebChat.open();
+      } else {
+        // If not available, try again after a short delay
+        setTimeout(initBotpressWebChat, 500);
+      }
+    };
+
+    // Start the initialization process
+    initBotpressWebChat();
+
+    // Cleanup function
+    return () => {
+      // Any cleanup if needed
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userQuery.trim() || !cryptocurrency.trim()) {
-        toast({
-            title: "Missing Information",
-            description: "Please enter both a cryptocurrency symbol and your query.",
-            variant: "destructive",
-        });
-        return;
+      toast({
+        title: "Missing Information",
+        description: "Please enter both a cryptocurrency symbol and your query.",
+        variant: "destructive",
+      });
+      return;
     }
 
     const newUserMessage: ChatMessage = {
@@ -59,7 +95,6 @@ const AiWebchat: React.FC = () => {
       const input: MarketAnalysisQueryInput = {
         cryptocurrency: cryptocurrency,
         userQuery: userQuery,
-        // tradingViewData: "User is viewing the chart in another section of the app." // Optional: pass context
       };
       const result = await marketAnalysisQuery(input);
       const aiResponse: ChatMessage = {
@@ -78,11 +113,11 @@ const AiWebchat: React.FC = () => {
         timestamp: new Date(),
       };
       setMessages((prevMessages) => [...prevMessages, errorResponse]);
-       toast({
-            title: "AI Error",
-            description: "Could not fetch analysis from AI. Check console for details.",
-            variant: "destructive",
-        });
+      toast({
+        title: "AI Error",
+        description: "Could not fetch analysis from AI. Check console for details.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +130,7 @@ const AiWebchat: React.FC = () => {
         <CardDescription>Ask about cryptocurrency market trends. Default: BTCUSDT</CardDescription>
       </CardHeader>
       <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
-        <ScrollArea className="flex-grow border rounded-md p-4 min-h-0">
+        <ScrollArea className="flex-grow border rounded-md p-4 min-h-0" ref={scrollAreaRef}>
           {messages.length === 0 && <p className="text-muted-foreground text-center">No messages yet. Ask a question!</p>}
           {messages.map((msg) => (
             <div
@@ -112,13 +147,13 @@ const AiWebchat: React.FC = () => {
               >
                 <p>{msg.text}</p>
                 <p className={`text-xs mt-1 ${ msg.sender === 'user' ? 'text-primary-foreground/70 text-right' : 'text-muted-foreground/70'}`}>
-                    {msg.timestamp.toLocaleTimeString()}
+                  {msg.timestamp.toLocaleTimeString()}
                 </p>
               </div>
               {msg.sender === 'user' && <User className="h-6 w-6 text-accent flex-shrink-0" />}
             </div>
           ))}
-           {isLoading && (
+          {isLoading && (
             <div className="flex justify-start gap-2 mb-3">
               <Bot className="h-6 w-6 text-primary flex-shrink-0" />
               <div className="p-3 rounded-lg bg-secondary text-secondary-foreground">
@@ -154,5 +189,3 @@ const AiWebchat: React.FC = () => {
 };
 
 export default AiWebchat;
-
-    
