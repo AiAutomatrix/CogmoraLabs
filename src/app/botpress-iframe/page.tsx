@@ -8,7 +8,7 @@ declare global {
     botpressWebChat?: {
       init: (config: any) => void;
       open: () => void;
-      onEvent?: (callback: (event: any) => void, eventTypes?: string[]) => void;
+      onEvent?: (callback: (event: any) => void, eventTypes?: string[]) => void; // Added eventTypes for v1
     };
   }
 }
@@ -23,7 +23,7 @@ const BotpressIframePage: React.FC = () => {
         console.log("Botpress script already loaded, attempting to open chat.");
         window.botpressWebChat.open();
       } else {
-        console.log("Botpress script already loaded, but webChat object not ready. Waiting for init.");
+        console.log("Botpress script already loaded, but webChat object not ready. Waiting for init or LIFECYCLE.LOADED.");
       }
       return;
     }
@@ -45,11 +45,11 @@ const BotpressIframePage: React.FC = () => {
           hostUrl: 'https://cdn.botpress.cloud/webchat/v1',
           messagingUrl: 'https://messaging.botpress.cloud',
           
-          // UI Customizations (as per your example)
+          // UI Customizations
           containerWidth: '100%',
           layoutWidth: '100%',
-          hideWidget: true, // Start hidden, then programmatically open
-          showCloseButton: true, // Or false, depending on desired UX
+          hideWidget: true, // Important for programmatic open; Botpress v1 often shows widget by default
+          showCloseButton: true, 
           disableAnimations: false,
           closeOnEscape: false,
           showConversationsButton: false,
@@ -57,35 +57,34 @@ const BotpressIframePage: React.FC = () => {
           
           // Additional common settings
           lazySocket: true,
-          themeName: 'prism', // Or your preferred theme
+          themeName: 'prism', 
           frontendVersion: 'v1',
           showPoweredBy: false,
           enableConversationDeletion: true,
         });
         console.log("Botpress initialized.");
 
-        // Try to open the chat
-        // For v1, often just calling open() after init is enough.
-        // If it needs to wait for a specific event, that's more complex.
-        // Let's try a direct open first.
+        // Attempt to open the chat directly
         if (typeof window.botpressWebChat.open === 'function') {
           window.botpressWebChat.open();
-          console.log("Botpress chat.open() called.");
+          console.log("Botpress chat.open() called directly after init.");
         } else {
-          console.error("window.botpressWebChat.open is not a function after init.");
+          console.error("window.botpressWebChat.open is not a function immediately after init. Will rely on LIFECYCLE.LOADED.");
         }
 
-        // Fallback: if open() is not immediately available, try with onEvent for LIFECYCLE.LOADED
-        // This is more common with v2.x but good to have as a robust measure
+        // Robust fallback: Listen for LIFECYCLE.LOADED event for v1
         if (window.botpressWebChat.onEvent) {
+            console.log("Setting up onEvent listener for LIFECYCLE.LOADED.");
             window.botpressWebChat.onEvent(() => {
-                if (typeof window.botpressWebChat.open === 'function') {
-                    console.log("Botpress LIFECYCLE.LOADED, attempting to open chat.");
+                if (typeof window.botpressWebChat?.open === 'function') {
+                    console.log("Botpress LIFECYCLE.LOADED event fired, attempting to open chat.");
                     window.botpressWebChat.open();
                 } else {
                     console.error("Botpress LIFECYCLE.LOADED, but open function still not available.");
                 }
-            }, ['LIFECYCLE.LOADED']);
+            }, ['LIFECYCLE.LOADED']); // Specify event type for v1
+        } else {
+            console.warn("window.botpressWebChat.onEvent is not available. Direct open might be the only option.");
         }
 
       } else {
@@ -98,15 +97,11 @@ const BotpressIframePage: React.FC = () => {
     document.body.appendChild(script);
 
     return () => {
-      // Cleanup if the script was added by this component instance
-      // Note: Botpress might inject its own UI elements outside this script's direct control.
-      // A full cleanup might require more specific Botpress API calls if available, or manual DOM removal.
       if (script.parentNode) {
         document.body.removeChild(script);
         console.log("Botpress inject.js script removed from iframe.");
       }
-      // Attempt to find and remove the Botpress container if it exists
-      const bpContainer = document.getElementById('botpress-webchat-container'); // Default Botpress container ID
+      const bpContainer = document.getElementById('botpress-webchat-container');
       if (bpContainer && bpContainer.parentNode) {
         bpContainer.parentNode.removeChild(bpContainer);
         console.log("Attempted to remove Botpress webchat container.");
@@ -116,7 +111,7 @@ const BotpressIframePage: React.FC = () => {
 
   return (
     // This div is where Botpress will inject its webchat UI.
-    // It needs to be present in the DOM for Botpress to target.
+    // Botpress v1 typically creates its own container, but having one doesn't hurt.
     <div id="botpress-webchat-container" className="w-full h-full" />
   );
 };
