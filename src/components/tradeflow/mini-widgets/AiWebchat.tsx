@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useMemo } from 'react'; // Changed from type import
 import type { FC } from 'react';
@@ -23,7 +24,6 @@ const AiWebchat: React.FC<AiWebchatProps> = () => {
           overflow: hidden; 
           background-color: transparent; /* Allow parent bg to show if widget is transparent */
         }
-        /* Specific targeting for Botpress container if its ID is known, or general full-size attempt */
         /* Common Botpress webchat container ID, might vary */
         #bp-web-widget-container { 
             width: 100% !important; 
@@ -44,7 +44,20 @@ const AiWebchat: React.FC<AiWebchatProps> = () => {
       <script src="https://files.bpcontent.cloud/2025/05/14/23/20250514232436-UD08HCV3.js"></script>
       <script>
         window.addEventListener("load", function () {
-          window.botpressWebChat && window.botpressWebChat.open();
+          // It's good practice to ensure window.botpressWebChat exists before calling methods on it.
+          if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
+            window.botpressWebChat.open();
+          } else {
+            // Fallback or error handling if botpressWebChat isn't initialized as expected
+            // This might happen if the scripts above fail to load or initialize botpressWebChat
+            console.warn('Botpress webchat not available or open function missing.');
+            // You could try a small delay and retry, but if the main scripts fail, this won't help.
+            // setTimeout(function() {
+            //   if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
+            //     window.botpressWebChat.open();
+            //   }
+            // }, 500); // example delay
+          }
         });
       </script>
     </body>
@@ -57,7 +70,6 @@ const AiWebchat: React.FC<AiWebchatProps> = () => {
       title="Botpress Webchat"
       className="w-full h-full border-0" // Ensure iframe fills its parent
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-      // allowFullScreen // Optional: if your Botpress chat uses fullscreen features
     />
   );
 };
