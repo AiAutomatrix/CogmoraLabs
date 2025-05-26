@@ -49,14 +49,7 @@ const AiWebchat: React.FC<AiWebchatProps> = () => {
             window.botpressWebChat.open();
           } else {
             // Fallback or error handling if botpressWebChat isn't initialized as expected
-            // This might happen if the scripts above fail to load or initialize botpressWebChat
             console.warn('Botpress webchat not available or open function missing.');
-            // You could try a small delay and retry, but if the main scripts fail, this won't help.
-            // setTimeout(function() {
-            //   if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
-            //     window.botpressWebChat.open();
-            //   }
-            // }, 500); // example delay
           }
         });
       </script>
