@@ -42,6 +42,11 @@ const AiWebchat: React.FC<AiWebchatProps> = () => {
       <!-- Botpress injects its UI here -->
       <script src="https://cdn.botpress.cloud/webchat/v2.5/inject.js"></script>
       <script src="https://files.bpcontent.cloud/2025/05/14/23/20250514232436-UD08HCV3.js"></script>
+      <script>
+        window.addEventListener("load", function () {
+          window.botpressWebChat && window.botpressWebChat.open();
+        });
+      </script>
     </body>
     </html>
   `, []);
