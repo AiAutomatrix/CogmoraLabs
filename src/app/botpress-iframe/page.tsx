@@ -2,7 +2,8 @@
 
 import React, { useMemo } from 'react';
 
-const AiWebchat: React.FC = () => {
+const BotpressIframePage: React.FC = () => {
+  // Using useMemo to ensure srcDoc is stable and only re-calculated if dependencies change (none here)
   const botpressSrcDoc = useMemo(() => `
     <!DOCTYPE html>
     <html lang="en">
@@ -15,7 +16,7 @@ const AiWebchat: React.FC = () => {
       </style>
     </head>
     <body>
-      {/* Botpress will inject its UI here or use its default container */}
+      <!-- Botpress will inject its UI here or use its default container -->
       
       <script src="https://cdn.botpress.cloud/webchat/v2.5/inject.js"></script>
       <script src="https://files.bpcontent.cloud/2025/05/14/23/20250514232436-UD08HCV3.js"></script>
@@ -39,15 +40,23 @@ const AiWebchat: React.FC = () => {
     </html>
   `, []);
 
+  // This page component will directly render the HTML content for the iframe.
+  // In a Next.js App Router page, we usually return JSX.
+  // To serve raw HTML, we'd typically use an API route or set srcDoc on an iframe in another component.
+  // Given the setup, this component is meant to BE the content of the iframe.
+  // So, it should render an iframe if it were a parent, or just the HTML if it's the iframe's source.
+  // For clarity, I will return an iframe here, but if this page.tsx is the direct source,
+  // then just returning null and having this page served AS the iframe content is fine.
+  // However, to be explicit as a React component for the /botpress-iframe route:
   return (
     <iframe
       srcDoc={botpressSrcDoc}
-      title="AI Webchat"
+      title="Botpress Webchat Frame Content"
       className="w-full h-full border-0"
-      allow="microphone"
+      allow="microphone" // If your bot uses microphone
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
     />
   );
 };
 
-export default AiWebchat;
+export default BotpressIframePage;
