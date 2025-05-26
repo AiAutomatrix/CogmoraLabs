@@ -11,6 +11,7 @@ export function useOpportunitySocket() {
     const connect = () => {
       // Ensure WebSocket is only created in the browser
       if (typeof window === 'undefined') {
+        setWebsocketStatus('disconnected'); // Or some other appropriate status for SSR
         return;
       }
       
@@ -21,12 +22,14 @@ export function useOpportunitySocket() {
       }
 
       setWebsocketStatus('connecting');
-      socketRef.current = new WebSocket("wss://your.server/ws/opportunities"); // Placeholder URL
+      // IMPORTANT: Replace with your actual WebSocket server URL
+      socketRef.current = new WebSocket("wss://your.server/ws/opportunities"); 
 
       socketRef.current.onopen = () => {
         console.log("WebSocket connected");
         setWebsocketStatus('connected');
-        // You might want to send an initial message or authentication here if needed
+        // Example: Send a ping or initial subscription message if required by your server
+        // socketRef.current?.send(JSON.stringify({ type: "ping", id: Date.now() }));
       };
 
       socketRef.current.onmessage = (event) => {
@@ -59,7 +62,7 @@ export function useOpportunitySocket() {
             
             case "error":
               console.error("WebSocket error message from server:", message.message);
-              setWebsocketStatus('error'); // Could be a specific app-level error
+              // You might want to set a specific error state or message here for the UI
               break;
 
             default:
@@ -74,16 +77,17 @@ export function useOpportunitySocket() {
       };
 
       socketRef.current.onerror = (event) => {
-        console.error("WebSocket error event:", event);
+        // Log the type of event for more clarity, as the event object itself might appear as {}
+        console.error(`WebSocket error event. Type: ${event.type}. The WebSocket URL might be invalid or the server unreachable.`, event);
         setWebsocketStatus('error');
       };
 
       socketRef.current.onclose = (event) => {
-        console.warn("WebSocket closed. Reconnecting...", event.reason, `Code: ${event.code}`);
+        console.warn(`WebSocket closed. Code: ${event.code}, Reason: "${event.reason || 'No reason provided'}". Reconnecting...`);
         setWebsocketStatus('disconnected');
         // Implement a more robust reconnection strategy, e.g., with backoff
         // Avoid reconnecting if explicitly closed by the component cleanup
-        if (socketRef.current && event.wasClean === false) { // Check if closure was not initiated by client
+        if (socketRef.current && event.wasClean === false) { 
             setTimeout(connect, 3000); 
         }
       };
@@ -94,13 +98,12 @@ export function useOpportunitySocket() {
     return () => {
       if (socketRef.current) {
         console.log("Closing WebSocket connection explicitly.");
-        // Set a flag or use a different method to prevent onclose from auto-reconnecting
         const ws = socketRef.current;
         socketRef.current = null; // Prevent onclose from finding a ref and reconnecting
         ws.close(1000, "Component unmounting"); 
       }
     };
-  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
+  }, []); 
 
   return { opportunities, websocketStatus };
 }
