@@ -1,5 +1,5 @@
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react"; // Added useMemo
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import type {
   IncomingKucoinWebSocketMessage,
   DisplayTickerData,
@@ -16,9 +16,21 @@ import type {
 // --- KuCoin API Constants & Simulation ---
 const SIMULATED_KUCOIN_API_BASE_URL_FOR_TOKEN = "https://api.kucoin.com"; // For conceptual REST call
 const SIMULATED_WS_ENDPOINT_BASE = "wss://ws-api-spot.kucoin.com"; // Base, actual endpoint has /endpoint from token response
-const SIMULATED_TOKEN = "simulated_public_token_from_bullet_public_call_v2";
-const SIMULATED_PING_INTERVAL = 18000; // Default from KuCoin docs
-const SIMULATED_PING_TIMEOUT = 10000; // Default from KuCoin docs
+const SIMULATED_PUBLIC_TOKEN_RESPONSE: KucoinTokenResponse = {
+  code: "200000",
+  data: {
+    token: "simulated_public_token_from_bullet_public_call_v2_for_all_tickers",
+    instanceServers: [
+      {
+        endpoint: `${SIMULATED_WS_ENDPOINT_BASE}/endpoint`, // Example endpoint
+        protocol: "websocket",
+        encrypt: true,
+        pingInterval: 18000, // KuCoin default, can be overridden by server
+        pingTimeout: 10000,  // KuCoin default
+      },
+    ],
+  },
+};
 
 const RECONNECT_DELAY = 5000; // 5 seconds
 const SUBSCRIBE_TOPIC_ALL_TICKERS = "/market/ticker:all";
@@ -31,11 +43,11 @@ export function useKucoinAllTickersSocket() {
   const pingTimeoutId = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutId = useRef<NodeJS.Timeout | null>(null);
   
-  const connectId = useRef<string | null>(null);
-  const currentSubscriptionRequestId = useRef<string | null>(null);
+  const connectId = useRef<string | null>(null); // For matching welcome message
+  const currentSubscriptionRequestId = useRef<string | null>(null); // For matching ack to subscribe
 
-  const currentPingInterval = useRef<number>(SIMULATED_PING_INTERVAL);
-  const currentPingTimeout = useRef<number>(SIMULATED_PING_TIMEOUT);
+  const currentPingInterval = useRef<number>(SIMULATED_PUBLIC_TOKEN_RESPONSE.data.instanceServers[0].pingInterval);
+  const currentPingTimeout = useRef<number>(SIMULATED_PUBLIC_TOKEN_RESPONSE.data.instanceServers[0].pingTimeout);
 
   const parseFloatSafe = (value: string | undefined | null): number | null => {
     if (value === undefined || value === null || value === '') return null;
@@ -57,29 +69,28 @@ export function useKucoinAllTickersSocket() {
     console.log(`KuCoin WS: Simulating token fetch from POST ${SIMULATED_KUCOIN_API_BASE_URL_FOR_TOKEN}/api/v1/bullet-public...`);
 
     // ** SIMULATION: Replace this with actual fetch in a real app **
+    // In a real app:
+    // try {
+    //   const response = await fetch(`${SIMULATED_KUCOIN_API_BASE_URL_FOR_TOKEN}/api/v1/bullet-public`, { method: 'POST' });
+    //   if (!response.ok) {
+    //     throw new Error(`Failed to fetch KuCoin token: ${response.status} ${await response.text()}`);
+    //   }
+    //   const tokenAPIResponse: KucoinTokenResponse = await response.json();
+    //   // Proceed with tokenAPIResponse...
+    // } catch (err) {
+    //   console.error("KuCoin WS: Error fetching token:", err);
+    //   setWebsocketStatus("error");
+    //   scheduleReconnect();
+    //   return;
+    // }
     await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-    const simulatedTokenAPIResponse: KucoinTokenResponse = {
-      code: "200000",
-      data: {
-        token: SIMULATED_TOKEN,
-        instanceServers: [
-          {
-            endpoint: `${SIMULATED_WS_ENDPOINT_BASE}/endpoint`,
-            protocol: "websocket",
-            encrypt: true,
-            pingInterval: SIMULATED_PING_INTERVAL, 
-            pingTimeout: SIMULATED_PING_TIMEOUT,  
-          },
-        ],
-      },
-    };
+    const tokenAPIResponse = SIMULATED_PUBLIC_TOKEN_RESPONSE;
     // ** END OF SIMULATION **
 
-    if (simulatedTokenAPIResponse.code === "200000" && simulatedTokenAPIResponse.data?.instanceServers?.length > 0) {
-      const serverInfo = simulatedTokenAPIResponse.data.instanceServers[0];
-      const token = simulatedTokenAPIResponse.data.token;
+    if (tokenAPIResponse.code === "200000" && tokenAPIResponse.data?.instanceServers?.length > 0) {
+      const serverInfo = tokenAPIResponse.data.instanceServers[0];
+      const token = tokenAPIResponse.data.token;
       
-      // Store actual ping intervals from (simulated) server response
       currentPingInterval.current = serverInfo.pingInterval;
       currentPingTimeout.current = serverInfo.pingTimeout;
 
@@ -100,7 +111,7 @@ export function useKucoinAllTickersSocket() {
 
       socketRef.current.onopen = () => {
         console.log("KuCoin WS: Connection opened. Waiting for welcome message...");
-        // Status remains 'connecting_ws' or similar until 'welcome' is received
+        // Status remains 'connecting_ws' or similar until 'welcome' is received and matched
       };
 
       socketRef.current.onmessage = (event) => {
@@ -111,14 +122,12 @@ export function useKucoinAllTickersSocket() {
             case "welcome":
               const welcomeMsg = message as KucoinWelcomeMessage;
               if (welcomeMsg.id === connectId.current) {
-                console.log("KuCoin WS: Welcome received. ID:", welcomeMsg.id, "Connection fully active.");
-                setWebsocketStatus("welcomed");
+                console.log("KuCoin WS: Welcome received for connectId:", welcomeMsg.id, "Connection active.");
+                setWebsocketStatus("welcomed"); // Or "connected" if you prefer
                 
-                // Per docs, subscription ID should match connectId for the initial topic.
-                // For subsequent subscriptions on same connection, use new unique IDs.
-                currentSubscriptionRequestId.current = connectId.current; 
+                currentSubscriptionRequestId.current = `sub-${Date.now()}`; // New unique ID for the subscribe request
                 const subscribeMsg: KucoinSubscribeMessage = {
-                  id: currentSubscriptionRequestId.current!, 
+                  id: currentSubscriptionRequestId.current, 
                   type: "subscribe",
                   topic: SUBSCRIBE_TOPIC_ALL_TICKERS,
                   privateChannel: false, 
@@ -139,11 +148,11 @@ export function useKucoinAllTickersSocket() {
               break;
 
             case "ack":
-              if (message.id && message.id === currentSubscriptionRequestId.current) { // Match against the ID used in subscribeMsg
-                console.log(`KuCoin WS: Subscription ACK received for topic. ID: ${message.id}`);
+              if (message.id && message.id === currentSubscriptionRequestId.current) {
+                console.log(`KuCoin WS: Subscription ACK received for ID: ${message.id}`);
                 setWebsocketStatus("subscribed");
               } else {
-                console.log("KuCoin WS: Received ACK for ID:", message.id, "(Not matching current subscription request ID)");
+                console.log("KuCoin WS: Received ACK for ID:", message.id, "(Not matching current subscription request ID:", currentSubscriptionRequestId.current, ")");
               }
               break;
 
@@ -159,15 +168,15 @@ export function useKucoinAllTickersSocket() {
               if (message.topic === SUBSCRIBE_TOPIC_ALL_TICKERS && message.type === "message") {
                 const tickerMsg = message as KucoinTickerMessageAll;
                 const symbol = tickerMsg.subject; 
-                const rawData = tickerMsg.data;
+                const rawData = tickerMsg.data as KucoinRawTickerData; // Type assertion for clarity
 
                 setTickers((prevTickers) => ({
                   ...prevTickers,
                   [symbol]: {
                     symbol: symbol,
-                    lastPrice: parseFloatSafe(rawData.last ?? rawData.price), // Use 'last' or 'price'
-                    bestBid: parseFloatSafe(rawData.buy ?? rawData.bestBid),     // Use 'buy' or 'bestBid'
-                    bestAsk: parseFloatSafe(rawData.sell ?? rawData.bestAsk),    // Use 'sell' or 'bestAsk'
+                    lastPrice: parseFloatSafe(rawData.last ?? rawData.price),
+                    bestBid: parseFloatSafe(rawData.buy ?? rawData.bestBid),
+                    bestAsk: parseFloatSafe(rawData.sell ?? rawData.bestAsk),
                     changeRate24h: parseFloatSafe(rawData.changeRate),
                     changePrice24h: parseFloatSafe(rawData.changePrice),
                     high24h: parseFloatSafe(rawData.high),
@@ -175,8 +184,8 @@ export function useKucoinAllTickersSocket() {
                     volume24h: parseFloatSafe(rawData.vol),
                     bestBidSize: parseFloatSafe(rawData.bestBidSize),
                     bestAskSize: parseFloatSafe(rawData.bestAskSize),
-                    size: parseFloatSafe(rawData.size), // Last trade size
-                    lastUpdate: new Date(rawData.Time ?? Date.now()),
+                    size: parseFloatSafe(rawData.size),
+                    lastUpdate: new Date(rawData.Time ?? Date.now()), // Use rawData.Time
                     sequence: rawData.sequence,
                   },
                 }));
@@ -192,8 +201,7 @@ export function useKucoinAllTickersSocket() {
               }
               setWebsocketStatus('error'); 
               if (kucoinError.code === "401") { 
-                // If token is invalid, close the connection with a reason to prevent immediate reconnect with the same bad token.
-                socketRef.current?.close(1008, "Invalid token: " + kucoinError.data);
+                socketRef.current?.close(1008, "Invalid token: " + kucoinError.data); // Code 1008: Policy Violation
               }
               break;
 
@@ -207,7 +215,7 @@ export function useKucoinAllTickersSocket() {
       };
 
       socketRef.current.onerror = (event: Event) => {
-        console.error("KuCoin WS: WebSocket connection error. Type:", event.type, "Check Network tab for details.");
+        console.error("KuCoin WS: WebSocket connection error. Type:", event.type, "Check Network tab in browser devtools or server logs for details.");
         setWebsocketStatus('error');
         // Connection will likely close, onclose will handle reconnect logic
       };
@@ -216,32 +224,30 @@ export function useKucoinAllTickersSocket() {
         console.warn(`KuCoin WS: Connection closed. Code: ${event.code}, Reason: "${event.reason || 'No reason provided'}". Clean: ${event.wasClean}`);
         setWebsocketStatus('disconnected');
         stopPingPong();
-        // Only attempt to reconnect if the closure was not clean (e.g., network error)
-        // or if it was clean but not due to a specific client action or a "token invalid" error.
-        // Code 1000 is a normal closure. Code 1008 (Policy Violation) is used for "token is invalid".
-        if (!event.wasClean && event.code !== 1000 && event.code !== 1008) { 
-          scheduleReconnect();
-        } else if (event.code === 1008 && event.reason.includes("Invalid token")) {
+        
+        if (event.code === 1008 && event.reason.includes("Invalid token")) {
             console.log("KuCoin WS: Not attempting reconnect due to invalid token error from server.");
+        } else if (event.code !== 1000) { // 1000 is normal closure (e.g., by client)
+          scheduleReconnect();
         }
       };
 
     } else {
-      console.error("KuCoin WS: Failed to simulate token fetch or invalid response structure.", simulatedTokenAPIResponse);
+      console.error("KuCoin WS: Failed to fetch or parse token from API (simulated or real).", tokenAPIResponse);
       setWebsocketStatus("error");
-      scheduleReconnect(); // Attempt reconnect even if token fetch fails
+      scheduleReconnect();
     }
-  }, []); // Empty dependency array: connect only on mount or manual call
+  }, []); 
 
-  const scheduleReconnect = () => {
-    stopPingPong(); // Ensure no old pings are running
-    if (socketRef.current) { // Defensive cleanup of old socket listeners
+  const scheduleReconnect = useCallback(() => {
+    stopPingPong();
+    if (socketRef.current) {
         socketRef.current.onopen = null;
         socketRef.current.onmessage = null;
         socketRef.current.onerror = null;
         socketRef.current.onclose = null;
         if (socketRef.current.readyState < WebSocket.CLOSING) {
-             socketRef.current.close(1000, "Preparing to reconnect");
+             socketRef.current.close(1000, "Client preparing to reconnect");
         }
         socketRef.current = null;
     }
@@ -253,27 +259,30 @@ export function useKucoinAllTickersSocket() {
       console.log("KuCoin WS: Attempting reconnect...");
       fetchTokenAndConnect();
     }, RECONNECT_DELAY);
-  };
+  }, [fetchTokenAndConnect]);
 
-  const startPingPong = () => {
-    stopPingPong(); // Clear any existing intervals/timeouts
+  const startPingPong = useCallback(() => {
+    stopPingPong(); 
     console.log(`KuCoin WS: Starting ping/pong. Interval: ${currentPingInterval.current}ms, Timeout: ${currentPingTimeout.current}ms`);
     pingIntervalId.current = setInterval(() => {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        const pingId = Date.now().toString(); // Ping ID must be a string
+        const pingId = `ping-${Date.now()}`; 
         const pingMsg: KucoinPingMessage = { id: pingId, type: "ping" };
-        socketRef.current.send(JSON.stringify(pingMsg));
-        // console.log("KuCoin WS: Sent Ping, ID:", pingMsg.id);
-
+        try {
+          socketRef.current.send(JSON.stringify(pingMsg));
+        } catch (e) {
+            console.error("KuCoin WS: Error sending ping:", e);
+            // If send fails, connection is likely broken, onclose will handle.
+        }
+        
         if (pingTimeoutId.current) clearTimeout(pingTimeoutId.current);
         pingTimeoutId.current = setTimeout(() => {
           console.warn("KuCoin WS: Ping timeout! No pong received. Closing WebSocket to trigger reconnect.");
-          // Close with a specific code if needed, or just close to trigger onclose handler
-          socketRef.current?.close(1001, "Ping timeout"); // 1001 = Going Away
+          socketRef.current?.close(1001, "Ping timeout"); 
         }, currentPingTimeout.current);
       }
     }, currentPingInterval.current);
-  };
+  }, []); // Dependencies: currentPingInterval.current and currentPingTimeout.current are refs updated by fetchToken
 
   const stopPingPong = () => {
     if (pingIntervalId.current) {
@@ -284,6 +293,7 @@ export function useKucoinAllTickersSocket() {
       clearTimeout(pingTimeoutId.current);
       pingTimeoutId.current = null;
     }
+    // console.log("KuCoin WS: Ping/pong stopped.");
   };
 
   useEffect(() => {
@@ -294,25 +304,25 @@ export function useKucoinAllTickersSocket() {
         clearTimeout(reconnectTimeoutId.current);
         reconnectTimeoutId.current = null;
       }
-      stopPingPong(); // Stop ping/pong process
+      stopPingPong(); 
       if (socketRef.current) {
         socketRef.current.onopen = null;
         socketRef.current.onmessage = null;
         socketRef.current.onerror = null;
-        socketRef.current.onclose = null; // Important to remove listener before closing
+        socketRef.current.onclose = null; 
         if (socketRef.current.readyState < WebSocket.CLOSING) {
-          socketRef.current.close(1000, "Component unmounting"); // Normal closure
+          socketRef.current.close(1000, "Component unmounting"); 
         }
         socketRef.current = null;
       }
-      setWebsocketStatus('idle'); // Reset status on unmount
-      setTickers({}); // Clear tickers on unmount
+      setWebsocketStatus('idle'); 
+      setTickers({}); 
     };
   }, [fetchTokenAndConnect]); 
 
   const processedTickers = useMemo(() => 
     Object.values(tickers)
-      .sort((a, b) => a.symbol.localeCompare(b.symbol)), 
+      .sort((a, b) => (a.symbol && b.symbol) ? a.symbol.localeCompare(b.symbol) : 0), 
   [tickers]);
 
   return { processedTickers, websocketStatus };
