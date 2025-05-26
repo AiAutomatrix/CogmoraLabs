@@ -4,6 +4,7 @@ import type { OpportunityMessage, OpportunityPayload } from "@/types/websocket";
 
 export function useOpportunitySocket() {
   const [opportunities, setOpportunities] = useState<OpportunityPayload[]>([]);
+  const [websocketStatus, setWebsocketStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -12,10 +13,19 @@ export function useOpportunitySocket() {
       if (typeof window === 'undefined') {
         return;
       }
+      
+      // Prevent multiple connections
+      if (socketRef.current && socketRef.current.readyState < WebSocket.CLOSING) {
+        // console.log("WebSocket already open or opening.");
+        return;
+      }
+
+      setWebsocketStatus('connecting');
       socketRef.current = new WebSocket("wss://your.server/ws/opportunities"); // Placeholder URL
 
       socketRef.current.onopen = () => {
         console.log("WebSocket connected");
+        setWebsocketStatus('connected');
         // You might want to send an initial message or authentication here if needed
       };
 
@@ -49,14 +59,13 @@ export function useOpportunitySocket() {
             
             case "error":
               console.error("WebSocket error message from server:", message.message);
-              // Handle specific error messages if needed
+              setWebsocketStatus('error'); // Could be a specific app-level error
               break;
 
             default:
-              // console.warn("Unhandled message type:", message);
               // Using a type assertion to handle potential unknown message types
               const unknownMessage = message as { type: string };
-              console.warn("Unhandled message type:", unknownMessage.type);
+              console.warn("Unhandled message type:", unknownMessage.type, message);
               break;
           }
         } catch (err) {
@@ -64,15 +73,19 @@ export function useOpportunitySocket() {
         }
       };
 
-      socketRef.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        // Optionally, you could try to reconnect here or show an error state
+      socketRef.current.onerror = (event) => {
+        console.error("WebSocket error event:", event);
+        setWebsocketStatus('error');
       };
 
       socketRef.current.onclose = (event) => {
-        console.warn("WebSocket closed. Reconnecting...", event.reason);
+        console.warn("WebSocket closed. Reconnecting...", event.reason, `Code: ${event.code}`);
+        setWebsocketStatus('disconnected');
         // Implement a more robust reconnection strategy, e.g., with backoff
-        setTimeout(connect, 3000); 
+        // Avoid reconnecting if explicitly closed by the component cleanup
+        if (socketRef.current && event.wasClean === false) { // Check if closure was not initiated by client
+            setTimeout(connect, 3000); 
+        }
       };
     };
 
@@ -80,12 +93,14 @@ export function useOpportunitySocket() {
 
     return () => {
       if (socketRef.current) {
-        console.log("Closing WebSocket connection");
-        socketRef.current.close();
-        socketRef.current = null;
+        console.log("Closing WebSocket connection explicitly.");
+        // Set a flag or use a different method to prevent onclose from auto-reconnecting
+        const ws = socketRef.current;
+        socketRef.current = null; // Prevent onclose from finding a ref and reconnecting
+        ws.close(1000, "Component unmounting"); 
       }
     };
   }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
-  return { opportunities };
+  return { opportunities, websocketStatus };
 }
