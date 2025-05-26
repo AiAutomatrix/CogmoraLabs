@@ -4,6 +4,8 @@ import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combine, TrendingUp, MessageCircle, ClipboardList, Coins } from 'lucide-react'; 
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'; // Added for placeholder
+
 
 // Import all mini-widget components
 import TechWidgetContent from './mini-widgets/TechWidgetContent';
@@ -48,8 +50,7 @@ const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange
       </TabsContent>
 
       <TabsContent value="ai_chat" className={`mt-0 flex-grow overflow-hidden ${FIXED_HEIGHT_CLASS}`}>
-        {/* AiWebchat component now renders the Botpress iframe, no onSymbolSubmit needed */}
-        <AiWebchat />
+        <AiWebchat /> {/* No onSymbolSubmit prop */}
       </TabsContent>
 
       <TabsContent value="trade_log" className={`mt-0 flex-grow overflow-auto ${WIDGET_CONTAINER_CLASS}`}>
