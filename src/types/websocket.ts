@@ -1,20 +1,40 @@
 
+// KuCoin WebSocket Token Response Types (Simulated)
+export type KucoinTokenResponseDataInstanceServer = {
+  endpoint: string;
+  protocol: string;
+  encrypt: boolean;
+  pingInterval: number;
+  pingTimeout: number;
+};
+
+export type KucoinTokenResponseData = {
+  token: string;
+  instanceServers: KucoinTokenResponseDataInstanceServer[];
+};
+
+export type KucoinTokenResponse = {
+  code: string;
+  data: KucoinTokenResponseData;
+};
+
+// KuCoin WebSocket Message Types
 export type KucoinWelcomeMessage = {
-  id: string;
+  id: string; // Echoes connectId
   type: 'welcome';
 };
 
 export type KucoinPongMessage = {
-  id: string; // Should match the ping ID
+  id: string; // Echoes ping id
   type: 'pong';
 };
 
 export type KucoinSubscribeMessage = {
-  id: number; // Client-generated ID
+  id: number; // Client-generated ID for the subscription request
   type: 'subscribe';
   topic: string; // e.g., /market/ticker:all or /market/ticker:BTC-USDT
   privateChannel?: boolean; // false for public topics
-  response?: boolean; // true to get an ack
+  response?: boolean; // true to request an ack
 };
 
 export type KucoinAckMessage = {
@@ -23,7 +43,7 @@ export type KucoinAckMessage = {
 };
 
 export type KucoinPingMessage = {
-  id: number; // Client-generated ID
+  id: number; // Client-generated ID for the ping
   type: 'ping';
 };
 
@@ -75,7 +95,18 @@ export type DisplayTickerData = {
   lastUpdate: Date;
 };
 
-// Old types - can be removed or kept if used elsewhere
+// WebSocket connection status
+export type WebSocketStatus =
+  | 'idle'
+  | 'connecting_token' // Fetching token
+  | 'connecting_ws'    // WebSocket connecting
+  | 'welcomed'         // Received "welcome" from server, ready to subscribe
+  | 'subscribing'      // Subscription message sent, awaiting ack
+  | 'subscribed'       // Subscription acknowledged, receiving data
+  | 'disconnected'
+  | 'error';
+
+// Old opportunity types (can be removed if no longer used by this feature)
 // export type OpportunityPayload = {
 //   id: string;
 //   name: string;
