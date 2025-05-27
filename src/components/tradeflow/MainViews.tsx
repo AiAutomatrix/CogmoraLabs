@@ -1,30 +1,30 @@
 
 'use client';
 
-import React, { useMemo, useState }
-  from 'react';
+import React, { useMemo, useState } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, TrendingUp, Activity, BarChart3 } from 'lucide-react';
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity, BarChart3, TrendingUp } from 'lucide-react'; // Added Activity, BarChart3, TrendingUp
+
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
-
-// Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
 import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
-import ThreeChartAnalysisPanel from './main-views/ThreeChartAnalysisPanel'; // New import
+import ThreeChartAnalysisPanel from './main-views/ThreeChartAnalysisPanel';
 
 interface MainViewsProps {
   currentSymbol: string;
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
-  const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
+  // Simplified WIDGET_CONTAINER_CLASS for iframes to fill their parent
+  const WIDGET_CONTAINER_CLASS = "w-full h-full"; 
+  // The min-h-[500px] and max-h will be handled by TabsContent or specific wrappers if needed
 
   const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
   const heatmapViewOptions = [
@@ -38,7 +38,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const [selectedChartLayout, setSelectedChartLayout] = useState<number>(1);
   const chartLayoutOptions = [
     { value: 1, label: '1 Chart', icon: <BarChart3 className="mr-2 h-4 w-4" /> },
-    { value: 2, label: '2 Charts', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },
+    { value: 2, label: '2 Charts', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> }, // Using LayoutDashboard for 2 charts
     { value: 3, label: '3 Charts + Analysis', icon: <TrendingUp className="mr-2 h-4 w-4" /> },
     { value: 4, label: '4 Charts', icon: <Columns className="mr-2 h-4 w-4" /> },
   ];
@@ -49,22 +49,21 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: #222222; /* Match app's dark background */
+      background-color: #222222; 
       box-sizing: border-box;
-      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
+      overflow: hidden; 
     }
     *, *::before, *::after { box-sizing: inherit; }
-    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
+    .tradingview-widget-container { 
       width: 100%;
       height: 100%;
       position: relative;
     }
-    .tradingview-widget-container__widget { /* Used by embed scripts */
+    .tradingview-widget-container__widget { 
       width: 100% !important;
       height: 100% !important;
       overflow: hidden;
     }
-    /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
     ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
@@ -76,10 +75,9 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     .tradingview-widget-copyright a:hover { text-decoration: underline; }
   `, []);
 
-  // Chart configurations
   const baseChartConfig = {
     width: "100%",
-    height: "100%", // Changed from 97% to fill grid cell
+    height: "100%", // Widgets inside grid cells should take 100% of cell
     autosize: true,
     interval: "180",
     timezone: "exchange",
@@ -102,7 +100,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     ...baseChartConfig,
     container_id: "tradingview-chart-1",
     symbol: currentSymbol,
-  }), [currentSymbol, baseChartConfig]); // baseChartConfig is stable if not recreated
+  }), [currentSymbol, baseChartConfig]); // baseChartConfig is stable due to useMemo
 
   const chartConfigObject2 = useMemo(() => ({
     ...baseChartConfig,
@@ -121,7 +119,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     container_id: "tradingview-chart-4",
     symbol: "BINANCE:SOLUSDT",
   }), [baseChartConfig]);
-
+  
   const generateChartSrcDoc = (config: any) => `
     <!DOCTYPE html>
     <html lang="en">
@@ -150,9 +148,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartSrcDoc3 = useMemo(() => generateChartSrcDoc(chartConfigObject3), [chartConfigObject3, tvWidgetBaseStyle]);
   const chartSrcDoc4 = useMemo(() => generateChartSrcDoc(chartConfigObject4), [chartConfigObject4, tvWidgetBaseStyle]);
 
-
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle}
+    ${tvWidgetBaseStyle} 
     html, body {
       overflow: auto !important; /* Allow scrolling for screeners */
     }
@@ -168,7 +165,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock",
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -230,9 +227,12 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
+  const TABS_CONTENT_BASE_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
+  const TABS_CONTENT_SCROLL_CLASS = "mt-0 flex-grow overflow-auto min-h-0"; // For Blog/Dashboard
+
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8"> {/* Adjusted for 8 tabs */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         
@@ -270,17 +270,18 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
+        <TabsTrigger value="live_ops"><Activity className="mr-2" />Live Ops</TabsTrigger> {/* Assuming AllTickersScreener for Live Ops */}
       </TabsList>
 
-      <TabsContent value="blog" className="flex-grow overflow-auto">
+      <TabsContent value="blog" className={TABS_CONTENT_SCROLL_CLASS}>
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="flex-grow overflow-auto">
+      <TabsContent value="dashboard" className={TABS_CONTENT_SCROLL_CLASS}>
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+      <TabsContent value="chart" className={TABS_CONTENT_BASE_CLASS}>
         <div className={`grid w-full h-full ${
             selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
             selectedChartLayout === 2 ? 'grid-cols-1 md:grid-cols-2 grid-rows-1 gap-0' :
@@ -323,7 +324,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
             </div>
           )}
           {selectedChartLayout === 3 && (
-            <div className="w-full h-full overflow-hidden p-1">
+            <div className="w-full h-full overflow-hidden p-1"> {/* Added small padding for analysis panel */}
               <ThreeChartAnalysisPanel />
             </div>
           )}
@@ -342,8 +343,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0">
+      <TabsContent value="heatmap" className={TABS_CONTENT_BASE_CLASS}>
+        <div className="w-full h-full"> {/* Wrapper for selected heatmap to fill space */}
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -352,34 +353,40 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto">
+      <TabsContent value="options_screener" className={TABS_CONTENT_BASE_CLASS}>
+        <div className="h-full w-full overflow-auto"> {/* This structure matches user's working example for screeners */}
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              className={WIDGET_CONTAINER_CLASS} // User's original class
+              style={{ border: 'none', minHeight: '500px' }} // User's original style
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto">
+      <TabsContent value="crypto_screener" className={TABS_CONTENT_BASE_CLASS}>
+         <div className="h-full w-full overflow-auto">  {/* This structure matches user's working example for screeners */}
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
               title="TradingView Crypto Screener"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              className={WIDGET_CONTAINER_CLASS} // User's original class
+              style={{ border: 'none', minHeight: '500px' }} // User's original style
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
-        <DexScreenerContent />
+      <TabsContent value="dex_screener" className={TABS_CONTENT_BASE_CLASS}>
+        <DexScreenerContent /> {/* This component has its own h-full Card */}
+      </TabsContent>
+      
+      <TabsContent value="live_ops" className={TABS_CONTENT_BASE_CLASS}>
+        {/* Assuming AllTickersScreener is also designed with h-full Card */}
+        {/* <AllTickersScreener /> */} {/* Placeholder if AllTickersScreener is ready */}
+        <div className="p-4 text-center">Live Ops Dashboard Content (using AllTickersScreener)</div>
       </TabsContent>
     </Tabs>
   );
