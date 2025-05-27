@@ -6,12 +6,10 @@ import React, { useMemo, useState } // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Added
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity } from 'lucide-react'; // Added Activity
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
-import AllTickersScreener from './main-views/AllTickersScreener';
-
 
 // Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
@@ -69,18 +67,12 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     .tradingview-widget-copyright a:hover { text-decoration: underline; }
   `, []);
 
-  // Chart state and configurations
-  const [selectedChartLayout, setSelectedChartLayout] = useState<number>(1);
-  const chartLayoutOptions = [
-    { value: 1, label: '1 Chart' },
-    { value: 2, label: '2 Charts' },
-    { value: 4, label: '4 Charts' },
-  ];
-
-  const commonChartConfig = {
+  const chartConfigObject = useMemo(() => ({
+    container_id: "technical-analysis-chart-demo",
     width: "100%",
-    height: "100%",
+    height: "97%",
     autosize: true,
+    symbol: currentSymbol,
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -89,40 +81,19 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     hide_side_toolbar: true,
     allow_symbol_change: true,
     save_image: false,
-    studies: ["StochasticRSI@tv-basicstudies", "MASimple@tv-basicstudies"],
+    studies: [
+        "StochasticRSI@tv-basicstudies",
+        "MASimple@tv-basicstudies"
+    ],
     show_popup_button: true,
     popup_width: "1000",
     popup_height: "650",
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
-  };
+  }), [currentSymbol]);
 
-  const chartConfigObject1 = useMemo(() => ({
-    ...commonChartConfig,
-    container_id: "tradingview-chart-1",
-    symbol: currentSymbol,
-  }), [currentSymbol, commonChartConfig]);
-
-  const chartConfigObject2 = useMemo(() => ({
-    ...commonChartConfig,
-    container_id: "tradingview-chart-2",
-    symbol: "BINANCE:ETHUSDT",
-  }), [commonChartConfig]);
-
-  const chartConfigObject3 = useMemo(() => ({
-    ...commonChartConfig,
-    container_id: "tradingview-chart-3",
-    symbol: "BINANCE:XRPUSDT",
-  }), [commonChartConfig]);
-
-  const chartConfigObject4 = useMemo(() => ({
-    ...commonChartConfig,
-    container_id: "tradingview-chart-4",
-    symbol: "BINANCE:SOLUSDT",
-  }), [commonChartConfig]);
-
-  const createChartSrcDoc = (config: any) => `
+  const chartSrcDoc = useMemo(() => `
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -132,24 +103,20 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </head>
     <body>
       <div class="tradingview-widget-container">
-        <div id="${config.container_id}" style="width:100%; height:100%;"></div>
+        <div id="${chartConfigObject.container_id}" style="width:100%; height:100%;"></div>
         <div class="tradingview-widget-copyright">
             <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
         </div>
       </div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
-        new TradingView.widget(${JSON.stringify(config)});
+        new TradingView.widget(${JSON.stringify(chartConfigObject)});
       </script>
     </body>
     </html>
-  `;
+  `, [chartConfigObject, tvWidgetBaseStyle]);
 
-  const chartSrcDoc1 = useMemo(() => createChartSrcDoc(chartConfigObject1), [chartConfigObject1, tvWidgetBaseStyle]);
-  const chartSrcDoc2 = useMemo(() => createChartSrcDoc(chartConfigObject2), [chartConfigObject2, tvWidgetBaseStyle]);
-  const chartSrcDoc3 = useMemo(() => createChartSrcDoc(chartConfigObject3), [chartConfigObject3, tvWidgetBaseStyle]);
-  const chartSrcDoc4 = useMemo(() => createChartSrcDoc(chartConfigObject4), [chartConfigObject4, tvWidgetBaseStyle]);
-
+  // Old heatmapConfigObject and heatmapSrcDoc removed as logic is now in specific heatmap components
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle}
@@ -232,25 +199,11 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8 mb-4"> {/* Adjusted to 8 cols */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
+        <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
         
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <TabsTrigger value="chart" className="flex items-center data-[state=active]:text-foreground">
-              <LineChart className="mr-2 h-4 w-4" />Chart
-            </TabsTrigger>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {chartLayoutOptions.map(option => (
-              <DropdownMenuItem key={option.value} onSelect={() => setSelectedChartLayout(option.value)}>
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <TabsTrigger value="heatmap" className="flex items-center data-[state=active]:text-foreground">
@@ -265,11 +218,10 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        
+
         <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
-        <TabsTrigger value="live_ops"><Activity className="mr-2" />Live Ops</TabsTrigger> {/* Added Live Ops Tab */}
       </TabsList>
 
       <TabsContent value="blog" className="flex-grow overflow-auto">
@@ -280,65 +232,19 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className={`grid w-full h-full ${
-            selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
-            selectedChartLayout === 2 ? 'grid-cols-1 md:grid-cols-2 grid-rows-1 gap-0' :
-            selectedChartLayout === 4 ? 'grid-cols-1 md:grid-cols-2 grid-rows-2 gap-0' : ''
-          }`}>
-          {selectedChartLayout >= 1 && (
-            <div className="w-full h-full overflow-hidden">
-              <iframe
-                key={`chart-iframe-1-${currentSymbol}`}
-                srcDoc={chartSrcDoc1}
-                title="TradingView Chart 1"
-                className="w-full h-full"
-                style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
-            </div>
-          )}
-          {selectedChartLayout >= 2 && (
-            <div className="w-full h-full overflow-hidden">
-              <iframe
-                key="chart-iframe-2"
-                srcDoc={chartSrcDoc2}
-                title="TradingView Chart 2"
-                className="w-full h-full"
-                style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
-            </div>
-          )}
-          {selectedChartLayout === 4 && (
-            <>
-              <div className="w-full h-full overflow-hidden">
-                <iframe
-                  key="chart-iframe-3"
-                  srcDoc={chartSrcDoc3}
-                  title="TradingView Chart 3"
-                  className="w-full h-full"
-                  style={{ border: 'none' }}
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                />
-              </div>
-              <div className="w-full h-full overflow-hidden">
-                <iframe
-                  key="chart-iframe-4"
-                  srcDoc={chartSrcDoc4}
-                  title="TradingView Chart 4"
-                  className="w-full h-full"
-                  style={{ border: 'none' }}
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                />
-              </div>
-            </>
-          )}
-        </div>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
+        <iframe
+          key={`adv-chart-iframe-${currentSymbol}`}
+          srcDoc={chartSrcDoc}
+          title="TradingView Advanced Chart"
+          className={WIDGET_CONTAINER_CLASS}
+          style={{ border: 'none' }}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        />
       </TabsContent>
 
-      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0">
+      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0"> {/* Modified to use mt-0 and min-h-0 for consistency with how dropdown content areas are usually styled for full height */}
+        <div className="flex-grow overflow-hidden min-h-0"> {/* This div allows the selected heatmap to take full space */}
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -348,20 +254,20 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="options_screener" className="flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto"> 
+        <div className="h-full w-full overflow-auto">
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }} 
+              style={{ border: 'none', minHeight: '500px' }}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
       <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto"> 
+         <div className="h-full w-full overflow-auto">
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
@@ -376,14 +282,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
-
-       <TabsContent value="live_ops" className="mt-0 flex-grow overflow-hidden">
-        <AllTickersScreener />
-      </TabsContent>
     </Tabs>
   );
 };
 
 export default MainViews;
-
-    
