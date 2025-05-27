@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Botpress Webchat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <script src="https://cdn.botpress.cloud/webchat/v2.2/inject.js"></script>
+  <script>
+    window.botpressWebChat.init({
+      composerPlaceholder: "Ask me anything...",
+      botId: "ud08hcv3",
+      hostUrl: "https://cdn.botpress.cloud/webchat/v2.2",
+      messagingUrl: "https://messaging.botpress.cloud",
+      clientId: "ud08hcv3",
+      enableConversationDeletion: true,
+      showPoweredBy: false,
+      themeName: "prism",
+      theme: "prism",
+      stylesheet: "https://cdn.botpress.cloud/webchat/v2.2/themes/prism.css",
+      showCloseButton: true,
+    });
+
+    window.addEventListener("load", () => {
+      console.log("✅ iframe page loaded, trying to auto-open webchat");
+      setTimeout(() => {
+        if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
+          window.botpressWebChat.open();
+        } else {
+          console.warn("❌ botpressWebChat.open() not found.");
+        }
+      }, 500);
+    });
+  </script>
+</body>
+</html>

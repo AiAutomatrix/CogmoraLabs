@@ -1,15 +1,15 @@
 
 'use client';
 
-import React, { useMemo, useState } // Added useState
-  from 'react';
+import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Added
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
+import LiveOpportunitiesDashboard from './main-views/AllTickersScreener'; // Renamed for clarity if needed
 
 // Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
@@ -34,28 +34,34 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     { value: 'forex_heatmap', label: 'Forex Heatmap' },
   ];
 
+  const [selectedChartLayout, setSelectedChartLayout] = useState<number>(1);
+  const chartLayoutOptions = [
+    { value: 1, label: '1 Chart' },
+    { value: 2, label: '2 Charts' },
+    { value: 4, label: '4 Charts' },
+  ];
+
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: #222222; /* Match app's dark background */
+      background-color: #222222;
       box-sizing: border-box;
-      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
+      overflow: hidden;
     }
     *, *::before, *::after { box-sizing: inherit; }
-    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
+    .tradingview-widget-container {
       width: 100%;
       height: 100%;
       position: relative;
     }
-    .tradingview-widget-container__widget { /* Used by embed scripts */
+    .tradingview-widget-container__widget {
       width: 100% !important;
       height: 100% !important;
       overflow: hidden;
     }
-    /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
     ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
@@ -67,12 +73,10 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     .tradingview-widget-copyright a:hover { text-decoration: underline; }
   `, []);
 
-  const chartConfigObject = useMemo(() => ({
-    container_id: "technical-analysis-chart-demo",
+  const baseChartConfig = {
     width: "100%",
     height: "97%",
     autosize: true,
-    symbol: currentSymbol,
     interval: "180",
     timezone: "exchange",
     theme: "dark",
@@ -81,47 +85,75 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     hide_side_toolbar: true,
     allow_symbol_change: true,
     save_image: false,
-    studies: [
-        "StochasticRSI@tv-basicstudies",
-        "MASimple@tv-basicstudies"
-    ],
+    studies: ["StochasticRSI@tv-basicstudies", "MASimple@tv-basicstudies"],
     show_popup_button: true,
     popup_width: "1000",
     popup_height: "650",
     support_host: "https://www.tradingview.com",
     locale: "en",
     enable_publishing: false,
+  };
+
+  const chartConfig1 = useMemo(() => ({
+    ...baseChartConfig,
+    symbol: currentSymbol,
+    container_id: "tradingview-chart-1",
   }), [currentSymbol]);
 
-  const chartSrcDoc = useMemo(() => `
+  const chartConfig2 = useMemo(() => ({
+    ...baseChartConfig,
+    symbol: "BINANCE:ETHUSDT",
+    container_id: "tradingview-chart-2",
+    allow_symbol_change: true, // Allow individual symbol changes
+  }), []);
+
+  const chartConfig3 = useMemo(() => ({
+    ...baseChartConfig,
+    symbol: "BINANCE:XRPUSDT",
+    container_id: "tradingview-chart-3",
+    allow_symbol_change: true,
+  }), []);
+
+  const chartConfig4 = useMemo(() => ({
+    ...baseChartConfig,
+    symbol: "BINANCE:SOLUSDT",
+    container_id: "tradingview-chart-4",
+    allow_symbol_change: true,
+  }), []);
+
+  const generateChartSrcDoc = (config: any, style: string) => `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>${tvWidgetBaseStyle}</style>
+      <style>${style}</style>
     </head>
     <body>
       <div class="tradingview-widget-container">
-        <div id="${chartConfigObject.container_id}" style="width:100%; height:100%;"></div>
+        <div id="${config.container_id}" style="width:100%; height:100%;"></div>
         <div class="tradingview-widget-copyright">
             <a href="https://www.tradingview.com/" rel="noopener nofollow" target="_blank"><span>Track all markets on TradingView</span></a>
         </div>
       </div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
-        new TradingView.widget(${JSON.stringify(chartConfigObject)});
+        new TradingView.widget(${JSON.stringify(config)});
       </script>
     </body>
     </html>
-  `, [chartConfigObject, tvWidgetBaseStyle]);
+  `;
 
-  // Old heatmapConfigObject and heatmapSrcDoc removed as logic is now in specific heatmap components
+  const chartSrcDoc1 = useMemo(() => generateChartSrcDoc(chartConfig1, tvWidgetBaseStyle), [chartConfig1, tvWidgetBaseStyle]);
+  const chartSrcDoc2 = useMemo(() => generateChartSrcDoc(chartConfig2, tvWidgetBaseStyle), [chartConfig2, tvWidgetBaseStyle]);
+  const chartSrcDoc3 = useMemo(() => generateChartSrcDoc(chartConfig3, tvWidgetBaseStyle), [chartConfig3, tvWidgetBaseStyle]);
+  const chartSrcDoc4 = useMemo(() => generateChartSrcDoc(chartConfig4, tvWidgetBaseStyle), [chartConfig4, tvWidgetBaseStyle]);
+
 
   const screenerBaseStyle = useMemo(() => `
     ${tvWidgetBaseStyle}
     html, body {
-      overflow: auto !important; /* Allow scrolling for screeners */
+      overflow: auto !important;
     }
     ::-webkit-scrollbar { width: 24px !important; height: 24px !important; }
     ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
@@ -199,11 +231,25 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-7 mb-4">
-        <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
-        <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
-        <TabsTrigger value="chart"><LineChart className="mr-2" />Chart</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8">
+        <TabsTrigger value="blog"><Newspaper className="mr-2 h-4 w-4" />Blog</TabsTrigger>
+        <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</TabsTrigger>
         
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <TabsTrigger value="chart" className="flex items-center data-[state=active]:text-foreground">
+              <LineChart className="mr-2 h-4 w-4" />Chart
+            </TabsTrigger>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {chartLayoutOptions.map(option => (
+              <DropdownMenuItem key={option.value} onSelect={() => setSelectedChartLayout(option.value)}>
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <TabsTrigger value="heatmap" className="flex items-center data-[state=active]:text-foreground">
@@ -219,32 +265,79 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <TabsTrigger value="options_screener"><Settings2 className="mr-2" />Options</TabsTrigger>
-        <TabsTrigger value="crypto_screener"><ListFilter className="mr-2" />Crypto</TabsTrigger>
-        <TabsTrigger value="dex_screener"><SearchCode className="mr-2" />DEX</TabsTrigger>
+        <TabsTrigger value="options_screener"><Settings2 className="mr-2 h-4 w-4" />Options</TabsTrigger>
+        <TabsTrigger value="crypto_screener"><ListFilter className="mr-2 h-4 w-4" />Crypto</TabsTrigger>
+        <TabsTrigger value="dex_screener"><SearchCode className="mr-2 h-4 w-4" />DEX</TabsTrigger>
+        <TabsTrigger value="live_ops"><Activity className="mr-2 h-4 w-4" />Live Ops</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="blog" className="flex-grow overflow-auto">
+      <TabsContent value="blog" className="mt-0 flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="flex-grow overflow-auto">
+      <TabsContent value="dashboard" className="mt-0 flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
-      <TabsContent value="chart" className="flex-grow overflow-hidden">
-        <iframe
-          key={`adv-chart-iframe-${currentSymbol}`}
-          srcDoc={chartSrcDoc}
-          title="TradingView Advanced Chart"
-          className={WIDGET_CONTAINER_CLASS}
-          style={{ border: 'none' }}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        />
+      <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className={`grid w-full h-full gap-1 ${
+          selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
+          selectedChartLayout === 2 ? 'grid-cols-1 md:grid-cols-2 grid-rows-1' : // Adjusted for responsiveness
+          selectedChartLayout === 4 ? 'grid-cols-1 md:grid-cols-2 grid-rows-2' : '' // Adjusted for responsiveness
+        }`}>
+          {(selectedChartLayout >= 1) && (
+            <div className="w-full h-full overflow-hidden">
+              <iframe
+                key={`chart-1-${currentSymbol}`}
+                srcDoc={chartSrcDoc1}
+                title="TradingView Chart 1"
+                className="w-full h-full"
+                style={{ border: 'none' }}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
+            </div>
+          )}
+          {(selectedChartLayout >= 2) && (
+            <div className="w-full h-full overflow-hidden">
+              <iframe
+                key="chart-2-eth"
+                srcDoc={chartSrcDoc2}
+                title="TradingView Chart 2"
+                className="w-full h-full"
+                style={{ border: 'none' }}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
+            </div>
+          )}
+          {(selectedChartLayout === 4) && (
+            <>
+              <div className="w-full h-full overflow-hidden">
+                <iframe
+                  key="chart-3-xrp"
+                  srcDoc={chartSrcDoc3}
+                  title="TradingView Chart 3"
+                  className="w-full h-full"
+                  style={{ border: 'none' }}
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                />
+              </div>
+              <div className="w-full h-full overflow-hidden">
+                <iframe
+                  key="chart-4-sol"
+                  srcDoc={chartSrcDoc4}
+                  title="TradingView Chart 4"
+                  className="w-full h-full"
+                  style={{ border: 'none' }}
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                />
+              </div>
+            </>
+          )}
+        </div>
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-hidden"> {/* Keep existing className from working example */}
-        <div className="h-full w-full"> {/* This div allows the selected heatmap to take full space */}
+      <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
+        <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -253,7 +346,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden">
         <div className="h-full w-full overflow-auto">
             <iframe
               key="options-screener-iframe"
@@ -266,7 +359,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden">
          <div className="h-full w-full overflow-auto">
             <iframe
               key="crypto-screener-iframe"
@@ -279,13 +372,15 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
+      <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden">
         <DexScreenerContent />
+      </TabsContent>
+      
+      <TabsContent value="live_ops" className="mt-0 flex-grow overflow-hidden">
+        <LiveOpportunitiesDashboard />
       </TabsContent>
     </Tabs>
   );
 };
 
 export default MainViews;
-
-    

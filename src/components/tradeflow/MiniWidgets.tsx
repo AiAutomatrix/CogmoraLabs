@@ -25,7 +25,7 @@ type SelectedExchangeType = 'kucoin' | 'raydium' | 'pumpswap';
 
 const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
   const WIDGET_CONTAINER_CLASS = "h-full min-h-[500px] w-full";
-  const FIXED_HEIGHT_CLASS = "w-full h-[825px]"; 
+  const FIXED_HEIGHT_CLASS = "w-full h-[925px]"; 
 
   const [selectedExchange, setSelectedExchange] = useState<SelectedExchangeType>('kucoin');
 
