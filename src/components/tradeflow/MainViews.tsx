@@ -1,11 +1,12 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react'; // Added useState
+import React, { useMemo, useState } // Added useState
+  from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Added
-import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity } from 'lucide-react'; // Added SearchCode, Activity
+import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity } from 'lucide-react'; // Added Activity
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
@@ -19,14 +20,21 @@ import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
 
-
-// Props for MainViews - expecting currentSymbol for the chart
 interface MainViewsProps {
   currentSymbol: string;
 }
 
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
+
+  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
+  const heatmapViewOptions = [
+    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
+    { value: 'stock_market', label: 'Stock Market Heatmap' },
+    { value: 'etf_heatmap', label: 'ETF Heatmap' },
+    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
+    { value: 'forex_heatmap', label: 'Forex Heatmap' },
+  ];
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
@@ -61,7 +69,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     .tradingview-widget-copyright a:hover { text-decoration: underline; }
   `, []);
 
-  // State for chart layout
+  // Chart state and configurations
   const [selectedChartLayout, setSelectedChartLayout] = useState<number>(1);
   const chartLayoutOptions = [
     { value: 1, label: '1 Chart' },
@@ -69,10 +77,9 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     { value: 4, label: '4 Charts' },
   ];
 
-  // Chart Configurations
   const commonChartConfig = {
     width: "100%",
-    height: "100%", // Changed from 97% to fill grid cell
+    height: "100%",
     autosize: true,
     interval: "180",
     timezone: "exchange",
@@ -93,29 +100,28 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   const chartConfigObject1 = useMemo(() => ({
     ...commonChartConfig,
-    container_id: "tradingview-chart-1", // Unique ID
+    container_id: "tradingview-chart-1",
     symbol: currentSymbol,
   }), [currentSymbol, commonChartConfig]);
 
   const chartConfigObject2 = useMemo(() => ({
     ...commonChartConfig,
-    container_id: "tradingview-chart-2", // Unique ID
-    symbol: "BINANCE:ETHUSDT", // Default for 2nd chart
+    container_id: "tradingview-chart-2",
+    symbol: "BINANCE:ETHUSDT",
   }), [commonChartConfig]);
 
   const chartConfigObject3 = useMemo(() => ({
     ...commonChartConfig,
-    container_id: "tradingview-chart-3", // Unique ID
-    symbol: "BINANCE:XRPUSDT", // Default for 3rd chart
+    container_id: "tradingview-chart-3",
+    symbol: "BINANCE:XRPUSDT",
   }), [commonChartConfig]);
 
   const chartConfigObject4 = useMemo(() => ({
     ...commonChartConfig,
-    container_id: "tradingview-chart-4", // Unique ID
-    symbol: "BINANCE:SOLUSDT", // Default for 4th chart
+    container_id: "tradingview-chart-4",
+    symbol: "BINANCE:SOLUSDT",
   }), [commonChartConfig]);
 
-  // Function to create srcDoc for a chart
   const createChartSrcDoc = (config: any) => `
     <!DOCTYPE html>
     <html lang="en">
@@ -145,18 +151,8 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartSrcDoc4 = useMemo(() => createChartSrcDoc(chartConfigObject4), [chartConfigObject4, tvWidgetBaseStyle]);
 
 
-  // State and options for Heatmap dropdown
-  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
-  const heatmapViewOptions = [
-    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
-    { value: 'stock_market', label: 'Stock Market Heatmap' },
-    { value: 'etf_heatmap', label: 'ETF Heatmap' },
-    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
-    { value: 'forex_heatmap', label: 'Forex Heatmap' },
-  ];
-
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle} 
+    ${tvWidgetBaseStyle}
     html, body {
       overflow: auto !important; /* Allow scrolling for screeners */
     }
@@ -172,7 +168,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock", 
+    screener_type: "stock",
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -236,7 +232,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8"> {/* Updated to 8 cols */}
+      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8 mb-4"> {/* Adjusted to 8 cols */}
         <TabsTrigger value="blog"><Newspaper className="mr-2" />Blog</TabsTrigger>
         <TabsTrigger value="dashboard"><LayoutDashboard className="mr-2" />Dashboard</TabsTrigger>
         
@@ -276,11 +272,11 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="live_ops"><Activity className="mr-2" />Live Ops</TabsTrigger> {/* Added Live Ops Tab */}
       </TabsList>
 
-      <TabsContent value="blog" className="mt-0 flex-grow overflow-auto">
+      <TabsContent value="blog" className="flex-grow overflow-auto">
         <BlogContent />
       </TabsContent>
 
-      <TabsContent value="dashboard" className="mt-0 flex-grow overflow-auto">
+      <TabsContent value="dashboard" className="flex-grow overflow-auto">
         <DashboardContent />
       </TabsContent>
 
@@ -342,7 +338,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0"> {/* This div ensures the content fills the TabsContent */}
+        <div className="flex-grow overflow-hidden min-h-0">
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -351,7 +347,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden">
+      <TabsContent value="options_screener" className="flex-grow overflow-hidden">
         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
@@ -364,7 +360,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden">
+      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden">
          <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
@@ -377,7 +373,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden">
+      <TabsContent value="dex_screener" className="flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
 
@@ -389,3 +385,5 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 };
 
 export default MainViews;
+
+    
