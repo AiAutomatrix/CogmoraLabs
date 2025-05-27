@@ -4,12 +4,11 @@
 import React, { useMemo, useState } from 'react'; // Added useState
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Added
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Newspaper, LayoutDashboard, LineChart, Columns, ListFilter, Settings2, SearchCode, Activity } from 'lucide-react';
 import BlogContent from './main-views/BlogContent';
 import DashboardContent from './main-views/DashboardContent';
 import DexScreenerContent from './main-views/DexScreenerContent';
-import LiveOpportunitiesDashboard from './main-views/AllTickersScreener'; // Renamed for clarity if needed
 
 // Import individual heatmap components
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
@@ -17,6 +16,8 @@ import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
+import AllTickersScreener from './main-views/AllTickersScreener';
+
 
 interface MainViewsProps {
   currentSymbol: string;
@@ -25,43 +26,28 @@ interface MainViewsProps {
 const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full min-h-[500px] max-h-[calc(100vh-200px)] overflow-auto";
 
-  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
-  const heatmapViewOptions = [
-    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
-    { value: 'stock_market', label: 'Stock Market Heatmap' },
-    { value: 'etf_heatmap', label: 'ETF Heatmap' },
-    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
-    { value: 'forex_heatmap', label: 'Forex Heatmap' },
-  ];
-
-  const [selectedChartLayout, setSelectedChartLayout] = useState<number>(1);
-  const chartLayoutOptions = [
-    { value: 1, label: '1 Chart' },
-    { value: 2, label: '2 Charts' },
-    { value: 4, label: '4 Charts' },
-  ];
-
   const tvWidgetBaseStyle = useMemo(() => `
     html, body {
       width: 100%;
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: #222222;
+      background-color: #222222; /* Match app's dark background */
       box-sizing: border-box;
-      overflow: hidden;
+      overflow: hidden; /* Prevent scrollbars on html/body of iframe */
     }
     *, *::before, *::after { box-sizing: inherit; }
-    .tradingview-widget-container {
+    .tradingview-widget-container { /* Used by embed scripts like heatmap/screener and our chart container */
       width: 100%;
       height: 100%;
       position: relative;
     }
-    .tradingview-widget-container__widget {
+    .tradingview-widget-container__widget { /* Used by embed scripts */
       width: 100% !important;
       height: 100% !important;
       overflow: hidden;
     }
+    /* Default scrollbar style for heatmap - can be overridden for screeners */
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: #2d3748; border-radius: 12px; }
     ::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 12px; border: 3px solid #2d3748; }
@@ -72,6 +58,24 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     .tradingview-widget-copyright a { color:#9db2bd; text-decoration: none; }
     .tradingview-widget-copyright a:hover { text-decoration: underline; }
   `, []);
+
+  // State for chart layout
+  const [selectedChartLayout, setSelectedChartLayout] = useState<number>(1);
+  const chartLayoutOptions = [
+    { value: 1, label: '1 Chart' },
+    { value: 2, label: '2 Charts' },
+    { value: 4, label: '4 Charts' },
+  ];
+
+  // State for heatmap view
+  const [selectedHeatmapView, setSelectedHeatmapView] = useState<string>('crypto_coins');
+  const heatmapViewOptions = [
+    { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
+    { value: 'stock_market', label: 'Stock Market Heatmap' },
+    { value: 'etf_heatmap', label: 'ETF Heatmap' },
+    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
+    { value: 'forex_heatmap', label: 'Forex Heatmap' },
+  ];
 
   const baseChartConfig = {
     width: "100%",
@@ -96,30 +100,27 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
 
   const chartConfig1 = useMemo(() => ({
     ...baseChartConfig,
-    symbol: currentSymbol,
+    symbol: currentSymbol, // Main chart uses the dynamic symbol
     container_id: "tradingview-chart-1",
-  }), [currentSymbol]);
+  }), [currentSymbol, baseChartConfig]); // Added baseChartConfig to dependencies
 
   const chartConfig2 = useMemo(() => ({
     ...baseChartConfig,
-    symbol: "BINANCE:ETHUSDT",
+    symbol: "BINANCE:ETHUSDT", // Default symbol for second chart
     container_id: "tradingview-chart-2",
-    allow_symbol_change: true, // Allow individual symbol changes
-  }), []);
+  }), [baseChartConfig]);
 
   const chartConfig3 = useMemo(() => ({
     ...baseChartConfig,
-    symbol: "BINANCE:XRPUSDT",
+    symbol: "BINANCE:XRPUSDT", // Default symbol for third chart
     container_id: "tradingview-chart-3",
-    allow_symbol_change: true,
-  }), []);
+  }), [baseChartConfig]);
 
   const chartConfig4 = useMemo(() => ({
     ...baseChartConfig,
-    symbol: "BINANCE:SOLUSDT",
+    symbol: "BINANCE:SOLUSDT", // Default symbol for fourth chart
     container_id: "tradingview-chart-4",
-    allow_symbol_change: true,
-  }), []);
+  }), [baseChartConfig]);
 
   const generateChartSrcDoc = (config: any, style: string) => `
     <!DOCTYPE html>
@@ -149,11 +150,10 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartSrcDoc3 = useMemo(() => generateChartSrcDoc(chartConfig3, tvWidgetBaseStyle), [chartConfig3, tvWidgetBaseStyle]);
   const chartSrcDoc4 = useMemo(() => generateChartSrcDoc(chartConfig4, tvWidgetBaseStyle), [chartConfig4, tvWidgetBaseStyle]);
 
-
   const screenerBaseStyle = useMemo(() => `
-    ${tvWidgetBaseStyle}
+    ${tvWidgetBaseStyle} 
     html, body {
-      overflow: auto !important;
+      overflow: auto !important; /* Allow scrolling for screeners */
     }
     ::-webkit-scrollbar { width: 24px !important; height: 24px !important; }
     ::-webkit-scrollbar-track { background: #1e222d; border-radius: 10px; }
@@ -167,7 +167,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     width: "100%",
     height: "100%",
     defaultColumn: "overview",
-    screener_type: "stock",
+    screener_type: "stock", 
     displayCurrency: "USD",
     colorTheme: "dark",
     locale: "en",
@@ -229,6 +229,13 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
     </html>
   `, [cryptoScreenerConfigObject, screenerBaseStyle]);
 
+  const chartGridClasses = 
+    selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
+    selectedChartLayout === 2 ? 'grid-cols-1 md:grid-cols-2 grid-rows-1' :
+    selectedChartLayout === 4 ? 'grid-cols-1 md:grid-cols-2 grid-rows-2' : '';
+  
+  const chartGapClass = selectedChartLayout === 4 ? 'gap-0' : 'gap-1';
+
   return (
     <Tabs defaultValue="dashboard" className="w-full h-full flex flex-col">
       <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-8">
@@ -269,6 +276,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="crypto_screener"><ListFilter className="mr-2 h-4 w-4" />Crypto</TabsTrigger>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2 h-4 w-4" />DEX</TabsTrigger>
         <TabsTrigger value="live_ops"><Activity className="mr-2 h-4 w-4" />Live Ops</TabsTrigger>
+
       </TabsList>
 
       <TabsContent value="blog" className="mt-0 flex-grow overflow-auto">
@@ -280,11 +288,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="chart" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className={`grid w-full h-full gap-1 ${
-          selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
-          selectedChartLayout === 2 ? 'grid-cols-1 md:grid-cols-2 grid-rows-1' : // Adjusted for responsiveness
-          selectedChartLayout === 4 ? 'grid-cols-1 md:grid-cols-2 grid-rows-2' : '' // Adjusted for responsiveness
-        }`}>
+        <div className={`grid w-full h-full ${chartGapClass} ${chartGridClasses}`}>
           {(selectedChartLayout >= 1) && (
             <div className="w-full h-full overflow-hidden">
               <iframe
@@ -300,7 +304,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
           {(selectedChartLayout >= 2) && (
             <div className="w-full h-full overflow-hidden">
               <iframe
-                key="chart-2-eth"
+                key="chart-2-eth" // Key should be stable if content is stable, or change if content changes
                 srcDoc={chartSrcDoc2}
                 title="TradingView Chart 2"
                 className="w-full h-full"
@@ -337,7 +341,7 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="heatmap" className="mt-0 flex-grow flex flex-col overflow-hidden min-h-0">
-        <div className="flex-grow overflow-hidden min-h-0">
+        <div className="flex-grow overflow-hidden min-h-0"> {/* This div takes the space */}
           {selectedHeatmapView === 'crypto_coins' && <CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'stock_market' && <StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
           {selectedHeatmapView === 'etf_heatmap' && <EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={WIDGET_CONTAINER_CLASS} />}
@@ -347,20 +351,20 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsContent>
 
       <TabsContent value="options_screener" className="mt-0 flex-grow overflow-hidden">
-        <div className="h-full w-full overflow-auto">
+        <div className="h-full w-full overflow-auto"> 
             <iframe
               key="options-screener-iframe"
               srcDoc={optionsScreenerSrcDoc}
               title="TradingView Options/Stock Screener"
               className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none', minHeight: '500px' }}
+              style={{ border: 'none', minHeight: '500px' }} 
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             />
         </div>
       </TabsContent>
 
       <TabsContent value="crypto_screener" className="mt-0 flex-grow overflow-hidden">
-         <div className="h-full w-full overflow-auto">
+         <div className="h-full w-full overflow-auto"> 
             <iframe
               key="crypto-screener-iframe"
               srcDoc={cryptoScreenerSrcDoc}
@@ -375,9 +379,9 @@ const MainViews: React.FC<MainViewsProps> = ({ currentSymbol }) => {
       <TabsContent value="dex_screener" className="mt-0 flex-grow overflow-hidden">
         <DexScreenerContent />
       </TabsContent>
-      
+
       <TabsContent value="live_ops" className="mt-0 flex-grow overflow-hidden">
-        <LiveOpportunitiesDashboard />
+        <AllTickersScreener />
       </TabsContent>
     </Tabs>
   );
