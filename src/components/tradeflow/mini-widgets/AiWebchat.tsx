@@ -28,20 +28,24 @@ const BotpressIframePage = () => {
 
     <script>
     window.addEventListener('load', function () {
-        if (typeof window.botpress !== 'undefined' && typeof window.botpress.open === 'function') {
-            console.log('Botpress SDK found, attempting to open chat.');
-            window.botpress.open();
-        } else {
-            console.error('Botpress SDK (window.botpress or window.botpress.open) not found after iframe load. Chat may not initialize or open.');
-            // For debugging, check if the core Botpress object from inject.js is present
-            if (typeof window.botpressWebChat !== 'undefined' && typeof window.botpressWebChat.init === 'function') {
-                 console.log('window.botpressWebChat.init seems to exist. The bot-specific script (files.bpcontent.cloud) should have called it. If window.botpress is still undefined, the bot-specific script might have failed or changed behavior.');
-            } else {
-                 console.error('window.botpressWebChat.init does not exist. The base Botpress inject.js (cdn.botpress.cloud) might have failed to load or changed.');
-            }
+      console.log('AiWebchat: Page loaded. Checking for window.botpress...');
+      if (window.botpress && typeof window.botpress.open === 'function') {
+        console.log('AiWebchat: window.botpress.open is available. Opening chat.');
+        try {
+          window.botpress.open();
+        } catch (e) {
+          console.error('AiWebchat: Error calling window.botpress.open():', e);
         }
+      } else {
+        console.error('AiWebchat: window.botpress or window.botpress.open is not available.');
+        if(window.botpress) {
+          console.log('AiWebchat: window.botpress object exists, but "open" method is missing. Botpress object:', window.botpress);
+        } else {
+          console.log('AiWebchat: window.botpress object itself is missing.');
+        }
+      }
     });
-    </script>
+  </script>
     </body>
     </html>
   `, []);
@@ -52,7 +56,7 @@ const BotpressIframePage = () => {
       title="Botpress Webchat"
       className="w-full h-full border-0"
       allow="microphone"
-      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+      sandbox="allow-scripts allow-forms allow-popups allow-modals allow-presentation"
     />
   );
 };
