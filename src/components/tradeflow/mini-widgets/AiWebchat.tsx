@@ -56,7 +56,7 @@ const BotpressIframePage = () => {
       title="Botpress Webchat"
       className="w-full h-full border-0"
       allow="microphone"
-      sandbox="allow-scripts allow-forms allow-popups allow-modals allow-presentation"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
     />
   );
 };
