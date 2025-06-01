@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -27,7 +28,18 @@ const BotpressIframePage = () => {
 
     <script>
     window.addEventListener('load', function () {
-        botpress.open();
+        if (typeof window.botpress !== 'undefined' && typeof window.botpress.open === 'function') {
+            console.log('Botpress SDK found, attempting to open chat.');
+            window.botpress.open();
+        } else {
+            console.error('Botpress SDK (window.botpress or window.botpress.open) not found after iframe load. Chat may not initialize or open.');
+            // For debugging, check if the core Botpress object from inject.js is present
+            if (typeof window.botpressWebChat !== 'undefined' && typeof window.botpressWebChat.init === 'function') {
+                 console.log('window.botpressWebChat.init seems to exist. The bot-specific script (files.bpcontent.cloud) should have called it. If window.botpress is still undefined, the bot-specific script might have failed or changed behavior.');
+            } else {
+                 console.error('window.botpressWebChat.init does not exist. The base Botpress inject.js (cdn.botpress.cloud) might have failed to load or changed.');
+            }
+        }
     });
     </script>
     </body>
