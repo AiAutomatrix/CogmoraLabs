@@ -14,20 +14,20 @@ interface MiniWidgetsProps {
   onSymbolChange: (symbol: string) => void;
 }
 
-const MiniWidgets: React.FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
+const MiniWidgets: FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
 
   return (
     <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2"> {/* Removed mb-4 */}
+      <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="tech_analysis"><TrendingUp className="mr-1 h-4 w-4 sm:mr-2" />Analysis</TabsTrigger>
         <TabsTrigger value="ai_chat"><MessageCircle className="mr-1 h-4 w-4 sm:mr-2" />AI Chat</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_analysis" className="flex-grow overflow-hidden min-h-0"> {/* Removed fixed height, added min-h-0 */}
+      <TabsContent value="tech_analysis" className="flex-grow overflow-hidden min-h-0 mt-0">
         <TradingViewTechAnalysisWidget symbol={currentSymbol} />
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="flex-grow overflow-hidden min-h-0"> {/* Removed fixed height, added min-h-0 */}
+      <TabsContent value="ai_chat" className="flex-grow overflow-hidden min-h-0 mt-0">
         <AiWebchat />
       </TabsContent>
     </Tabs>
