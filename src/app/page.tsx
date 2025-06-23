@@ -23,25 +23,18 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex-grow flex flex-col bg-background min-h-0">
       <header className="p-4 border-b border-border shadow-md sticky top-0 bg-background z-50">
         <div className="container mx-auto">
           <TradeFlowLogo />
         </div>
       </header>
 
-      {/* 
-        Main content area grows to fill space. 
-        Crucially, the 'container' and 'mx-auto' classes have been removed from this grid container 
-        to ensure it expands to the full width and height, providing a stable foundation for child components.
-      */}
-      <main className="flex-grow grid grid-cols-1 lg:grid-cols-3">
-        {/* Section for MainViews, takes 2 columns and is a flex container to allow its child to be h-full */}
-        <section className="lg:col-span-2 flex flex-col">
+      <main className="flex-grow flex flex-col lg:flex-row min-h-0">
+        <section className="lg:w-2/3 flex flex-col">
           <MainViews currentSymbol={activeSymbol} />
         </section>
-        {/* Aside for MiniWidgets, takes 1 column and is a flex container */}
-        <aside className="lg:col-span-1 flex flex-col lg:border-l border-border">
+        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border">
           <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
         </aside>
       </main>

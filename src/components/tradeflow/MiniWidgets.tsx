@@ -17,7 +17,7 @@ interface MiniWidgetsProps {
 const MiniWidgets: FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) => {
 
   return (
-    <Tabs defaultValue="ai_chat" className="w-full h-full flex flex-col">
+    <Tabs defaultValue="ai_chat" className="w-full flex-grow flex flex-col min-h-0">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="tech_analysis"><TrendingUp className="mr-1 h-4 w-4 sm:mr-2" />Analysis</TabsTrigger>
         <TabsTrigger value="ai_chat"><MessageCircle className="mr-1 h-4 w-4 sm:mr-2" />AI Chat</TabsTrigger>

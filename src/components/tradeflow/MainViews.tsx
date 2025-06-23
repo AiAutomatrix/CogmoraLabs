@@ -68,29 +68,10 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   }), []);
 
   // Specific chart configs
-  const chartConfigObject1 = useMemo(() => ({
-    ...baseChartConfig,
-    container_id: 'tradingview-chart-1',
-    symbol: currentSymbol,
-  }), [baseChartConfig, currentSymbol]);
-
-  const chartConfigObject2 = useMemo(() => ({
-    ...baseChartConfig,
-    container_id: 'tradingview-chart-2',
-    symbol: 'BINANCE:ETHUSDT',
-  }), [baseChartConfig]);
-
-  const chartConfigObject3 = useMemo(() => ({
-    ...baseChartConfig,
-    container_id: 'tradingview-chart-3',
-    symbol: 'BINANCE:SOLUSDT',
-  }), [baseChartConfig]);
-
-  const chartConfigObject4 = useMemo(() => ({
-    ...baseChartConfig,
-    container_id: 'tradingview-chart-4',
-    symbol: 'BINANCE:DOGEUSDT',
-  }), [baseChartConfig]);
+  const chartConfigObject1 = useMemo(() => ({ ...baseChartConfig, container_id: 'tradingview-chart-1', symbol: currentSymbol, }), [baseChartConfig, currentSymbol]);
+  const chartConfigObject2 = useMemo(() => ({ ...baseChartConfig, container_id: 'tradingview-chart-2', symbol: 'BINANCE:ETHUSDT', }), [baseChartConfig]);
+  const chartConfigObject3 = useMemo(() => ({ ...baseChartConfig, container_id: 'tradingview-chart-3', symbol: 'BINANCE:SOLUSDT', }), [baseChartConfig]);
+  const chartConfigObject4 = useMemo(() => ({ ...baseChartConfig, container_id: 'tradingview-chart-4', symbol: 'BINANCE:DOGEUSDT', }), [baseChartConfig]);
 
   // Function to create the HTML for an iframe
   const createChartSrcDoc = (config: any) => `
@@ -117,7 +98,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   const cryptoSrc = useMemo(() => makeScreenerSrc('crypto_mkt'), [screenerStyle]);
 
   return (
-    <Tabs defaultValue="chart" className="w-full h-full flex flex-col">
+    <Tabs defaultValue="chart" className="w-full flex-grow flex flex-col min-h-0">
       <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-5">
 
         {/* Chart dropdown */}
@@ -154,41 +135,20 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
           }`} >
           {/* Chart 1 */}
           <div className="w-full h-full overflow-hidden">
-            <iframe
-              key={`chart-${chartConfigObject1.symbol}-${chartConfigObject1.container_id}`}
-              srcDoc={chartSrcDoc1}
-              title="Chart 1"
-              className={WIDGET_CONTAINER_CLASS}
-              style={{ border: 'none' }}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-            />
+            <iframe key={`chart-${chartConfigObject1.symbol}-${chartConfigObject1.container_id}`} srcDoc={chartSrcDoc1} title="Chart 1" className={WIDGET_CONTAINER_CLASS} style={{ border: 'none' }} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
           </div>
 
           {/* Chart 2 */}
           {selectedChartLayout > 1 && (
             <div className="w-full h-full overflow-hidden">
-              <iframe
-                key={`chart-${chartConfigObject2.symbol}-${chartConfigObject2.container_id}`}
-                srcDoc={chartSrcDoc2}
-                title="Chart 2"
-                className={WIDGET_CONTAINER_CLASS}
-                style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
+              <iframe key={`chart-${chartConfigObject2.symbol}-${chartConfigObject2.container_id}`} srcDoc={chartSrcDoc2} title="Chart 2" className={WIDGET_CONTAINER_CLASS} style={{ border: 'none' }} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
             </div>
           )}
 
           {/* Chart 3 */}
           {(selectedChartLayout === 3 || selectedChartLayout === 4) && (
             <div className="w-full h-full overflow-hidden">
-              <iframe
-                key={`chart-${chartConfigObject3.symbol}-${chartConfigObject3.container_id}`}
-                srcDoc={chartSrcDoc3}
-                title="Chart 3"
-                className={WIDGET_CONTAINER_CLASS}
-                style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
+              <iframe key={`chart-${chartConfigObject3.symbol}-${chartConfigObject3.container_id}`} srcDoc={chartSrcDoc3} title="Chart 3" className={WIDGET_CONTAINER_CLASS} style={{ border: 'none' }} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
             </div>
           )}
 
@@ -199,14 +159,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
             </div>
           ) : selectedChartLayout === 4 ? (
             <div className="w-full h-full overflow-hidden">
-              <iframe
-                key={`chart-${chartConfigObject4.symbol}-${chartConfigObject4.container_id}`}
-                srcDoc={chartSrcDoc4}
-                title="Chart 4"
-                className={WIDGET_CONTAINER_CLASS}
-                style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              />
+              <iframe key={`chart-${chartConfigObject4.symbol}-${chartConfigObject4.container_id}`} srcDoc={chartSrcDoc4} title="Chart 4" className={WIDGET_CONTAINER_CLASS} style={{ border: 'none' }} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" />
             </div>
           ) : null}
         </div>
