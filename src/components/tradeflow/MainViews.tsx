@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -21,6 +22,7 @@ interface MainViewsProps {
 
 const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   const WIDGET_CONTAINER_CLASS = "w-full h-full";
+  const TABS_CONTENT_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
 
   // Heatmap state
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
@@ -69,25 +71,25 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   const chartConfigObject1 = useMemo(() => ({
     ...baseChartConfig,
     container_id: 'tradingview-chart-1',
-    symbol: currentSymbol, // Main chart uses the prop (BTC default)
+    symbol: currentSymbol,
   }), [baseChartConfig, currentSymbol]);
 
   const chartConfigObject2 = useMemo(() => ({
     ...baseChartConfig,
     container_id: 'tradingview-chart-2',
-    symbol: 'BINANCE:ETHUSDT', // Keep as ETH
+    symbol: 'BINANCE:ETHUSDT',
   }), [baseChartConfig]);
 
   const chartConfigObject3 = useMemo(() => ({
     ...baseChartConfig,
     container_id: 'tradingview-chart-3',
-    symbol: 'BINANCE:SOLUSDT', // Changed to SOL
+    symbol: 'BINANCE:SOLUSDT',
   }), [baseChartConfig]);
 
   const chartConfigObject4 = useMemo(() => ({
     ...baseChartConfig,
     container_id: 'tradingview-chart-4',
-    symbol: 'BINANCE:DOGEUSDT', // Changed to DOGE
+    symbol: 'BINANCE:DOGEUSDT',
   }), [baseChartConfig]);
 
   // Function to create the HTML for an iframe
@@ -113,9 +115,6 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
     </div></body></html>`;
   const optionsSrc = useMemo(() => makeScreenerSrc('stock'), [screenerStyle]);
   const cryptoSrc = useMemo(() => makeScreenerSrc('crypto_mkt'), [screenerStyle]);
-
-  // Consistent TabContent styling
-  const TABS_CONTENT_CLASS = "mt-0 flex-grow flex flex-col overflow-hidden min-h-0";
 
   return (
     <Tabs defaultValue="chart" className="w-full h-full flex flex-col">

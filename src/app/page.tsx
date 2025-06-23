@@ -30,13 +30,13 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-grow container mx-auto p-4 flex flex-col">
+      <main className="flex-grow container mx-auto flex flex-col">
         {/* This div is the direct child of main, it needs to grow */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6 flex-grow"> {/* Changed to flex-grow */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 flex-grow"> {/* Removed gap */}
           <section className="lg:col-span-2 h-full flex flex-col"> {/* h-full is correct here as grid child */}
             <MainViews currentSymbol={activeSymbol} />
           </section>
-          <aside className="lg:col-span-1 h-full flex flex-col"> {/* h-full is correct here as grid child */}
+          <aside className="lg:col-span-1 h-full flex flex-col lg:border-l border-border"> {/* Added border for separation */}
             <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
           </aside>
         </div>
