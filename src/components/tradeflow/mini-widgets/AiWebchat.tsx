@@ -23,30 +23,19 @@ const BotpressIframePage = () => {
       <div id="webchat" />
       
       <!-- Load Botpress webchat script (v2.5) -->
-    <script src="https://cdn.botpress.cloud/webchat/v2.5/inject.js"></script>
-    <script src="https://files.bpcontent.cloud/2025/05/14/23/20250514232436-UD08HCV3.js"></script>
-
+    
+    
+    <script src="https://cdn.botpress.cloud/webchat/v3.0/inject.js" defer></script>
+    <script src="https://files.bpcontent.cloud/2025/06/23/16/20250623161452-3OQKFSWN.js" defer></script>
     <script>
-    window.addEventListener('load', function () {
-      console.log('AiWebchat: Page loaded. Checking for window.botpress...');
-      if (window.botpress && typeof window.botpress.open === 'function') {
-        console.log('AiWebchat: window.botpress.open is available. Opening chat.');
-        try {
-          window.botpress.open();
-        } catch (e) {
-          console.error('AiWebchat: Error calling window.botpress.open():', e);
-        }
-      } else {
-        console.error('AiWebchat: window.botpress or window.botpress.open is not available.');
-        if(window.botpress) {
-          console.log('AiWebchat: window.botpress object exists, but "open" method is missing. Botpress object:', window.botpress);
-        } else {
-          console.log('AiWebchat: window.botpress object itself is missing.');
-        }
-      }
-    });
-  </script>
-    </body>
+    // Your existing command (works in Studio)
+    window.botpress.open();
+    // Fallback for production (if first command fails)
+    if (typeof window.botpressWebChat !== 'undefined') {
+    window.botpressWebChat.sendEvent({ type: 'show' });
+    }
+    </script>
+
     </html>
   `, []);
 
