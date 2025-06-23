@@ -30,8 +30,12 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Main content area grows to fill space and is a grid container */}
-      <main className="flex-grow container mx-auto grid grid-cols-1 lg:grid-cols-3">
+      {/* 
+        Main content area grows to fill space. 
+        Crucially, the 'container' and 'mx-auto' classes have been removed from this grid container 
+        to ensure it expands to the full width and height, providing a stable foundation for child components.
+      */}
+      <main className="flex-grow grid grid-cols-1 lg:grid-cols-3">
         {/* Section for MainViews, takes 2 columns and is a flex container to allow its child to be h-full */}
         <section className="lg:col-span-2 flex flex-col">
           <MainViews currentSymbol={activeSymbol} />
