@@ -15,29 +15,27 @@
   </style>
 </head>
 <body>
-  <script src="https://cdn.botpress.cloud/webchat/v2.2/inject.js"></script>
+  <script src="https://cdn.botpress.cloud/webchat/v3.0/inject.js" defer></script>
+  <script src="https://files.bpcontent.cloud/2025/06/23/16/20250623161452-3OQKFSWN.js" defer></script>
   <script>
-    window.botpressWebChat.init({
-      composerPlaceholder: "Ask me anything...",
-      botId: "ud08hcv3",
-      hostUrl: "https://cdn.botpress.cloud/webchat/v2.2",
-      messagingUrl: "https://messaging.botpress.cloud",
-      clientId: "ud08hcv3",
-      enableConversationDeletion: true,
-      showPoweredBy: false,
-      themeName: "prism",
-      theme: "prism",
-      stylesheet: "https://cdn.botpress.cloud/webchat/v2.2/themes/prism.css",
-      showCloseButton: true,
-    });
-
     window.addEventListener("load", () => {
-      console.log("✅ iframe page loaded, trying to auto-open webchat");
+      console.log("✅ iframe page loaded, initializing and opening webchat");
+
       setTimeout(() => {
-        if (window.botpressWebChat && typeof window.botpressWebChat.open === 'function') {
-          window.botpressWebChat.open();
+        if (window.botpress) {
+          // Main open command
+          if (typeof window.botpress.open === 'function') {
+            window.botpress.open();
+            console.log("🟢 botpress.open() called");
+          }
+
+          // Additional 'show' event (some themes use this)
+          if (typeof window.botpress.sendEvent === 'function') {
+            window.botpress.sendEvent({ type: 'show' });
+            console.log("🟢 botpress.sendEvent({ type: 'show' }) sent");
+          }
         } else {
-          console.warn("❌ botpressWebChat.open() not found.");
+          console.warn("❌ botpress object not found.");
         }
       }, 500);
     });
