@@ -7,7 +7,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import DexScreenerContent from './main-views/DexScreenerContent';
 import ThreeChartAnalysisPanel from './main-views/ThreeChartAnalysisPanel';
-
 import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
 import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
@@ -22,6 +21,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   const FIXED_HEIGHT_CLASS = "h-[890px]";
   const BASE_CLASS = "w-full overflow-hidden";
 
+  const [activeTab, setActiveTab] = useState("heatmap");
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const heatmapViewOptions = [
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
@@ -79,8 +79,45 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   const cryptoSrc = useMemo(() => makeScreenerSrc('crypto_mkt'), [screenerStyle]);
 
   return (
-    <Tabs defaultValue="heatmap" className="w-full h-full flex flex-col p-0 m-0">
-      <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-5 mb-0 p-0">
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col p-0 m-0">
+      {/* 📱 Mobile Menus */}
+      <div className="w-full flex flex-col space-y-2 p-2 md:hidden">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
+            📊 Chart & Heatmap Views
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-full">
+            <DropdownMenuItem onSelect={() => setActiveTab('chart')}>Chart View</DropdownMenuItem>
+            {chartLayoutOptions.map(o => (
+              <DropdownMenuItem key={o.value} onSelect={() => {
+                setSelectedChartLayout(o.value);
+                setActiveTab('chart');
+              }}>{o.label}</DropdownMenuItem>
+            ))}
+            <DropdownMenuItem onSelect={() => setActiveTab('heatmap')}>Heatmap View</DropdownMenuItem>
+            {heatmapViewOptions.map(o => (
+              <DropdownMenuItem key={o.value} onSelect={() => {
+                setSelectedHeatmapView(o.value);
+                setActiveTab('heatmap');
+              }}>{o.label}</DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
+            📈 Screener Views
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-full">
+            <DropdownMenuItem onSelect={() => setActiveTab('options_screener')}>Options Screener</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setActiveTab('crypto_screener')}>Crypto Screener</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setActiveTab('dex_screener')}>DEX Screener</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* 🖥️ Desktop Tabs */}
+      <TabsList className="hidden md:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-5 mb-0 p-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <TabsTrigger value="chart" className="flex items-center"><LineChart className="mr-2"/>Chart</TabsTrigger>
@@ -104,6 +141,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2"/>DEX</TabsTrigger>
       </TabsList>
 
+      {/* 🔁 Tab Content */}
       <TabsContent value="chart" className="flex-grow overflow-hidden p-0 m-0">
         <div className={`grid w-full ${FIXED_HEIGHT_CLASS} gap-0 p-0 m-0 ${
           selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
