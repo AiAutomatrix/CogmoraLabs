@@ -30,11 +30,11 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-grow flex flex-col lg:flex-row min-h-0">
+      <main className="flex flex-col lg:flex-row flex-grow">
         <section className="lg:w-2/3 flex flex-col">
           <MainViews currentSymbol={activeSymbol} />
         </section>
-        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border">
+        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow min-h-[700px] lg:min-h-0">
           <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
         </aside>
       </main>
