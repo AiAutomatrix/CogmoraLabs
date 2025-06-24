@@ -34,7 +34,7 @@ export default function HomePage() {
         <section className="lg:w-2/3 flex flex-col">
           <MainViews currentSymbol={activeSymbol} />
         </section>
-        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow min-h-[700px] lg:min-h-0">
+        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow min-h-[900px] lg:min-h-0">
           <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
         </aside>
       </main>

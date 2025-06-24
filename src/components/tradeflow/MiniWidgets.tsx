@@ -23,11 +23,11 @@ const MiniWidgets: FC<MiniWidgetsProps> = ({ currentSymbol, onSymbolChange }) =>
         <TabsTrigger value="ai_chat"><MessageCircle className="mr-1 h-4 w-4 sm:mr-2" />AI Chat</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tech_analysis" className="flex-grow overflow-hidden min-h-0 mt-0">
+      <TabsContent value="tech_analysis" className="overflow-hidden min-h-0 mt-0 h-full">
         <TradingViewTechAnalysisWidget symbol={currentSymbol} />
       </TabsContent>
 
-      <TabsContent value="ai_chat" className="flex-grow overflow-hidden min-h-0 mt-0">
+      <TabsContent value="ai_chat" className="overflow-hidden min-h-0 mt-0 h-full">
         <AiWebchat />
       </TabsContent>
     </Tabs>
