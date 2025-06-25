@@ -18,7 +18,7 @@ interface MainViewsProps {
 }
 
 const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
-  const FIXED_HEIGHT_CLASS = "h-[890px]";
+  const FIXED_HEIGHT_CLASS = "h-[900px]";
   const BASE_CLASS = "w-full overflow-hidden";
 
   const [activeTab, setActiveTab] = useState("heatmap");

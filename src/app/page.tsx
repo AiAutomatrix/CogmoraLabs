@@ -1,7 +1,7 @@
 
 'use client';
 
-import TradeFlowLogo from '@/components/tradeflow/TradeFlowLogo';
+// import TradeFlowLogo from '@/components/tradeflow/TradeFlowLogo';
 import MainViews from '@/components/tradeflow/MainViews';
 import MiniWidgets from '@/components/tradeflow/MiniWidgets';
 import React, { useState } from 'react';
@@ -26,7 +26,7 @@ export default function HomePage() {
     <div className="flex-grow flex flex-col bg-background min-h-0">
       <header className="p-4 border-b border-border shadow-md sticky top-0 bg-background z-50">
         <div className="container mx-auto">
-          <TradeFlowLogo />
+          {/* <TradeFlowLogo /> */}
         </div>
       </header>
 
