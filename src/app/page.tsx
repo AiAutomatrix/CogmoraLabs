@@ -23,18 +23,18 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex-grow flex flex-col bg-background min-h-0">
-      <header className="p-4 border-b border-border shadow-md sticky top-0 bg-background z-50">
+    <div className="flex-grow flex flex-col bg-background min-h-0 overflow-y-auto">
+      <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
         <div className="container mx-auto">
           {/* <TradeFlowLogo /> */}
         </div>
       </header>
 
-      <main className="flex flex-col lg:flex-row flex-grow">
-        <section className="lg:w-2/3 flex flex-col">
+      <main className="flex flex-col lg:flex-row flex-grow h-full">
+        <section className="lg:w-2/3 flex flex-col h-full">
           <MainViews currentSymbol={activeSymbol} />
         </section>
-        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow min-h-[900px] lg:min-h-0">
+        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow lg:min-h-0 h-full overflow-y-auto">
           <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
         </aside>
       </main>

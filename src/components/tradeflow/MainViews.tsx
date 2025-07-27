@@ -18,8 +18,7 @@ interface MainViewsProps {
 }
 
 const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
-  const FIXED_HEIGHT_CLASS = "h-[900px]";
-  const BASE_CLASS = "w-full overflow-hidden";
+  const BASE_CLASS = "w-full overflow-hidden"; // Keep overflow-hidden for horizontal scroll if needed
 
   const [activeTab, setActiveTab] = useState("heatmap");
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
@@ -117,7 +116,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
       </div>
 
       {/* 🖥️ Desktop Tabs */}
-      <TabsList className="hidden md:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-5 mb-0 p-0">
+      <TabsList className="hidden md:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-5 mb-0 p-0 flex-shrink-0">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <TabsTrigger value="chart" className="flex items-center"><LineChart className="mr-2"/>Chart</TabsTrigger>
@@ -142,14 +141,14 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
       </TabsList>
 
       {/* 🔁 Tab Content */}
-      <TabsContent value="chart" className="flex-grow overflow-hidden p-0 m-0">
-        <div className={`grid w-full ${FIXED_HEIGHT_CLASS} gap-0 p-0 m-0 ${
+      <TabsContent value="chart" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+        <div className={`grid w-full gap-0 p-0 m-0 h-full ${
           selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
           selectedChartLayout === 2 ? 'grid-cols-2 grid-rows-1' :
           'grid-cols-2 grid-rows-2'
         }`}>
           {[1, 2, 3, 4].slice(0, selectedChartLayout === 3 ? 3 : selectedChartLayout).map((_, i) => (
-            <div key={i} className={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS} p-0 m-0`}>
+            <div key={i} className={`${BASE_CLASS} p-0 m-0 h-full`}>
               <iframe
                 srcDoc={chartSrcDoc}
                 title={`Chart ${i + 1}`}
@@ -160,36 +159,36 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
             </div>
           ))}
           {selectedChartLayout === 3 && (
-            <div className={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS} p-0 m-0`}>
+            <div className={`${BASE_CLASS} p-0 m-0 h-full`}>
               <ThreeChartAnalysisPanel />
             </div>
           )}
         </div>
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-hidden p-0 m-0">
-        <div className={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`}>
-          {selectedHeatmapView==='crypto_coins'&&<CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`} />}          
-          {selectedHeatmapView==='stock_market'&&<StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`} />}          
-          {selectedHeatmapView==='etf_heatmap'&&<EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`} />}          
-          {selectedHeatmapView==='forex_cross_rates'&&<ForexCrossRatesWidget tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`} />}          
-          {selectedHeatmapView==='forex_heatmap'&&<ForexHeatmapWidget tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`} />}          
+      <TabsContent value="heatmap" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+        <div className={`${BASE_CLASS} h-full`}>
+          {selectedHeatmapView==='crypto_coins'&&<CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
+          {selectedHeatmapView==='stock_market'&&<StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
+          {selectedHeatmapView==='etf_heatmap'&&<EtfHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
+          {selectedHeatmapView==='forex_cross_rates'&&<ForexCrossRatesWidget tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
+          {selectedHeatmapView==='forex_heatmap'&&<ForexHeatmapWidget tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-hidden p-0 m-0">
-        <div className={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`}>
+      <TabsContent value="options_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+        <div className={`${BASE_CLASS} h-full`}>
           <iframe srcDoc={optionsSrc} title="Options Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-hidden p-0 m-0">
-        <div className={`${BASE_CLASS} ${FIXED_HEIGHT_CLASS}`}>
+      <TabsContent value="crypto_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+        <div className={`${BASE_CLASS} h-full`}>
           <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
         </div>
       </TabsContent>
 
-      <TabsContent value="dex_screener" className="flex-grow overflow-hidden p-0 m-0">
+      <TabsContent value="dex_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
