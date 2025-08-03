@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 export default function HomePage() {
   const [activeSymbol, setActiveSymbol] = useState<string>('BINANCE:BTCUSDT'); // Default symbol, TradingView format
 
+  const [selectedCryptoScreener, setSelectedCryptoScreener] = useState('all_kucoin');
   const handleSymbolChange = (newSymbol: string) => {
     if (newSymbol && newSymbol.trim() !== '') {
       let formattedSymbol = newSymbol.toUpperCase().trim();
@@ -32,9 +33,13 @@ export default function HomePage() {
 
       <main className="flex flex-col lg:flex-row flex-grow h-full">
         <section className="lg:w-2/3 flex flex-col h-full">
-          <MainViews currentSymbol={activeSymbol} />
+          <MainViews
+            currentSymbol={activeSymbol}
+            selectedCryptoScreener={selectedCryptoScreener}
+            setSelectedCryptoScreener={setSelectedCryptoScreener}
+          />
         </section>
-        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow lg:min-h-0 h-full overflow-y-auto">
+        <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow h-[calc(100vh-8rem)] lg:h-full overflow-y-auto">
           <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
         </aside>
       </main>

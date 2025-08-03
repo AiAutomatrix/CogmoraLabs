@@ -9,8 +9,8 @@ body {
 @layer base {
   :root {
     /* Default light theme (won't be used if html has .dark) */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --background: 0 0% 0%; /* Pure Black */
+    --foreground: 0 0% 98%; /* White text for black background */
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
@@ -37,32 +37,32 @@ body {
   }
 
   .dark {
-    --background: 0 0% 13.3%; /* #222222 */
+    --background: 0 0% 0%; /* Pure Black */
     --foreground: 0 0% 98%; /* Light text for dark background */
 
-    --card: 0 0% 16%; /* Slightly lighter than background for cards */
+    --card: 0 0% 5%; /* Slightly lighter than background for cards */
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 16%;
+    --popover: 0 0% 5%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 270 100% 25.5%; /* #4B0082 Deep Indigo */
+    --primary: 200 100% 50%; /* Electric Blue */
     --primary-foreground: 0 0% 98%; /* Light text on primary */
 
-    --secondary: 0 0% 20%; /* Darker gray for secondary elements */
+    --secondary: 120 100% 45%; /* Neon Green */
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 0 0% 20%;
+    --muted: 0 0% 10%;
     --muted-foreground: 0 0% 60%; /* Lighter gray for muted text */
 
-    --accent: 180 100% 25.1%; /* #008080 Teal */
+    --accent: 330 100% 50%; /* Hot Pink */
     --accent-foreground: 0 0% 98%; /* Light text on accent */
 
     --destructive: 0 72.2% 50.6%; /* Adjusted destructive for dark theme */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 25%; /* Darker border */
-    --input: 0 0% 25%; /* Input background */
+    --border: 0 0% 15%; /* Darker border */
+    --input: 0 0% 15%; /* Input background */
     --ring: 180 100% 25.1%; /* Teal for rings */
     
     /* Chart colors for dark theme - can be adjusted further */

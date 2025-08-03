@@ -1,205 +1,174 @@
+"use client";
 
-'use client';
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { useKucoinAllTickersSocket } from "@/hooks/useKucoinAllTickersSocket";
-import type { DisplayTickerData, WebSocketStatus } from "@/types/websocket";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  CardHeader,
+  CardDescription,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
-  TableCaption,
 } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, CheckCircle, Loader2, WifiOff, ServerCrash, Search } from 'lucide-react';
-import { format } from 'date-fns';
 
-export function AllTickersScreener() {
-  const { processedTickers, websocketStatus } = useKucoinAllTickersSocket();
-  const [filterTerm, setFilterTerm] = useState('');
+export default function AllTickersScreener() {
+  type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
 
-  // Log when processedTickers update to see if data is flowing to UI
-  // useEffect(() => {
-  //    if (processedTickers.length > 0) {
-  //     console.log("AllTickersScreener: Received new processedTickers, count:", processedTickers.length, processedTickers.slice(0,2));
-  //   }
-  // }, [processedTickers]);
+  const { tickers, loading } = useKucoinTickers();
+  const [sortedTickers, setSortedTickers] = useState<KucoinTicker[]>([]);
+  const [sortConfig, setSortConfig] = useState<{
+    key: SortKey;
+    direction: "ascending" | "descending";
+  } | null>({ key: "volValue", direction: "descending" });
 
-  const filteredTickers = useMemo(() => {
-    if (!filterTerm.trim()) {
-      return processedTickers;
+  useEffect(() => {
+    setSortedTickers(tickers);
+  }, [tickers]);
+
+  const sortedMemo = useMemo(() => {
+    let sortableItems = [...sortedTickers];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        const aValue = parseFloat(a[sortConfig.key]);
+        const bValue = parseFloat(b[sortConfig.key]);
+        if (aValue < bValue) return sortConfig.direction === "ascending" ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === "ascending" ? 1 : -1;
+        return 0;
+      });
     }
-    const lowerFilterTerm = filterTerm.toLowerCase();
-    return processedTickers.filter(ticker =>
-      ticker.symbol.toLowerCase().includes(lowerFilterTerm)
+    return sortableItems;
+  }, [sortedTickers, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: "ascending" | "descending" = "descending";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "descending") {
+      direction = "ascending";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: SortKey) => {
+    if (!sortConfig || sortConfig.key !== key) return null;
+    return sortConfig.direction === "ascending" ? (
+      <ArrowUp className="ml-1 h-3 w-3 inline" />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3 inline" />
     );
-  }, [processedTickers, filterTerm]);
-
-  const formatPrice = (price: number | null) => {
-    if (price === null) return '-';
-    if (price === 0) return '0.00';
-    if (Math.abs(price) < 0.000001) return price.toExponential(2);
-    if (Math.abs(price) < 0.01) return price.toFixed(6);
-    if (Math.abs(price) < 1) return price.toFixed(4);
-    return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-  
-  const formatChangeRate = (rate: number | null) => {
-    if (rate === null) return '-';
-    return `${(rate * 100).toFixed(2)}%`;
-  };
-  
-  const formatVolume = (volume: number | null) => {
-    if (volume === null) return '-';
-    return volume.toLocaleString(undefined, { maximumFractionDigits: 0 });
   };
 
-  const formatSize = (size: number | null) => {
-    if (size === null) return '-';
-    if (size === 0) return '0.00';
-    if (Math.abs(size) < 0.001 && size !== 0) return size.toPrecision(3);
-    return size.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
-  };
-
-
-  const renderStatusIndicator = () => {
-    switch (websocketStatus) {
-      case 'idle':
-        return <span className="text-xs text-muted-foreground flex items-center"><Loader2 className="animate-spin h-3 w-3 mr-1" /> Initializing...</span>;
-      case 'fetching_token':
-        return <span className="text-xs text-yellow-500 flex items-center"><Loader2 className="animate-spin h-3 w-3 mr-1" /> Fetching token...</span>;
-      case 'connecting_ws':
-        return <span className="text-xs text-orange-500 flex items-center"><Loader2 className="animate-spin h-3 w-3 mr-1" /> Connecting WS...</span>;
-      case 'welcomed':
-        return <span className="text-xs text-blue-500 flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Connected! Waiting for subscription...</span>;
-      case 'subscribing':
-        return <span className="text-xs text-purple-500 flex items-center"><Loader2 className="animate-spin h-3 w-3 mr-1" /> Subscribing...</span>;
-      case 'subscribed':
-        return <span className="text-xs text-green-600 font-semibold flex items-center"><CheckCircle className="h-3 w-3 mr-1" /> Live Data Streaming</span>;
-      case 'disconnected':
-        return <span className="text-xs text-red-500 flex items-center"><WifiOff className="h-3 w-3 mr-1" /> Disconnected. Reconnecting...</span>;
-      case 'error':
-        return <span className="text-xs text-red-700 font-semibold flex items-center"><ServerCrash className="h-3 w-3 mr-1" /> Connection Error</span>;
-      default:
-        return <span className="text-xs text-muted-foreground">{websocketStatus}</span>;
+  const formatPrice = (priceStr: string) => {
+    const price = parseFloat(priceStr);
+    if (isNaN(price)) return "N/A";
+    if (price < 10) {
+      if (price < 0.0001) return price.toFixed(8);
+      return price.toFixed(6);
     }
+    return price.toFixed(2);
   };
 
-  const isLoadingOrConnecting = !['subscribed', 'error', 'disconnected'].includes(websocketStatus) || (websocketStatus === 'subscribed' && processedTickers.length === 0);
+  const formatChange = (changeRateStr: string) => {
+    const changeRate = parseFloat(changeRateStr);
+    if (isNaN(changeRate)) return "N/A";
+    return `${changeRate >= 0 ? "+" : ""}${(changeRate * 100).toFixed(2)}%`;
+  };
 
+  const formatVolume = (volValueStr: string) => {
+    const volValue = parseFloat(volValueStr);
+    if (isNaN(volValue)) return "N/A";
+    if (volValue >= 1_000_000_000) return `${(volValue / 1_000_000_000).toFixed(2)}B`;
+    if (volValue >= 1_000_000) return `${(volValue / 1_000_000).toFixed(2)}M`;
+    if (volValue >= 1_000) return `${(volValue / 1_000).toFixed(2)}K`;
+    return volValue.toString();
+  };
+
+  const skeletonRows = (
+    <div className="space-y-4 px-6 py-3">
+      {[...Array(10)].map((_, index) => (
+        <Skeleton key={index} className="h-10 w-full" />
+      ))}
+    </div>
+  );
+
+  const tableHeaders = (
+    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+      <div className="text-left font-semibold text-muted-foreground col-span-1 sm:col-span-2">
+        Pair
+      </div>
+      {["last", "changeRate", "high", "low", "volValue"].map((key) => (
+        <div
+          key={key}
+          className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end col-span-1"
+          onClick={() => requestSort(key as SortKey)}
+        >
+          {{
+            last: "Price (USD)",
+            changeRate: "Change (24h)",
+            high: "High (24h)",
+            low: "Low (24h)",
+            volValue: "Volume (24h)",
+          }[key]}
+          {getSortIcon(key as SortKey)}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden">
-      <CardHeader className="border-b px-4 py-3">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-lg flex items-center">
-            <Search className="mr-2 h-5 w-5 text-primary" /> KuCoin All Tickers (Live)
-          </CardTitle>
-          {renderStatusIndicator()}
-        </div>
-        <Input
-          type="text"
-          placeholder="Filter by symbol (e.g., BTC-USDT)..."
-          value={filterTerm}
-          onChange={(e) => setFilterTerm(e.target.value)}
-          className="mt-2 h-9"
-          disabled={isLoadingOrConnecting && filteredTickers.length === 0}
-        />
+    <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
+      <CardHeader className="pb-2">
+        <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
+        <CardDescription>
+          Real-time data feed from KuCoin for all available trading pairs. Click headers to sort.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow overflow-y-auto p-0">
-        {isLoadingOrConnecting && filteredTickers.length === 0 ? (
-          <div className="space-y-1 p-2">
-            {[...Array(15)].map((_, i) => (
-              <Skeleton key={i} className="h-8 w-full rounded" />
-            ))}
-            <p className="py-2 text-xs text-muted-foreground text-center">
-              {websocketStatus === 'fetching_token' && 'Requesting connection token...'}
-              {websocketStatus === 'connecting_ws' && 'Establishing WebSocket connection...'}
-              {websocketStatus === 'welcomed' && 'Connection established, preparing to subscribe...'}
-              {websocketStatus === 'subscribing' && 'Subscribing to live ticker feed...'}
-              {websocketStatus === 'subscribed' && processedTickers.length === 0 && 'Subscription active, waiting for initial data...'}
-              {websocketStatus === 'idle' && 'Initializing connection...'}
-            </p>
-          </div>
-        ) : websocketStatus === 'error' ? (
-            <div className="flex flex-col items-center justify-center h-full text-destructive p-4">
-                <ServerCrash className="h-12 w-12 mb-2"/>
-                <p className="font-semibold">WebSocket Connection Error</p>
-                <p className="text-sm text-center text-muted-foreground">
-                    Could not establish or maintain WebSocket connection. Check console for details. Retrying...
-                </p>
-            </div>
-        ) : websocketStatus === 'disconnected' && filteredTickers.length === 0 ? (
-             <div className="flex flex-col items-center justify-center h-full text-red-500 p-4">
-                <WifiOff className="h-12 w-12 mb-2"/>
-                <p className="font-semibold">WebSocket Disconnected</p>
-                <p className="text-sm text-center text-muted-foreground">
-                    Attempting to reconnect. Check console for details...
-                </p>
-            </div>
-        ): !isLoadingOrConnecting && filteredTickers.length === 0 && filterTerm ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground p-4">
-            <p>No tickers matching your filter: "{filterTerm}"</p>
-          </div>
-        ): !isLoadingOrConnecting && filteredTickers.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground p-4">
-            <p>No ticker data received yet. Status: {websocketStatus}</p>
-          </div>
+
+      {tableHeaders}
+
+      <ScrollArea className="max-h-[350px] lg:max-h-[800px] overflow-auto rounded-md">
+        {loading ? (
+          skeletonRows
         ) : (
-          <Table className="min-w-full text-xs">
-            <TableCaption className="py-2 text-xs">
-              Live ticker data from KuCoin. {filterTerm && `(Filtered by "${filterTerm}")`}
-            </TableCaption>
-            <TableHeader className="sticky top-0 bg-card z-10">
-              <TableRow>
-                <TableHead className="py-2 px-3 font-medium">Symbol</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Last Price</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Size (Last)</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Change Rate (24h)</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Change Price (24h)</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">High (24h)</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Low (24h)</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Volume (24h)</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Best Bid</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Best Bid Size</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Best Ask</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Best Ask Size</TableHead>
-                <TableHead className="py-2 px-3 font-medium text-right">Last Update</TableHead>
-              </TableRow>
-            </TableHeader>
+          <Table>
             <TableBody>
-              {filteredTickers.map((ticker) => (
-                <TableRow key={ticker.symbol} className="hover:bg-muted/50">
-                  <TableCell className="py-1.5 px-3 font-mono font-medium">{ticker.symbol}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.lastPrice)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatSize(ticker.size)}</TableCell>
-                  <TableCell className={`py-1.5 px-3 font-mono text-right ${ticker.changeRate24h === null ? '' : ticker.changeRate24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {formatChangeRate(ticker.changeRate24h)}
+              {sortedMemo.map((token) => (
+                <TableRow
+                  key={token.symbol}
+                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                >
+                  <TableCell className="text-left font-medium col-span-1 sm:col-span-2">
+                    {token.symbolName}
                   </TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.changePrice24h)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.high24h)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatPrice(ticker.low24h)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatVolume(ticker.volume24h)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right text-green-500">{formatPrice(ticker.bestBid)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatSize(ticker.bestBidSize)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right text-red-500">{formatPrice(ticker.bestAsk)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right">{formatSize(ticker.bestAskSize)}</TableCell>
-                  <TableCell className="py-1.5 px-3 font-mono text-right text-muted-foreground">
-                    {ticker.lastUpdate ? format(ticker.lastUpdate, 'HH:mm:ss.SSS') : '-'}
+                  <TableCell className="text-right font-mono col-span-1">
+                    ${formatPrice(token.last)}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-mono col-span-1 ${
+                      parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"
+                    }`}
+                  >
+                    {formatChange(token.changeRate)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono col-span-1">
+                    ${formatPrice(token.high)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono col-span-1">
+                    ${formatPrice(token.low)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono col-span-1">
+                    {formatVolume(token.volValue)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
-      </CardContent>
-    </Card>
+      </ScrollArea>
+    </div>
   );
 }
-
-export default AllTickersScreener;

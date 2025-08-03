@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import DexScreenerContent from './main-views/DexScreenerContent';
 import ThreeChartAnalysisPanel from './main-views/ThreeChartAnalysisPanel';
@@ -11,13 +11,17 @@ import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
 import StockHeatmap from './main-views/heatmaps/StockHeatmap';
 import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
 import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
+import AllTickersScreener from './main-views/AllTickersScreener';
 import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
+import AllFuturesScreener from './main-views/AllFuturesScreener';
 
 interface MainViewsProps {
   currentSymbol: string;
+  selectedCryptoScreener: string;
+  setSelectedCryptoScreener: (screener: string) => void;
 }
 
-const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
+const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, setSelectedCryptoScreener }) => {
   const BASE_CLASS = "w-full overflow-hidden"; // Keep overflow-hidden for horizontal scroll if needed
 
   const [activeTab, setActiveTab] = useState("heatmap");
@@ -26,7 +30,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
     { value: 'stock_market', label: 'Stock Market Heatmap' },
     { value: 'etf_heatmap', label: 'ETF Heatmap' },
-    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
+    { value: 'forex_crossates', label: 'Forex Cross Rates' },
     { value: 'forex_heatmap', label: 'Forex Heatmap' },
   ];
 
@@ -37,6 +41,12 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
     { value: 3, label: '3 Charts + Analysis' },
     { value: 4, label: '4 Charts' },
   ];
+
+  const cryptoScreenerOptions = [
+ { value: 'all_kucoin', label: 'Kucoin Spot' },
+ { value: 'kucoin_futures', label: 'Kucoin Futures' },
+    { value: 'tradingview_crypto', label: 'TradingView' },
+ ];
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body { width:100%; height:100%; margin:0; padding:0; background-color:#222; box-sizing:border-box; overflow:hidden; }
@@ -53,7 +63,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
 
   const baseChartConfig = useMemo(() => ({
     width:'100%', height:'100%', autosize:true,
-    symbol:currentSymbol, interval:'180', timezone:'exchange', theme:'dark', style:'1',
+    symbol:currentSymbol, int_rerval:'180', timezone:'exchange', theme:'dark', style:'1',
     withdateranges:true, hide_side_toolbar:true, allow_symbol_change:true, save_image:false,
     studies:['StochasticRSI@tv-basicstudies','MASimple@tv-basicstudies'],
     show_popup_button:true, popup_width:'1000', popup_height:'650', support_host:'https://www.tradingview.com',
@@ -80,36 +90,33 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col p-0 m-0">
       {/* 📱 Mobile Menus */}
+      {/* Replace the entire div containing the two DropdownMenu components with a single new DropdownMenu */}
       <div className="w-full flex flex-col space-y-2 p-2 md:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
-            📊 Chart & Heatmap Views
+            Views
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-full">
+            <DropdownMenuLabel>Chart & Heatmap</DropdownMenuLabel>
             <DropdownMenuItem onSelect={() => setActiveTab('chart')}>Chart View</DropdownMenuItem>
             {chartLayoutOptions.map(o => (
               <DropdownMenuItem key={o.value} onSelect={() => {
                 setSelectedChartLayout(o.value);
                 setActiveTab('chart');
-              }}>{o.label}</DropdownMenuItem>
+              }}>{o.label} (Chart)</DropdownMenuItem>
             ))}
             <DropdownMenuItem onSelect={() => setActiveTab('heatmap')}>Heatmap View</DropdownMenuItem>
             {heatmapViewOptions.map(o => (
               <DropdownMenuItem key={o.value} onSelect={() => {
                 setSelectedHeatmapView(o.value);
                 setActiveTab('heatmap');
-              }}>{o.label}</DropdownMenuItem>
+              }}>{o.label} (Heatmap)</DropdownMenuItem>
             ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
-            📈 Screener Views
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-full">
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Screeners</DropdownMenuLabel>
             <DropdownMenuItem onSelect={() => setActiveTab('options_screener')}>Options Screener</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setActiveTab('crypto_screener')}>Crypto Screener</DropdownMenuItem>
+            {cryptoScreenerOptions.map(o => <DropdownMenuItem key={o.value} onSelect={() => {setSelectedCryptoScreener(o.value); setActiveTab('crypto_screener');}}>{o.label} (Crypto Screener)</DropdownMenuItem>)}
+
             <DropdownMenuItem onSelect={() => setActiveTab('dex_screener')}>DEX Screener</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -136,7 +143,14 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
         </DropdownMenu>
 
         <TabsTrigger value="options_screener"><Settings2 className="mr-2"/>Options</TabsTrigger>
-        <TabsTrigger value="crypto_screener"><ListFilter className="mr-2"/>Crypto</TabsTrigger>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <TabsTrigger value="crypto_screener" className="flex items-center"><ListFilter className="mr-2"/>Crypto</TabsTrigger>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {cryptoScreenerOptions.map(o=><DropdownMenuItem key={o.value} onSelect={()=>setSelectedCryptoScreener(o.value)}>{o.label}</DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <TabsTrigger value="dex_screener"><SearchCode className="mr-2"/>DEX</TabsTrigger>
       </TabsList>
 
@@ -182,9 +196,15 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
-        <div className={`${BASE_CLASS} h-full`}>
-          <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
+      <TabsContent value="crypto_screener" className="overflow-y-auto p-0 m-0 md:flex-grow md:h-full max-h-mobile">
+        <div className={`${BASE_CLASS} md:h-full`}>
+ {selectedCryptoScreener === 'all_kucoin' ? (
+ <AllTickersScreener />
+ ) : selectedCryptoScreener === 'kucoin_futures' ? (
+ <AllFuturesScreener />
+          ) : (
+            <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
+          )}
         </div>
       </TabsContent>
 
@@ -194,5 +214,6 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol }) => {
     </Tabs>
   );
 };
+
 
 export default MainViews;
