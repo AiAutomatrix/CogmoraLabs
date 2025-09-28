@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
 import DexScreenerContent from './screeners/DexScreenerContent';
-import ThreeChartAnalysisPanel from './ThreeChartAnalysisPanel';
+import ThreeChartAnalysisPanel from './analysis/ThreeChartAnalysisPanel';
 import CryptoCoinsHeatmap from './heatmaps/CryptoCoinsHeatmap';
 import StockHeatmap from './heatmaps/StockHeatmap';
 import EtfHeatmap from './heatmaps/EtfHeatmap';
@@ -30,7 +30,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
     { value: 'stock_market', label: 'Stock Market Heatmap' },
     { value: 'etf_heatmap', label: 'ETF Heatmap' },
-    { value: 'forex_crossates', label: 'Forex Cross Rates' },
+    { value: 'forex_cross_rates', label: 'Forex Cross Rates' },
     { value: 'forex_heatmap', label: 'Forex Heatmap' },
   ];
 
