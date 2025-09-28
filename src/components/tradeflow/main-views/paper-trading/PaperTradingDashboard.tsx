@@ -69,23 +69,23 @@ export default function PaperTradingDashboard() {
         <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Equity</p>
-            <p className="text-2xl font-bold">{formatCurrency(equity)}</p>
+            <p className="text-xl md:text-2xl font-bold">{formatCurrency(equity)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Available Cash</p>
-            <p className="text-2xl font-bold">{formatCurrency(balance)}</p>
+            <p className="text-xl md:text-2xl font-bold">{formatCurrency(balance)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Unrealized P&L</p>
-            <p className={`text-2xl font-bold ${totalUnrealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalUnrealizedPNL)}</p>
+            <p className={`text-xl md:text-2xl font-bold ${totalUnrealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalUnrealizedPNL)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Realized P&L</p>
-            <p className={`text-2xl font-bold ${totalRealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalRealizedPNL)}</p>
+            <p className={`text-xl md:text-2xl font-bold ${totalRealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalRealizedPNL)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Win Rate</p>
-            <p className="text-2xl font-bold">{winRate.toFixed(2)}%</p>
+            <p className="text-xl md:text-2xl font-bold">{winRate.toFixed(2)}%</p>
           </div>
         </CardContent>
       </Card>
@@ -150,24 +150,30 @@ export default function PaperTradingDashboard() {
                   <TableHead>Side</TableHead>
                   <TableHead className="text-right">Size</TableHead>
                   <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Value (USD)</TableHead>
                   <TableHead className="text-right">P&L at Close</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                 {tradeHistory.slice(0, rowsToShow).map(trade => (
-                   <TableRow key={trade.id}>
-                     <TableCell>{format(new Date(trade.timestamp), 'yyyy-MM-dd HH:mm:ss')}</TableCell>
-                     <TableCell>{trade.symbolName}</TableCell>
-                     <TableCell className={`capitalize ${trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</TableCell>
-                     <TableCell className="text-right">{trade.size.toFixed(6)}</TableCell>
-                     <TableCell className="text-right">{formatPrice(trade.side === 'buy' ? trade.entryPrice : trade.currentPrice)}</TableCell>
-                     {trade.status === 'closed' && trade.pnl !== undefined ? (
-                        <PNLCell pnl={trade.pnl} />
-                     ) : (
-                        <TableCell className="text-right">-</TableCell>
-                     )}
-                   </TableRow>
-                 ))}
+                 {tradeHistory.slice(0, rowsToShow).map(trade => {
+                   const tradePrice = trade.side === 'buy' ? trade.entryPrice : trade.currentPrice;
+                   const tradeValue = trade.size * tradePrice;
+                   return (
+                     <TableRow key={trade.id}>
+                       <TableCell>{format(new Date(trade.timestamp), 'yyyy-MM-dd HH:mm:ss')}</TableCell>
+                       <TableCell>{trade.symbolName}</TableCell>
+                       <TableCell className={`capitalize ${trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</TableCell>
+                       <TableCell className="text-right">{trade.size.toFixed(6)}</TableCell>
+                       <TableCell className="text-right">{formatPrice(tradePrice)}</TableCell>
+                       <TableCell className="text-right">{formatCurrency(tradeValue)}</TableCell>
+                       {trade.status === 'closed' && trade.pnl !== undefined ? (
+                          <PNLCell pnl={trade.pnl} />
+                       ) : (
+                          <TableCell className="text-right">-</TableCell>
+                       )}
+                     </TableRow>
+                   )
+                 })}
               </TableBody>
             </Table>
              {tradeHistory.length > rowsToShow && (
@@ -184,3 +190,5 @@ export default function PaperTradingDashboard() {
     </div>
   );
 }
+
+    
