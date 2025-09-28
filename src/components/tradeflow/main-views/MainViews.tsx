@@ -103,11 +103,13 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     ), [numCharts, multiChartSymbols, tvWidgetBaseStyle]
   );
   
+  const contentClassName = "flex-grow overflow-y-auto p-2 m-0 h-full";
+  const mobileContentClassName = "min-h-[500px] lg:min-h-0";
+  
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col p-0 m-0">
       {/* 📱 Mobile Menus */}
-      {/* Replace the entire div containing the two DropdownMenu components with a single new DropdownMenu */}
-      <div className="w-full flex flex-col space-y-2 p-2 md:hidden">
+      <div className="w-full flex flex-col space-y-2 p-2 lg:hidden">
         <DropdownMenu>
           <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
             Views
@@ -141,7 +143,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
       </div>
 
       {/* 🖥️ Desktop Tabs */}
-      <TabsList className="hidden md:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-6 mb-0 p-0 flex-shrink-0">
+      <TabsList className="hidden lg:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-6 mb-0 p-0 flex-shrink-0">
         <TabsTrigger value="paper_trading"><NotebookPen className="mr-2"/>Paper Trading</TabsTrigger>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -174,12 +176,12 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
       </TabsList>
 
       {/* 🔁 Tab Content */}
-      <TabsContent value="paper_trading" className="flex-grow overflow-y-auto p-2 m-0 h-full">
+      <TabsContent value="paper_trading" className={`${contentClassName} ${mobileContentClassName}`}>
         <PaperTradingDashboard />
       </TabsContent>
-      <TabsContent value="chart" className="flex-grow overflow-hidden p-0 m-0 h-full">
+      <TabsContent value="chart" className={`flex-grow overflow-hidden p-0 m-0 ${mobileContentClassName}`}>
         {/* Mobile Carousel */}
-        <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory h-full">
+        <div className="lg:hidden flex overflow-x-auto snap-x snap-mandatory h-full">
           {chartSrcDocs.map((srcDoc, i) => (
             <div key={i} className="snap-center flex-shrink-0 w-full h-full">
               <iframe
@@ -198,7 +200,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
           )}
         </div>
         {/* Desktop Grid */}
-        <div className={`hidden md:grid w-full gap-0 p-0 m-0 h-full ${
+        <div className={`hidden lg:grid w-full gap-0 p-0 m-0 h-full ${
           selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
           selectedChartLayout === 2 ? 'grid-cols-2 grid-rows-1' :
           'grid-cols-2 grid-rows-2'
@@ -222,7 +224,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
         </div>
       </TabsContent>
 
-      <TabsContent value="heatmap" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+      <TabsContent value="heatmap" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
           {selectedHeatmapView==='crypto_coins'&&<CryptoCoinsHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
           {selectedHeatmapView==='stock_market'&&<StockHeatmap tvWidgetBaseStyle={tvWidgetBaseStyle} WIDGET_CONTAINER_CLASS={`${BASE_CLASS} h-full`} />}          
@@ -232,13 +234,13 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
         </div>
       </TabsContent>
 
-      <TabsContent value="options_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+      <TabsContent value="options_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
           <iframe srcDoc={optionsSrc} title="Options Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+      <TabsContent value="crypto_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
  {selectedCryptoScreener === 'all_kucoin' ? (
  <AllTickersScreener />
@@ -250,7 +252,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
         </div>
       </TabsContent>
 
-      <TabsContent value="dex_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+      <TabsContent value="dex_screener" className={`${contentClassName} ${mobileContentClassName}`}>
         <DexScreenerContent />
       </TabsContent>
     </Tabs>
@@ -259,5 +261,3 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
 
 
 export default MainViews;
-
-    

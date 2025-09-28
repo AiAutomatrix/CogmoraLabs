@@ -26,7 +26,7 @@ export default function HomePage() {
 
   return (
     <PaperTradingProvider>
-      <div className="flex-grow flex flex-col bg-background min-h-0 h-full">
+      <div className="flex flex-col bg-background h-full">
         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
           <div className="container mx-auto">
             {/* <TradeFlowLogo /> */}
@@ -34,14 +34,14 @@ export default function HomePage() {
         </header>
 
         <main className="flex flex-col lg:flex-row flex-grow min-h-0">
-          <section className="lg:w-2/3 flex flex-col min-h-0">
+          <section className="flex flex-col lg:w-2/3 lg:min-h-0">
             <MainViews
               currentSymbol={activeSymbol}
               selectedCryptoScreener={selectedCryptoScreener}
               setSelectedCryptoScreener={setSelectedCryptoScreener}
             />
           </section>
-          <aside className="lg:w-1/3 flex flex-col lg:border-l border-border min-h-0">
+          <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[500px] lg:min-h-0">
             <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
           </aside>
         </main>
