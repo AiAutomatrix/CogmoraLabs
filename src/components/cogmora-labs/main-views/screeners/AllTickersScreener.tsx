@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -17,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
 import { ArrowUp, ArrowDown, ShoppingCart, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/componentsui/button";
+import { Button } from "@/components/ui/button";
 import { TradePopup } from "../../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 
