@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -14,8 +15,10 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, ShoppingCart } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { TradePopup } from "../../paper-trading/TradePopup";
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
@@ -26,6 +29,9 @@ export default function AllTickersScreener() {
     key: SortKey;
     direction: "ascending" | "descending";
   } | null>({ key: "volValue", direction: "descending" });
+
+  const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
+  const [selectedTicker, setSelectedTicker] = useState<KucoinTicker | null>(null);
 
   useEffect(() => {
     setSortedTickers(tickers);
@@ -62,6 +68,11 @@ export default function AllTickersScreener() {
     );
   };
 
+  const handleBuyClick = (ticker: KucoinTicker) => {
+    setSelectedTicker(ticker);
+    setIsTradePopupOpen(true);
+  };
+
   const formatPrice = (priceStr: string) => {
     const price = parseFloat(priceStr);
     if (isNaN(price)) return "N/A";
@@ -96,7 +107,7 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+    <div className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
       <div className="text-left font-semibold text-muted-foreground col-span-1 sm:col-span-2">
         Pair
       </div>
@@ -116,10 +127,12 @@ export default function AllTickersScreener() {
           {getSortIcon(key as SortKey)}
         </div>
       ))}
+      <div className="text-center font-semibold text-muted-foreground">Trade</div>
     </div>
   );
 
   return (
+    <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
       <CardHeader className="pb-2">
         <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
@@ -139,7 +152,7 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
                   <TableCell className="text-left font-medium col-span-1 sm:col-span-2">
                     {token.symbolName}
@@ -163,6 +176,16 @@ export default function AllTickersScreener() {
                   <TableCell className="text-right font-mono col-span-1">
                     {formatVolume(token.volValue)}
                   </TableCell>
+                   <TableCell className="text-center">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleBuyClick(token)}
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -170,5 +193,13 @@ export default function AllTickersScreener() {
         )}
       </ScrollArea>
     </div>
+    {selectedTicker && (
+        <TradePopup
+          isOpen={isTradePopupOpen}
+          onOpenChange={setIsTradePopupOpen}
+          ticker={selectedTicker}
+        />
+      )}
+    </>
   );
 }

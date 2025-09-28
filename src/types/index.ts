@@ -1,6 +1,31 @@
 
+
 import { z } from 'zod';
 
+export const PaperTradeSchema = z.object({
+  id: z.string(),
+  symbol: z.string(),
+  symbolName: z.string(),
+  size: z.number(), // Amount of tokens
+  entryPrice: z.number(),
+  currentPrice: z.number(),
+  side: z.enum(['buy', 'sell']),
+  timestamp: z.number(),
+  status: z.enum(['open', 'closed']),
+  pnl: z.number().optional(), // Profit and Loss on close
+});
+export type PaperTrade = z.infer<typeof PaperTradeSchema>;
+
+export const OpenPositionSchema = z.object({
+  symbol: z.string(),
+  symbolName: z.string(),
+  size: z.number(),
+  averageEntryPrice: z.number(),
+  currentPrice: z.number(),
+});
+export type OpenPosition = z.infer<typeof OpenPositionSchema>;
+
+// Original TradeSchema, keeping if used elsewhere, but papertrade is more specific
 export const TradeSchema = z.object({
   id: z.string(),
   cryptocurrency: z.string().min(1, "Cryptocurrency symbol is required (e.g., BTCUSDT)"),
@@ -42,7 +67,7 @@ export type TokenProfileItem = z.infer<typeof TokenProfileItemSchema>;
 export const TokenBoostItemSchema = z.object({
   url: z.string().url().optional().nullable(),
   chainId: z.string(),
-  tokenAddress: z.string(),
+  tokenAddress: z_string(),
   name: z.string().optional().nullable(), // Added for consistency
   amount: z.number().optional().nullable(),
   totalAmount: z.number().optional().nullable(),

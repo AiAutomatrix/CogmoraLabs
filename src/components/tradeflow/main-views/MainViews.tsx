@@ -1,10 +1,11 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
-import { LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
+import { LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import DexScreenerContent from './screeners/DexScreenerContent';
 import ThreeChartAnalysisPanel from './analysis/ThreeChartAnalysisPanel';
 import CryptoCoinsHeatmap from './heatmaps/CryptoCoinsHeatmap';
@@ -14,6 +15,7 @@ import ForexCrossRatesWidget from './heatmaps/ForexCrossRatesWidget';
 import AllTickersScreener from './screeners/AllTickersScreener';
 import ForexHeatmapWidget from './heatmaps/ForexHeatmapWidget';
 import AllFuturesScreener from './screeners/AllFuturesScreener';
+import PaperTradingDashboard from './paper-trading/PaperTradingDashboard';
 
 interface MainViewsProps {
   currentSymbol: string;
@@ -24,7 +26,7 @@ interface MainViewsProps {
 const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, setSelectedCryptoScreener }) => {
   const BASE_CLASS = "w-full overflow-hidden"; // Keep overflow-hidden for horizontal scroll if needed
 
-  const [activeTab, setActiveTab] = useState("heatmap");
+  const [activeTab, setActiveTab] = useState("paper_trading");
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const heatmapViewOptions = [
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
@@ -97,6 +99,8 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
             Views
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-full">
+            <DropdownMenuItem onSelect={() => setActiveTab('paper_trading')}>Paper Trading</DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuLabel>Chart & Heatmap</DropdownMenuLabel>
             <DropdownMenuItem onSelect={() => setActiveTab('chart')}>Chart View</DropdownMenuItem>
             {chartLayoutOptions.map(o => (
@@ -123,7 +127,8 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
       </div>
 
       {/* 🖥️ Desktop Tabs */}
-      <TabsList className="hidden md:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-5 mb-0 p-0 flex-shrink-0">
+      <TabsList className="hidden md:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-6 mb-0 p-0 flex-shrink-0">
+        <TabsTrigger value="paper_trading"><NotebookPen className="mr-2"/>Paper Trading</TabsTrigger>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <TabsTrigger value="chart" className="flex items-center"><LineChart className="mr-2"/>Chart</TabsTrigger>
@@ -155,6 +160,9 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
       </TabsList>
 
       {/* 🔁 Tab Content */}
+      <TabsContent value="paper_trading" className="flex-grow overflow-y-auto p-2 m-0 h-full">
+        <PaperTradingDashboard />
+      </TabsContent>
       <TabsContent value="chart" className="flex-grow overflow-y-auto p-0 m-0 h-full">
         <div className={`grid w-full gap-0 p-0 m-0 h-full ${
           selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
