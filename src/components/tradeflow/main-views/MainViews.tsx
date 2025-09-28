@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -43,6 +42,13 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     { value: 3, label: '3 Charts + Analysis' },
     { value: 4, label: '4 Charts' },
   ];
+  
+  const multiChartSymbols = useMemo(() => [
+    currentSymbol,
+    'BINANCE:ETHUSDT',
+    'BINANCE:XRPUSDT',
+    'BINANCE:SOLUSDT'
+  ], [currentSymbol]);
 
   const cryptoScreenerOptions = [
  { value: 'all_kucoin', label: 'Kucoin Spot' },
@@ -63,23 +69,23 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     .tradingview-widget-copyright a:hover { text-decoration:underline; }
   `, []);
 
-  const baseChartConfig = useMemo(() => ({
-    width:'100%', height:'100%', autosize:true,
-    symbol:currentSymbol, int_rerval:'180', timezone:'exchange', theme:'dark', style:'1',
-    withdateranges:true, hide_side_toolbar:true, allow_symbol_change:true, save_image:false,
-    studies:['StochasticRSI@tv-basicstudies','MASimple@tv-basicstudies'],
-    show_popup_button:true, popup_width:'1000', popup_height:'650', support_host:'https://www.tradingview.com',
-    locale:'en', enable_publishing:false
-  }), [currentSymbol]);
-
-  const chartConfig = useMemo(() => ({ ...baseChartConfig, container_id:'tv-chart-main' }), [baseChartConfig]);
-  const chartSrcDoc = useMemo(() => `
-    <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${tvWidgetBaseStyle}</style></head><body>
-    <div class="tradingview-widget-container"><div id="${chartConfig.container_id}" style="width:100%;height:100%;"></div>
-    <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" target="_blank">Track all markets on TradingView</a></div>
-    </div><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget(${JSON.stringify(chartConfig)});</script>
-    </body></html>
-  `, [chartConfig, tvWidgetBaseStyle]);
+  const createChartSrcDoc = (symbol: string, containerId: string) => {
+    const chartConfig = {
+      width: '100%', height: '100%', autosize: true,
+      symbol: symbol, interval: '180', timezone: 'exchange', theme: 'dark', style: '1',
+      withdateranges: true, hide_side_toolbar: true, allow_symbol_change: true, save_image: false,
+      studies: ['StochasticRSI@tv-basicstudies', 'MASimple@tv-basicstudies'],
+      show_popup_button: true, popup_width: '1000', popup_height: '650', support_host: 'https://www.tradingview.com',
+      locale: 'en', enable_publishing: false, container_id: containerId
+    };
+    return `
+      <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${tvWidgetBaseStyle}</style></head><body>
+      <div class="tradingview-widget-container"><div id="${containerId}" style="width:100%;height:100%;"></div>
+      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" target="_blank">Track all markets on TradingView</a></div>
+      </div><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget(${JSON.stringify(chartConfig)});</script>
+      </body></html>
+    `;
+  };
 
   const screenerStyle = useMemo(() => tvWidgetBaseStyle + ' html, body { overflow:auto!important; }', [tvWidgetBaseStyle]);
   const makeScreenerSrc = (type:string) => `<!DOCTYPE html><html><head><style>${screenerStyle}</style></head><body>
@@ -89,6 +95,13 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
   const optionsSrc = useMemo(() => makeScreenerSrc('stock'), [screenerStyle]);
   const cryptoSrc = useMemo(() => makeScreenerSrc('crypto_mkt'), [screenerStyle]);
 
+  const numCharts = selectedChartLayout === 3 ? 3 : selectedChartLayout;
+  const chartSrcDocs = useMemo(() =>
+    Array.from({ length: numCharts }, (_, i) =>
+      createChartSrcDoc(multiChartSymbols[i], `tv-chart-${i}`)
+    ), [numCharts, multiChartSymbols, tvWidgetBaseStyle]
+  );
+  
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col p-0 m-0">
       {/* 📱 Mobile Menus */}
@@ -164,15 +177,35 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
         <PaperTradingDashboard />
       </TabsContent>
       <TabsContent value="chart" className="flex-grow overflow-y-auto p-0 m-0 h-full">
-        <div className={`grid w-full gap-0 p-0 m-0 h-full ${
+        {/* Mobile Carousel */}
+        <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory h-full">
+          {chartSrcDocs.map((srcDoc, i) => (
+            <div key={i} className="snap-center flex-shrink-0 w-full h-full">
+              <iframe
+                srcDoc={srcDoc}
+                title={`Chart ${i + 1}`}
+                className="w-full h-full"
+                style={{ border: 'none' }}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              />
+            </div>
+          ))}
+          {selectedChartLayout === 3 && (
+            <div className="snap-center flex-shrink-0 w-full h-full">
+              <ThreeChartAnalysisPanel />
+            </div>
+          )}
+        </div>
+        {/* Desktop Grid */}
+        <div className={`hidden md:grid w-full gap-0 p-0 m-0 h-full ${
           selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
           selectedChartLayout === 2 ? 'grid-cols-2 grid-rows-1' :
           'grid-cols-2 grid-rows-2'
         }`}>
-          {[1, 2, 3, 4].slice(0, selectedChartLayout === 3 ? 3 : selectedChartLayout).map((_, i) => (
+          {chartSrcDocs.map((srcDoc, i) => (
             <div key={i} className={`${BASE_CLASS} p-0 m-0 h-full`}>
               <iframe
-                srcDoc={chartSrcDoc}
+                srcDoc={srcDoc}
                 title={`Chart ${i + 1}`}
                 className="w-full h-full"
                 style={{ border: 'none' }}
@@ -225,3 +258,5 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
 
 
 export default MainViews;
+
+    
