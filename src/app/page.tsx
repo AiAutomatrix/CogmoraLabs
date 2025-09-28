@@ -26,27 +26,27 @@ export default function HomePage() {
 
   return (
     <PaperTradingProvider>
-      <div className="flex-grow flex flex-col bg-background min-h-0">
+      <div className="flex-grow flex flex-col bg-background min-h-0 h-full">
         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
           <div className="container mx-auto">
             {/* <TradeFlowLogo /> */}
           </div>
         </header>
 
-        <main className="flex flex-col lg:flex-row flex-grow">
-          <section className="lg:w-2/3 flex flex-col">
+        <main className="flex flex-col lg:flex-row flex-grow min-h-0">
+          <section className="lg:w-2/3 flex flex-col min-h-0">
             <MainViews
               currentSymbol={activeSymbol}
               selectedCryptoScreener={selectedCryptoScreener}
               setSelectedCryptoScreener={setSelectedCryptoScreener}
             />
           </section>
-          <aside className="lg:w-1/3 flex flex-col lg:border-l border-border flex-grow h-[calc(100vh-4rem)] lg:h-auto lg:max-h-[calc(100vh-8rem)]">
+          <aside className="lg:w-1/3 flex flex-col lg:border-l border-border min-h-0">
             <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
           </aside>
         </main>
 
-        <footer className="p-4 border-t border-border text-center">
+        <footer className="p-4 border-t border-border text-center flex-shrink-0">
           <p className="text-sm text-muted-foreground">
             &copy; {new Date().getFullYear()} TradeFlow. All rights reserved. Market data provided by TradingView.
           </p>

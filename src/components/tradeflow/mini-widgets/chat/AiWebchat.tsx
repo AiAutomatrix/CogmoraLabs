@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -15,6 +16,10 @@ const BotpressIframePage = () => {
           margin: 0; padding: 0;
           width: 100%; height: 100%;
           overflow: hidden;
+        }
+        #webchat, #webchat > div {
+            height: 100% !important;
+            width: 100% !important;
         }
       </style>
     </head>
