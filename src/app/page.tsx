@@ -1,9 +1,9 @@
 
 'use client';
 
-// import TradeFlowLogo from '@/components/tradeflow/TradeFlowLogo';
-import MainViews from '@/components/tradeflow/main-views/MainViews';
-import MiniWidgets from '@/components/tradeflow/mini-widgets/MiniWidgets';
+// import CogmoraLabsLogo from '@/components/cogmora-labs/CogmoraLabsLogo';
+import MainViews from '@/components/cogmora-labs/main-views/MainViews';
+import MiniWidgets from '@/components/cogmora-labs/mini-widgets/MiniWidgets';
 import { PaperTradingProvider } from '@/context/PaperTradingContext';
 import React, { useState } from 'react';
 
@@ -29,7 +29,7 @@ export default function HomePage() {
       <div className="flex flex-col bg-background h-full">
         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
           <div className="container mx-auto">
-            {/* <TradeFlowLogo /> */}
+            {/* <CogmoraLabsLogo /> */}
           </div>
         </header>
 
@@ -48,7 +48,7 @@ export default function HomePage() {
 
         <footer className="p-4 border-t border-border text-center flex-shrink-0">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} TradeFlow. All rights reserved. Market data provided by TradingView.
+            &copy; {new Date().getFullYear()} Cogmora Labs. All rights reserved. Market data provided by TradingView.
           </p>
         </footer>
       </div>

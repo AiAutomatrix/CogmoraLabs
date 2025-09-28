@@ -82,7 +82,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       const { token, instanceServers } = tokenData.data;
       const endpoint = instanceServers[0].endpoint;
-      const connectId = `tradeflow-${Date.now()}`;
+      const connectId = `cogmora-labs-${Date.now()}`;
       
       const wsUrl = `${endpoint}?token=${token}&connectId=${connectId}`;
 
@@ -297,5 +297,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    

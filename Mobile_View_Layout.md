@@ -1,6 +1,6 @@
 # Mobile View Layout Documentation
 
-This document explains the mobile-first responsive layout of the TradeFlow application. The primary goal for mobile is to provide a user-friendly, single-column, vertically scrolling experience, ensuring all content is accessible and readable on smaller screens.
+This document explains the mobile-first responsive layout of the Cogmora Labs application. The primary goal for mobile is to provide a user-friendly, single-column, vertically scrolling experience, ensuring all content is accessible and readable on smaller screens.
 
 ## Core Philosophy
 

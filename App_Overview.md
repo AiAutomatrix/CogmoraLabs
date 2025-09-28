@@ -1,10 +1,10 @@
 # App Overview
 
-This document provides a high-level overview of the TradeFlow application's architecture, functionality, and data flow.
+This document provides a high-level overview of the Cogmora Labs application's architecture, functionality, and data flow.
 
 ## Architecture
 
-TradeFlow is a Next.js application built with the App Router, React, and TypeScript. It leverages Server Components and Server Actions for efficient data fetching and mutations. The user interface is constructed using **ShadCN UI** components and styled with **Tailwind CSS**. For AI-powered features, the application integrates with **Genkit**.
+Cogmora Labs is a Next.js application built with the App Router, React, and TypeScript. It leverages Server Components and Server Actions for efficient data fetching and mutations. The user interface is constructed using **ShadCN UI** components and styled with **Tailwind CSS**. For AI-powered features, the application integrates with **Genkit**.
 
 The application is structured into two main sections:
 - **Main View**: A larger section for displaying primary content like charts, heatmaps, and data screeners.
@@ -12,7 +12,7 @@ The application is structured into two main sections:
 
 ## Main View Structure
 
-The main view is managed by the `src/components/tradeflow/main-views/MainViews.tsx` component. It uses a `Tabs` component to switch between different views:
+The main view is managed by the `src/components/cogmora-labs/main-views/MainViews.tsx` component. It uses a `Tabs` component to switch between different views:
 
 - **Chart View**: Displays one or more TradingView chart widgets. The layout can be dynamically changed to show 1, 2, 3, or 4 charts. When the "3 Charts + Analysis" layout is selected, an additional analysis panel is shown.
 - **Heatmap View**: Renders various TradingView heatmap widgets, including Crypto Coins, Stocks, ETFs, and Forex. The view is selected via a dropdown menu.
@@ -25,7 +25,7 @@ The main view is managed by the `src/components/tradeflow/main-views/MainViews.t
 
 ## Mini View Structure
 
-The mini view, or sidebar, is managed by `src/components/tradeflow/mini-widgets/MiniWidgets.tsx`. It also uses a `Tabs` component to switch between:
+The mini view, or sidebar, is managed by `src/components/cogmora-labs/mini-widgets/MiniWidgets.tsx`. It also uses a `Tabs` component to switch between:
 
 - **Technical Analysis**: Displays the `TradingViewTechAnalysisWidget`, which provides technical indicators for the currently selected symbol.
 - **AI Chat**: Embeds a **Botpress Webchat** instance within an iframe (`AiWebchat.tsx`), allowing users to interact with an AI assistant.

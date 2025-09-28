@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'TradeFlow',
+  title: 'Cogmora Labs',
   description: 'Cryptocurrency trading analysis and tracking platform',
 };
 

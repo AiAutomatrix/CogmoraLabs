@@ -1,7 +1,7 @@
 
 # Paper Trading System Documentation
 
-This document outlines the architecture and functionality of the paper trading feature within the TradeFlow application. It enables users to simulate cryptocurrency trades using live data from KuCoin without risking real money.
+This document outlines the architecture and functionality of the paper trading feature within the Cogmora Labs application. It enables users to simulate cryptocurrency trades using live data from KuCoin without risking real money.
 
 ## How the Paper Trading Engine Works
 

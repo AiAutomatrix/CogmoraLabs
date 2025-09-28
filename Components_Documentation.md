@@ -1,10 +1,10 @@
 # Components Documentation
 
-This document provides details on each component used in the TradeFlow application.
+This document provides details on each component used in the Cogmora Labs application.
 
 ---
 
-## Main View Components (`/src/components/tradeflow/main-views/`)
+## Main View Components (`/src/components/cogmora-labs/main-views/`)
 
 ### `MainViews.tsx`
 - **Purpose**: The central component for the main content area. It manages the layout and content for the different views using a `Tabs` and `DropdownMenu` system.
@@ -63,7 +63,7 @@ These components render specific TradingView heatmap widgets inside an `iframe`.
 
 ---
 
-## Mini View Components (`/src/components/tradeflow/mini-widgets/`)
+## Mini View Components (`/src/components/cogmora-labs/mini-widgets/`)
 
 ### `MiniWidgets.tsx`
 - **Purpose**: The main component for the sidebar/mini-view area. It uses a `Tabs` component to switch between different widgets.

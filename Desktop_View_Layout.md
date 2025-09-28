@@ -1,6 +1,6 @@
 # Desktop View Layout Documentation
 
-This document outlines the structure and styling that creates the desktop-first, two-column layout for the TradeFlow application. The goal is a persistent, side-by-side view where the main content and sidebar widgets are always visible.
+This document outlines the structure and styling that creates the desktop-first, two-column layout for the Cogmora Labs application. The goal is a persistent, side-by-side view where the main content and sidebar widgets are always visible.
 
 ## Core Philosophy
 
