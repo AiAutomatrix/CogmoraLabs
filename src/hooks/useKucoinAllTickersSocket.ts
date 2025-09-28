@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 
 const KUCOIN_TICKERS_PROXY_URL = "/api/kucoin-tickers";
@@ -38,47 +38,58 @@ export function useKucoinTickers() {
   const [loading, setLoading] = useState(true);
   const { updatePositionPrice } = usePaperTrading();
 
-  useEffect(() => {
-    const fetchTickers = async () => {
-      try {
-        if (loading) { // Only show loader on initial fetch
-             setLoading(true);
-        }
-        const response = await fetch(KUCOIN_TICKERS_PROXY_URL);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch KuCoin tickers from proxy: ${response.statusText}`);
-        }
-        const data: KucoinAllTickersApiResponse = await response.json();
-        if (data && data.code === "200000" && data.data && data.data.ticker) {
-          const usdtTickers = data.data.ticker.filter(t => t.symbol.endsWith('-USDT'));
-          setTickers(usdtTickers);
-
-          // Update paper trading positions with the latest prices
-          usdtTickers.forEach(ticker => {
-            if (ticker.last) {
-              updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
-            }
-          });
-
-        } else {
-          console.error("Unexpected response structure:", data);
-          setTickers([]);
-        }
-      } catch (error) {
-        console.error("Error fetching tickers:", error);
-        setTickers([]);
-      } finally {
-        if (loading) {
-            setLoading(false);
-        }
+  const fetchTickers = useCallback(async (isInitialLoad: boolean) => {
+    try {
+      if (isInitialLoad) {
+        setLoading(true);
       }
-    };
+      const response = await fetch(KUCOIN_TICKERS_PROXY_URL);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch KuCoin tickers from proxy: ${response.statusText}`);
+      }
+      const data: KucoinAllTickersApiResponse = await response.json();
+      if (data && data.code === "200000" && data.data && data.data.ticker) {
+        const usdtTickers = data.data.ticker.filter(t => t.symbol.endsWith('-USDT'));
+        
+        setTickers(prevTickers => {
+          if (isInitialLoad || prevTickers.length === 0) {
+            return usdtTickers;
+          }
+          // Merge new data with old data for smoother updates
+          const tickersMap = new Map(prevTickers.map(t => [t.symbol, t]));
+          usdtTickers.forEach(newTicker => {
+            tickersMap.set(newTicker.symbol, newTicker);
+          });
+          return Array.from(tickersMap.values());
+        });
 
-    fetchTickers();
-    const interval = setInterval(fetchTickers, 5000); // Fetch every 5 seconds for more real-time feel
+        // Update paper trading positions with the latest prices
+        usdtTickers.forEach(ticker => {
+          if (ticker.last) {
+            updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
+          }
+        });
+
+      } else {
+        console.error("Unexpected response structure:", data);
+        if (isInitialLoad) setTickers([]);
+      }
+    } catch (error) {
+      console.error("Error fetching tickers:", error);
+      if (isInitialLoad) setTickers([]);
+    } finally {
+      if (isInitialLoad) {
+          setLoading(false);
+      }
+    }
+  }, [updatePositionPrice]);
+
+  useEffect(() => {
+    fetchTickers(true); // Initial fetch
+    const interval = setInterval(() => fetchTickers(false), 5000); // Subsequent fetches
 
     return () => clearInterval(interval);
-  }, [updatePositionPrice]);
+  }, [fetchTickers]);
 
   return { tickers, loading };
 }
