@@ -73,7 +73,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
   const createChartSrcDoc = (symbol: string, containerId: string) => {
     const chartConfig = {
       width: '100%', height: '100%', autosize: true,
-      symbol: symbol, interval: '180', timezone: 'exchange', theme: 'dark', style: '1',
+      symbol: symbol, interval: 'D', timezone: 'exchange', theme: 'dark', style: '1',
       withdateranges: true, hide_side_toolbar: true, allow_symbol_change: true, save_image: false,
       studies: ['StochasticRSI@tv-basicstudies', 'MASimple@tv-basicstudies'],
       show_popup_button: true, popup_width: '1000', popup_height: '650', support_host: 'https://www.tradingview.com',

@@ -33,7 +33,7 @@ export default function HomePage() {
           </div>
         </header>
 
-        <main className="flex flex-col lg:flex-row flex-grow min-h-0">
+        <main className="flex flex-col lg:flex-row flex-grow lg:min-h-0">
           <section className="flex flex-col lg:w-2/3 lg:min-h-0">
             <MainViews
               currentSymbol={activeSymbol}
@@ -41,7 +41,7 @@ export default function HomePage() {
               setSelectedCryptoScreener={setSelectedCryptoScreener}
             />
           </section>
-          <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[500px] lg:min-h-0">
+          <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">
             <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
           </aside>
         </main>
