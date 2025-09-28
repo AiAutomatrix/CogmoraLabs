@@ -88,7 +88,7 @@ export default function PaperTradingDashboard() {
                 <TableRow>
                   <TableHead>Symbol</TableHead>
                   <TableHead className="text-right">Size</TableHead>
-                  <TableHead className="text-right">Avg. Entry</TableHead>
+                  <TableHead className="text-right">Entry Price (Avg)</TableHead>
                   <TableHead className="text-right">Current Price</TableHead>
                   <TableHead className="text-right">Unrealized P&L</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
