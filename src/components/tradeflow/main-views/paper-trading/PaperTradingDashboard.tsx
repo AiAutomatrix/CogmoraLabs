@@ -69,23 +69,23 @@ export default function PaperTradingDashboard() {
         <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Equity</p>
-            <p className="text-xl md:text-2xl font-bold">{formatCurrency(equity)}</p>
+            <p className="text-xl font-bold">{formatCurrency(equity)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Available Cash</p>
-            <p className="text-xl md:text-2xl font-bold">{formatCurrency(balance)}</p>
+            <p className="text-xl font-bold">{formatCurrency(balance)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Unrealized P&L</p>
-            <p className={`text-xl md:text-2xl font-bold ${totalUnrealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalUnrealizedPNL)}</p>
+            <p className={`text-xl font-bold ${totalUnrealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalUnrealizedPNL)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Realized P&L</p>
-            <p className={`text-xl md:text-2xl font-bold ${totalRealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalRealizedPNL)}</p>
+            <p className={`text-xl font-bold ${totalRealizedPNL >= 0 ? 'text-green-500' : 'text-red-500'}`}>{formatCurrency(totalRealizedPNL)}</p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Win Rate</p>
-            <p className="text-xl md:text-2xl font-bold">{winRate.toFixed(2)}%</p>
+            <p className="text-xl font-bold">{winRate.toFixed(2)}%</p>
           </div>
         </CardContent>
       </Card>
