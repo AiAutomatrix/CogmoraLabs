@@ -39,6 +39,20 @@ export default function PaperTradingDashboard() {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
   };
+  
+  const formatPrice = (price: number) => {
+    const options: Intl.NumberFormatOptions = {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+    };
+    if (price < 0.1) {
+      options.maximumFractionDigits = 6;
+    } else {
+      options.maximumFractionDigits = 2;
+    }
+    return new Intl.NumberFormat('en-US', options).format(price);
+  }
 
   const PNLCell = ({ pnl }: { pnl: number }) => (
     <TableCell className={`text-right ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -104,8 +118,8 @@ export default function PaperTradingDashboard() {
                             <TableCell>{pos.symbolName}</TableCell>
                             <TableCell className="text-right">{pos.size.toFixed(6)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(value)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(pos.averageEntryPrice)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(pos.currentPrice)}</TableCell>
+                            <TableCell className="text-right">{formatPrice(pos.averageEntryPrice)}</TableCell>
+                            <TableCell className="text-right">{formatPrice(pos.currentPrice)}</TableCell>
                             <PNLCell pnl={pnl} />
                             <TableCell className="text-center">
                                 <Button size="sm" variant="destructive" onClick={() => sell(pos.symbol, pos.size, pos.currentPrice)}>Close</Button>
@@ -146,7 +160,7 @@ export default function PaperTradingDashboard() {
                      <TableCell>{trade.symbolName}</TableCell>
                      <TableCell className={`capitalize ${trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</TableCell>
                      <TableCell className="text-right">{trade.size.toFixed(6)}</TableCell>
-                     <TableCell className="text-right">{formatCurrency(trade.side === 'buy' ? trade.entryPrice : trade.currentPrice)}</TableCell>
+                     <TableCell className="text-right">{formatPrice(trade.side === 'buy' ? trade.entryPrice : trade.currentPrice)}</TableCell>
                      {trade.status === 'closed' && trade.pnl !== undefined ? (
                         <PNLCell pnl={trade.pnl} />
                      ) : (
