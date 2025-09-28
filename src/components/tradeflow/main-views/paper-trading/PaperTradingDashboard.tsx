@@ -88,6 +88,7 @@ export default function PaperTradingDashboard() {
                 <TableRow>
                   <TableHead>Symbol</TableHead>
                   <TableHead className="text-right">Size</TableHead>
+                  <TableHead className="text-right">Value (USD)</TableHead>
                   <TableHead className="text-right">Entry Price (Avg)</TableHead>
                   <TableHead className="text-right">Current Price</TableHead>
                   <TableHead className="text-right">Unrealized P&L</TableHead>
@@ -97,10 +98,12 @@ export default function PaperTradingDashboard() {
               <TableBody>
                 {openPositions.length > 0 ? openPositions.map(pos => {
                     const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+                    const value = pos.size * pos.averageEntryPrice;
                     return (
                         <TableRow key={pos.symbol}>
                             <TableCell>{pos.symbolName}</TableCell>
                             <TableCell className="text-right">{pos.size.toFixed(6)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(value)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(pos.averageEntryPrice)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(pos.currentPrice)}</TableCell>
                             <PNLCell pnl={pnl} />
@@ -110,7 +113,7 @@ export default function PaperTradingDashboard() {
                         </TableRow>
                     )
                 }) : (
-                    <TableRow><TableCell colSpan={6} className="text-center">No open positions.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center">No open positions.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
