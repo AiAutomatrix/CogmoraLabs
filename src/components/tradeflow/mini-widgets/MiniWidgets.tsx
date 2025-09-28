@@ -6,8 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, MessageCircle } from 'lucide-react';
 
 // Import mini-widget components
-import TradingViewTechAnalysisWidget from './mini-widgets/TradingViewTechAnalysisWidget';
-import AiWebchat from './mini-widgets/AiWebchat';
+import TradingViewTechAnalysisWidget from './TradingViewTechAnalysisWidget';
+import AiWebchat from './AiWebchat';
 
 interface MiniWidgetsProps {
   currentSymbol: string;

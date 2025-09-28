@@ -2,8 +2,8 @@
 'use client';
 
 // import TradeFlowLogo from '@/components/tradeflow/TradeFlowLogo';
-import MainViews from '@/components/tradeflow/MainViews';
-import MiniWidgets from '@/components/tradeflow/MiniWidgets';
+import MainViews from '@/components/tradeflow/main-views/MainViews';
+import MiniWidgets from '@/components/tradeflow/mini-widgets/MiniWidgets';
 import React, { useState } from 'react';
 
 export default function HomePage() {

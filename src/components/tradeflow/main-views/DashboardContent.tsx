@@ -1,4 +1,3 @@
-
 import type React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';

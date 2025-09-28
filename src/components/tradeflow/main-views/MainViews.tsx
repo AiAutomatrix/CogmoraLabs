@@ -5,15 +5,15 @@ import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { LineChart, Columns, ListFilter, Settings2, SearchCode } from 'lucide-react';
-import DexScreenerContent from './main-views/DexScreenerContent';
-import ThreeChartAnalysisPanel from './main-views/ThreeChartAnalysisPanel';
-import CryptoCoinsHeatmap from './main-views/heatmaps/CryptoCoinsHeatmap';
-import StockHeatmap from './main-views/heatmaps/StockHeatmap';
-import EtfHeatmap from './main-views/heatmaps/EtfHeatmap';
-import ForexCrossRatesWidget from './main-views/heatmaps/ForexCrossRatesWidget';
-import AllTickersScreener from './main-views/AllTickersScreener';
-import ForexHeatmapWidget from './main-views/heatmaps/ForexHeatmapWidget';
-import AllFuturesScreener from './main-views/AllFuturesScreener';
+import DexScreenerContent from './screeners/DexScreenerContent';
+import ThreeChartAnalysisPanel from './ThreeChartAnalysisPanel';
+import CryptoCoinsHeatmap from './heatmaps/CryptoCoinsHeatmap';
+import StockHeatmap from './heatmaps/StockHeatmap';
+import EtfHeatmap from './heatmaps/EtfHeatmap';
+import ForexCrossRatesWidget from './heatmaps/ForexCrossRatesWidget';
+import AllTickersScreener from './screeners/AllTickersScreener';
+import ForexHeatmapWidget from './heatmaps/ForexHeatmapWidget';
+import AllFuturesScreener from './screeners/AllFuturesScreener';
 
 interface MainViewsProps {
   currentSymbol: string;

@@ -1,7 +1,10 @@
 
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
-import type { Trade } from '@/types';
+import type React from 'react';
+import { useState, useEffect } from 'react';
+import { useForm, type SubmitHandler } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { TradeSchema, type Trade } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,180 +19,187 @@ import {
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { Trash2, DoorClosed } from 'lucide-react';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Trash2, Edit3, PlusCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { format } from 'date-fns';
+
+type TradeFormData = Omit<Trade, 'id' | 'createdAt' | 'status'>;
 
 const TradeTracker: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
-  const [tradeToClose, setTradeToClose] = useState<Trade | null>(null);
-  const [exitPriceInput, setExitPriceInput] = useState<string>('');
+  const [isEditing, setIsEditing] = useState<string | null>(null); // stores ID of trade being edited
   const { toast } = useToast();
 
-  const parseTradeItem = (trade: any): Trade => ({
-    ...trade,
-    entryPrice: parseFloat(String(trade.entryPrice || '0')),
-    quantity: parseFloat(String(trade.quantity || '0')),
-    leverage: trade.leverage != null ? parseInt(String(trade.leverage), 10) : null,
-    exitPrice: trade.exitPrice != null ? parseFloat(String(trade.exitPrice)) : null,
-    pnl: trade.pnl != null ? parseFloat(String(trade.pnl)) : null,
-    roiPercent: trade.roiPercent != null ? parseFloat(String(trade.roiPercent)) : null,
-    createdAt: new Date(trade.createdAt),
-    closedAt: trade.closedAt ? new Date(trade.closedAt) : null,
+  const form = useForm<TradeFormData>({
+    resolver: zodResolver(TradeSchema.omit({ id: true, createdAt: true, status: true })),
+    defaultValues: {
+      cryptocurrency: '',
+      entryPrice: undefined,
+      targetPrice: undefined,
+      stopLoss: undefined,
+    },
   });
 
-  const loadTradesFromStorage = useCallback(() => {
+  // Load trades from local storage on component mount
+  useEffect(() => {
     const storedTrades = localStorage.getItem('tradeflow_trades');
     if (storedTrades) {
-      try {
-        const parsedTrades = JSON.parse(storedTrades);
-        if (Array.isArray(parsedTrades)) {
-          setTrades(parsedTrades.map(parseTradeItem));
-        } else {
-          setTrades([]);
-        }
-      } catch (e) {
-        console.error("Error parsing trades from localStorage", e);
-        setTrades([]);
-      }
-    } else {
-      setTrades([]);
+      setTrades(JSON.parse(storedTrades).map((trade: any) => ({...trade, createdAt: new Date(trade.createdAt)})));
     }
   }, []);
 
+  // Save trades to local storage whenever trades state changes
   useEffect(() => {
-    loadTradesFromStorage(); 
+    localStorage.setItem('tradeflow_trades', JSON.stringify(trades));
+  }, [trades]);
 
-    const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === 'tradeflow_trades' || event.type === 'storageUpdate') { // Listen to custom event too
-        loadTradesFromStorage(); 
-      }
-    };
+  const onSubmit: SubmitHandler<TradeFormData> = (data) => {
+    if (isEditing) {
+      setTrades(trades.map(t => t.id === isEditing ? { ...t, ...data, createdAt: t.createdAt } : t));
+      toast({ title: "Trade Updated", description: `${data.cryptocurrency} trade details modified.` });
+      setIsEditing(null);
+    } else {
+      const newTrade: Trade = {
+        ...data,
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        status: 'active',
+      };
+      setTrades([...trades, newTrade]);
+      toast({ title: "Trade Added", description: `${data.cryptocurrency} position tracked.` });
+    }
+    form.reset();
+  };
 
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('storageUpdate', handleStorageChange as EventListener); // Custom event
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('storageUpdate', handleStorageChange as EventListener);
-    };
-  }, [loadTradesFromStorage]);
-
+  const handleEdit = (trade: Trade) => {
+    setIsEditing(trade.id);
+    form.reset({
+        cryptocurrency: trade.cryptocurrency,
+        entryPrice: trade.entryPrice,
+        targetPrice: trade.targetPrice,
+        stopLoss: trade.stopLoss,
+    });
+  };
 
   const handleDelete = (id: string) => {
-    const updatedTrades = trades.filter(t => t.id !== id);
-    setTrades(updatedTrades);
-    localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
-    window.dispatchEvent(new StorageEvent('storage', { key: 'tradeflow_trades' }));
-    toast({ title: "Trade Deleted", description: "Trade removed from log.", variant: "destructive", duration: 3000 });
+    setTrades(trades.filter(t => t.id !== id));
+    toast({ title: "Trade Deleted", description: "Trade removed from tracker.", variant: "destructive" });
+    if (isEditing === id) {
+        setIsEditing(null);
+        form.reset();
+    }
   };
   
-  const openCloseTradeDialog = (trade: Trade) => {
-    setTradeToClose(trade);
-    setExitPriceInput('');
-    setIsCloseDialogOpen(true);
-  };
-
-  const handleCloseTradeSubmit = () => {
-    if (!tradeToClose || !exitPriceInput) {
-      toast({ title: "Error", description: "Please enter an exit price.", variant: "destructive", duration: 3000 });
-      return;
-    }
-    const exitPrice = parseFloat(exitPriceInput);
-    if (isNaN(exitPrice) || exitPrice <= 0) {
-      toast({ title: "Error", description: "Invalid exit price.", variant: "destructive", duration: 3000 });
-      return;
-    }
-
-    let pnl = 0;
-    const leverageMultiplier = tradeToClose.leverage || 1;
-    if (tradeToClose.tradeType === 'buy') {
-      pnl = (exitPrice - tradeToClose.entryPrice) * tradeToClose.quantity * leverageMultiplier;
-    } else { 
-      pnl = (tradeToClose.entryPrice - exitPrice) * tradeToClose.quantity * leverageMultiplier;
-    }
-    
-    const initialInvestment = tradeToClose.entryPrice * tradeToClose.quantity;
-    // Prevent division by zero if initialInvestment is 0
-    const roiPercent = initialInvestment !== 0 ? (pnl / initialInvestment) * 100 : 0;
-
-    const updatedTrades = trades.map(t => 
-      t.id === tradeToClose.id 
-        ? { ...parseTradeItem(t), status: 'closed', exitPrice, pnl, roiPercent, closedAt: new Date() } 
-        : parseTradeItem(t)
-    );
-    setTrades(updatedTrades);
-    localStorage.setItem('tradeflow_trades', JSON.stringify(updatedTrades));
-    window.dispatchEvent(new StorageEvent('storage', { key: 'tradeflow_trades' }));
-
-    toast({ title: "Trade Closed", description: `${tradeToClose.symbol} position closed. P&L: ${pnl.toFixed(2)}`, duration: 3000 });
-    setIsCloseDialogOpen(false);
-    setTradeToClose(null);
-  };
+  const handleCancelEdit = () => {
+    setIsEditing(null);
+    form.reset();
+  }
 
   return (
-    <Card className="h-full flex flex-col rounded-none border-0 shadow-none">
-      <CardHeader className="px-3 pt-1 pb-2 border-b">
-        <CardTitle className="text-lg">Trade Log</CardTitle>
-        <CardDescription className="text-xs">View and manage trades simulated from the exchange panels.</CardDescription>
+    <Card className="h-full flex flex-col">
+      <CardHeader>
+        <CardTitle>Trade Tracker</CardTitle>
+        <CardDescription>Log and monitor your cryptocurrency trades.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="flex-grow p-3 min-h-0">
-          <h3 className="text-md font-semibold mb-1">Logged Trades</h3>
+      <CardContent className="flex-grow flex flex-col gap-4 overflow-hidden">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="cryptocurrency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Symbol (e.g. BTCUSDT)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="BTCUSDT" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="entryPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Entry</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="50000" {...field} step="any" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="targetPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Target</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="55000" {...field} step="any"/>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="stopLoss"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Stop Loss</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="48000" {...field} step="any"/>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="flex gap-2">
+                <Button type="submit" className="w-full">
+                  {isEditing ? <Edit3 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+                  {isEditing ? 'Update Trade' : 'Add Trade'}
+                </Button>
+                {isEditing && (
+                    <Button type="button" variant="outline" onClick={handleCancelEdit} className="w-full">
+                        Cancel Edit
+                    </Button>
+                )}
+            </div>
+          </form>
+        </Form>
+
+        <h3 className="text-lg font-semibold mt-6 mb-2">Active Trades</h3>
+        <ScrollArea className="flex-grow border rounded-md min-h-0">
           <Table>
-            {trades.length === 0 && <TableCaption>No trades logged yet. Place a simulated trade in the 'Trade' tab.</TableCaption>}
+            {trades.length === 0 && <TableCaption>No trades tracked yet.</TableCaption>}
             <TableHeader>
               <TableRow>
-                <TableHead className="py-2 px-2 text-xs">Type</TableHead>
-                <TableHead className="py-2 px-2 text-xs">Symbol</TableHead>
-                <TableHead className="py-2 px-2 text-xs">Qty</TableHead>
-                <TableHead className="py-2 px-2 text-xs text-right">Entry</TableHead>
-                <TableHead className="py-2 px-2 text-xs text-center">Leverage</TableHead>
-                <TableHead className="py-2 px-2 text-xs text-right">Exit</TableHead>
-                <TableHead className="py-2 px-2 text-xs text-right">P&L</TableHead>
-                <TableHead className="py-2 px-2 text-xs text-right">ROI %</TableHead>
-                <TableHead className="py-2 px-2 text-xs">Status</TableHead>
-                <TableHead className="py-2 px-2 text-xs">Date</TableHead>
-                <TableHead className="text-right py-2 px-2 text-xs">Actions</TableHead>
+                <TableHead>Symbol</TableHead>
+                <TableHead>Entry</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Stop</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {trades.map((trade) => (
-                <TableRow key={trade.id} className={`text-xs ${trade.status === 'closed' ? 'opacity-60' : ''}`}>
-                  <TableCell className={`font-medium py-1 px-2 ${trade.tradeType === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-                    {trade.tradeType.toUpperCase()}
-                  </TableCell>
-                  <TableCell className="py-1 px-2 font-mono">{trade.symbol.length > 15 ? `${trade.symbol.substring(0,12)}...` : trade.symbol}</TableCell>
-                  <TableCell className="py-1 px-2 text-right">{trade.quantity.toLocaleString()}</TableCell>
-                  <TableCell className="py-1 px-2 text-right">{trade.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 5})}</TableCell>
-                  <TableCell className="py-1 px-2 text-center">{trade.leverage ? `${trade.leverage}x` : '-'}</TableCell>
-                  <TableCell className="py-1 px-2 text-right">{trade.exitPrice?.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 5}) ?? '-'}</TableCell>
-                  <TableCell className={`py-1 px-2 font-semibold text-right ${ (trade.pnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {trade.pnl?.toFixed(2) ?? '-'}
-                  </TableCell>
-                  <TableCell className={`py-1 px-2 text-right ${ (trade.roiPercent ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {trade.roiPercent?.toFixed(2) ?? '-'}%
-                  </TableCell>
-                  <TableCell className="py-1 px-2">{trade.status}</TableCell>
-                  <TableCell className="py-1 px-2">{format(trade.createdAt, 'MM/dd HH:mm')}</TableCell>
-                  <TableCell className="text-right space-x-1 py-1 px-2">
-                    {trade.status === 'open' && (
-                      <Button variant="outline" size="icon" onClick={() => openCloseTradeDialog(trade)} aria-label="Close trade" className="h-6 w-6">
-                          <DoorClosed className="h-3 w-3" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(trade.id)} aria-label="Delete trade" className="h-6 w-6">
-                        <Trash2 className="h-3 w-3 text-destructive" />
+                <TableRow key={trade.id}>
+                  <TableCell className="font-medium">{trade.cryptocurrency}</TableCell>
+                  <TableCell>{trade.entryPrice.toLocaleString()}</TableCell>
+                  <TableCell>{trade.targetPrice.toLocaleString()}</TableCell>
+                  <TableCell>{trade.stopLoss.toLocaleString()}</TableCell>
+                  <TableCell>{trade.createdAt.toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(trade)} aria-label="Edit trade">
+                        <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDelete(trade.id)} aria-label="Delete trade">
+                        <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -197,40 +207,11 @@ const TradeTracker: React.FC = () => {
             </TableBody>
           </Table>
         </ScrollArea>
-
-        <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Close Trade: {tradeToClose?.symbol}</DialogTitle>
-                    <DialogDescription>
-                        Entry: {tradeToClose?.entryPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 5})} | Qty: {tradeToClose?.quantity.toLocaleString()} {tradeToClose?.leverage ? `| Lev: ${tradeToClose.leverage}x` : ''}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="exitPrice" className="text-right">Exit Price</Label>
-                        <Input 
-                            id="exitPrice" 
-                            type="number" 
-                            value={exitPriceInput} 
-                            onChange={(e) => setExitPriceInput(e.target.value)} 
-                            className="col-span-3 h-9"
-                            step="any"
-                        />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild>
-                        <Button type="button" variant="outline">Cancel</Button>
-                    </DialogClose>
-                    <Button type="button" onClick={handleCloseTradeSubmit}>Confirm Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
       </CardContent>
     </Card>
   );
 };
 
 export default TradeTracker;
+
+    

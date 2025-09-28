@@ -2,24 +2,19 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import type { FC } from 'react';
 
-interface TradingViewTechAnalysisWidgetProps {
-  symbol: string;
-}
-
-const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps> = ({ symbol }) => {
+const TradingViewTechAnalysisWidget: React.FC = () => {
   const widgetConfig = useMemo(() => ({
     interval: "30m",
     width: "100%",
-    isTransparent: false, // Keep false if you want TradingView's dark theme to manage bg
+    isTransparent: false,
     height: "100%",
-    symbol: symbol, 
+    symbol: "KUCOIN:BTCUSDT",
     showIntervalTabs: false,
     displayMode: "multiple",
     locale: "en",
     colorTheme: "dark"
-  }), [symbol]); 
+  }), []);
 
   const srcDocContent = useMemo(() => `
     <!DOCTYPE html>
@@ -35,7 +30,7 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
           margin: 0;
           padding: 0;
           overflow: hidden;
-          background-color: #222222; /* Or transparent if isTransparent:true in widgetConfig */
+          background-color: #222222; /* Match app's dark background */
           box-sizing: border-box;
         }
         *, *::before, *::after { box-sizing: inherit; }
@@ -43,8 +38,9 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
           width: 100%;
           height: 100%;
         }
+        /* The script typically injects a div with this class or similar */
         .tradingview-widget-container__widget {
-            width: 100% !important; 
+            width: 100% !important; /* Ensure widget fills container */
             height: 100% !important;
         }
       </style>
@@ -61,13 +57,10 @@ const TradingViewTechAnalysisWidget: React.FC<TradingViewTechAnalysisWidgetProps
   `, [widgetConfig]);
 
   return (
-    // This component is designed to be a direct child of a TabsContent that is already flex-grow.
-    // The iframe itself will fill the space given by TabsContent.
     <iframe
-      key={symbol} 
       srcDoc={srcDocContent}
       title="TradingView Technical Analysis Widget"
-      className="w-full h-full" // Ensures iframe fills its parent (TabsContent)
+      className="w-full h-full"
       style={{ border: 'none' }}
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
     />
