@@ -15,15 +15,17 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
-import { ArrowUp, ArrowDown, ShoppingCart } from "lucide-react";
+import { ArrowUp, ArrowDown, ShoppingCart, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TradePopup } from "../../paper-trading/TradePopup";
+import { Input } from "@/components/ui/input";
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
+  const [filter, setFilter] = useState("");
   const [sortedTickers, setSortedTickers] = useState<KucoinTicker[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -39,6 +41,14 @@ export default function AllTickersScreener() {
 
   const sortedMemo = useMemo(() => {
     let sortableItems = [...sortedTickers];
+    
+    if (filter) {
+      sortableItems = sortableItems.filter(ticker =>
+        ticker.symbolName.toLowerCase().includes(filter.toLowerCase()) ||
+        ticker.symbol.toLowerCase().includes(filter.toLowerCase())
+      );
+    }
+    
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
         const aValue = parseFloat(a[sortConfig.key]);
@@ -49,7 +59,7 @@ export default function AllTickersScreener() {
       });
     }
     return sortableItems;
-  }, [sortedTickers, sortConfig]);
+  }, [sortedTickers, sortConfig, filter]);
 
   const requestSort = (key: SortKey) => {
     let direction: "ascending" | "descending" = "descending";
@@ -134,17 +144,29 @@ export default function AllTickersScreener() {
   return (
     <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
-      <CardHeader className="pb-2">
-        <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
-        <CardDescription>
-          Real-time data feed from KuCoin for all available trading pairs. Click headers to sort.
-        </CardDescription>
+      <CardHeader className="pb-2 space-y-4">
+        <div>
+          <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
+          <CardDescription>
+            Real-time data feed from KuCoin for all available trading pairs. Click headers to sort.
+          </CardDescription>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search coins..."
+            className="pl-8"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
       </CardHeader>
 
       {tableHeaders}
 
       <ScrollArea className="max-h-[350px] lg:max-h-[800px] overflow-auto rounded-md">
-        {loading ? (
+        {loading && !tickers.length ? (
           skeletonRows
         ) : (
           <Table>

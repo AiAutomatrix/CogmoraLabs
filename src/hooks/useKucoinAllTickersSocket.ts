@@ -39,10 +39,10 @@ export function useKucoinTickers() {
   const { updatePositionPrice } = usePaperTrading();
 
   const fetchTickers = useCallback(async (isInitialLoad: boolean) => {
+    if (isInitialLoad) {
+      setLoading(true);
+    }
     try {
-      if (isInitialLoad) {
-        setLoading(true);
-      }
       const response = await fetch(KUCOIN_TICKERS_PROXY_URL);
       if (!response.ok) {
         throw new Error(`Failed to fetch KuCoin tickers from proxy: ${response.statusText}`);
@@ -52,10 +52,11 @@ export function useKucoinTickers() {
         const usdtTickers = data.data.ticker.filter(t => t.symbol.endsWith('-USDT'));
         
         setTickers(prevTickers => {
+          // For initial load or if previous state is empty, just set the new tickers.
           if (isInitialLoad || prevTickers.length === 0) {
             return usdtTickers;
           }
-          // Merge new data with old data for smoother updates
+          // For subsequent updates, merge the new data.
           const tickersMap = new Map(prevTickers.map(t => [t.symbol, t]));
           usdtTickers.forEach(newTicker => {
             tickersMap.set(newTicker.symbol, newTicker);
