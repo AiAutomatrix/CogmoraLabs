@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -111,7 +112,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
           <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
             Views
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-full">
+          <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
             <DropdownMenuItem onSelect={() => setActiveTab('paper_trading')}>Paper Trading</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Chart & Heatmap</DropdownMenuLabel>
@@ -176,7 +177,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
       <TabsContent value="paper_trading" className="flex-grow overflow-y-auto p-2 m-0 h-full">
         <PaperTradingDashboard />
       </TabsContent>
-      <TabsContent value="chart" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+      <TabsContent value="chart" className="flex-grow overflow-hidden p-0 m-0 h-full">
         {/* Mobile Carousel */}
         <div className="md:hidden flex overflow-x-auto snap-x snap-mandatory h-full">
           {chartSrcDocs.map((srcDoc, i) => (
@@ -237,8 +238,8 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
         </div>
       </TabsContent>
 
-      <TabsContent value="crypto_screener" className="overflow-y-auto p-0 m-0 md:flex-grow md:h-full max-h-mobile">
-        <div className={`${BASE_CLASS} md:h-full`}>
+      <TabsContent value="crypto_screener" className="flex-grow overflow-y-auto p-0 m-0 h-full">
+        <div className={`${BASE_CLASS} h-full`}>
  {selectedCryptoScreener === 'all_kucoin' ? (
  <AllTickersScreener />
  ) : selectedCryptoScreener === 'kucoin_futures' ? (
