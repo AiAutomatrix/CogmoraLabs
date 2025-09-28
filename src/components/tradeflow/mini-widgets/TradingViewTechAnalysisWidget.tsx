@@ -1,70 +1,81 @@
-
 'use client';
+import React, { useEffect, useRef, memo, useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
-import React, { useMemo } from 'react';
+interface TradingViewTechAnalysisWidgetProps {
+  symbol?: string;
+}
 
-const TradingViewTechAnalysisWidget: React.FC = () => {
-  const widgetConfig = useMemo(() => ({
-    interval: "30m",
-    width: "100%",
-    isTransparent: false,
-    height: "100%",
-    symbol: "KUCOIN:BTCUSDT",
-    showIntervalTabs: false,
-    displayMode: "multiple",
-    locale: "en",
-    colorTheme: "dark"
-  }), []);
+const TradingViewTechAnalysisWidgetComponent: React.FC<TradingViewTechAnalysisWidgetProps> = ({
+  symbol = "BINANCE:BTCUSDT",
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scriptRef = useRef<HTMLScriptElement | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const srcDocContent = useMemo(() => `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>TradingView Technical Analysis</title>
-      <style>
-        html, body {
-          width: 100%;
-          height: 100%;
-          margin: 0;
-          padding: 0;
-          overflow: hidden;
-          background-color: #222222; /* Match app's dark background */
-          box-sizing: border-box;
-        }
-        *, *::before, *::after { box-sizing: inherit; }
-        .tradingview-widget-container {
-          width: 100%;
-          height: 100%;
-        }
-        /* The script typically injects a div with this class or similar */
-        .tradingview-widget-container__widget {
-            width: 100% !important; /* Ensure widget fills container */
-            height: 100% !important;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="tradingview-widget-container">
-        <div class="tradingview-widget-container__widget"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
-          ${JSON.stringify(widgetConfig)}
-        </script>
-      </div>
-    </body>
-    </html>
-  `, [widgetConfig]);
+  useEffect(() => {
+    const currentContainer = containerRef.current;
+    if (!currentContainer) {
+      return;
+    }
+
+    // Clean up any existing script to prevent duplicates
+    if (scriptRef.current) {
+      scriptRef.current.remove();
+      scriptRef.current = null;
+    }
+    currentContainer.innerHTML = '';
+    setIsLoading(true);
+
+    const widgetConfig = {
+      "interval": "1m",
+      "width": "100%",
+      "isTransparent": true,
+      "height": "100%",
+      "symbol": symbol,
+      "showIntervalTabs": true,
+      "locale": "en",
+      "colorTheme": "dark"
+    };
+
+    const script = document.createElement('script');
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify(widgetConfig);
+
+    script.onload = () => setIsLoading(false);
+    script.onerror = () => {
+      console.error("Failed to load TradingView Technical Analysis widget script.");
+      setIsLoading(false);
+    }
+    
+    currentContainer.appendChild(script);
+    scriptRef.current = script;
+
+    return () => {
+      if (scriptRef.current) {
+        scriptRef.current.remove();
+      }
+       if (currentContainer) {
+        currentContainer.innerHTML = '';
+      }
+    };
+  }, [symbol]);
 
   return (
-    <iframe
-      srcDoc={srcDocContent}
-      title="TradingView Technical Analysis Widget"
-      className="w-full h-full"
-      style={{ border: 'none' }}
-      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-    />
+    <div className="tradingview-widget-container h-full w-full relative">
+       {isLoading && <Skeleton className="absolute inset-0 w-full h-full" />}
+      <div ref={containerRef} className="tradingview-widget-container__widget h-full w-full"></div>
+       <div className="tradingview-widget-copyright absolute bottom-0 left-0 right-0 text-center p-1 bg-background/50 backdrop-blur-sm z-20">
+          <a href={`https://www.tradingview.com/symbols/${symbol}/technicals/`} rel="noopener nofollow" target="_blank" className="text-xs text-muted-foreground hover:text-accent-foreground">
+            Technical analysis for {symbol} by TradingView
+          </a>
+        </div>
+    </div>
   );
 };
+
+const TradingViewTechAnalysisWidget = memo(TradingViewTechAnalysisWidgetComponent);
 
 export default TradingViewTechAnalysisWidget;
