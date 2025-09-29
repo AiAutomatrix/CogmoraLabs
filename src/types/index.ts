@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 export const PaperTradeSchema = z.object({
@@ -217,22 +218,33 @@ export type KucoinErrorMessage = {
   data: string; 
 };
 
-export type KucoinRawTickerData = {
-    sequence: string;
-    price: string;
-    size: string;
-    bestAsk: string;
-    bestAskSize: string;
-    bestBid: string;
-    bestBidSize: string;
-    time: number;
-};
+export interface KucoinTicker {
+  symbol: string;
+  symbolName: string;
+  buy: string;
+  sell: string;
+  bestBidSize: string;
+  bestAskSize: string;
+  changeRate: string;
+  changePrice: string;
+  high: string;
+  low: string;
+  vol: string;
+  volValue: string;
+  last: string;
+  averagePrice?: string;
+  takerFeeRate?: string;
+  makerFeeRate?: string;
+  takerCoefficient?: string;
+  makerCoefficient?: string;
+  price?: string; // Add price to match websocket data structure
+}
 
 export type KucoinTickerMessage = {
   type: 'message';
-  topic: string; // e.g., /market/ticker:BTC-USDT
+  topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker';
-  data: KucoinRawTickerData;
+  data: KucoinTicker;
 };
 
 export type IncomingKucoinWebSocketMessage =

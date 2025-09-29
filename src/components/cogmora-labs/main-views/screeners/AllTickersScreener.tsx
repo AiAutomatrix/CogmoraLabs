@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -19,13 +20,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TradePopup } from "../../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
+import { usePaperTrading } from "@/context/PaperTradingContext";
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
   const [filter, setFilter] = useState("");
-  const [sortedTickers, setSortedTickers] = useState<KucoinTicker[]>([]);
+  
+  const { updatePositionPrice } = usePaperTrading();
+
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
     direction: "ascending" | "descending";
@@ -35,11 +39,17 @@ export default function AllTickersScreener() {
   const [selectedTicker, setSelectedTicker] = useState<KucoinTicker | null>(null);
 
   useEffect(() => {
-    setSortedTickers(tickers);
-  }, [tickers]);
+    // Update paper trading positions with the latest prices from the hook
+    tickers.forEach(ticker => {
+        if (ticker.last) {
+            updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
+        }
+    });
+  }, [tickers, updatePositionPrice]);
+
 
   const sortedMemo = useMemo(() => {
-    let sortableItems = [...sortedTickers];
+    let sortableItems = [...tickers];
     
     if (filter) {
       sortableItems = sortableItems.filter(ticker =>
@@ -58,7 +68,7 @@ export default function AllTickersScreener() {
       });
     }
     return sortableItems;
-  }, [sortedTickers, sortConfig, filter]);
+  }, [tickers, sortConfig, filter]);
 
   const requestSort = (key: SortKey) => {
     let direction: "ascending" | "descending" = "descending";

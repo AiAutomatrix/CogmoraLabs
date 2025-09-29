@@ -1,96 +1,90 @@
 
-import { useState, useEffect, useCallback } from "react";
-import { usePaperTrading } from "@/context/PaperTradingContext";
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import type { KucoinTicker, KucoinTokenResponse, IncomingKucoinWebSocketMessage } from "@/types";
 
 const KUCOIN_TICKERS_PROXY_URL = "/api/kucoin-tickers";
-
-export interface KucoinTicker {
-  symbol: string;
-  symbolName: string;
-  buy: string;
-  sell: string;
-  bestBidSize: string;
-  bestAskSize: string;
-  changeRate: string;
-  changePrice: string;
-  high: string;
-  low: string;
-  vol: string;
-  volValue: string;
-  last: string;
-  averagePrice: string;
-  takerFeeRate: string;
-  makerFeeRate: string;
-  takerCoefficient: string;
-  makerCoefficient: string;
-}
-
-interface KucoinAllTickersApiResponse {
-  code: string;
-  data: {
-    time: number;
-    ticker: KucoinTicker[];
-  }
-}
 
 export function useKucoinTickers() {
   const [tickers, setTickers] = useState<KucoinTicker[]>([]);
   const [loading, setLoading] = useState(true);
-  const { updatePositionPrice } = usePaperTrading();
+  const [wsStatus, setWsStatus] = useState('idle');
 
-  const fetchTickers = useCallback(async (isInitialLoad: boolean) => {
-    if (isInitialLoad) {
-      setLoading(true);
+  const ws = useRef<WebSocket | null>(null);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const connectToAllTickers = useCallback(async () => {
+    if (ws.current) {
+      ws.current.close();
     }
+    setWsStatus('fetching_token');
+
     try {
-      const response = await fetch(KUCOIN_TICKERS_PROXY_URL);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch KuCoin tickers from proxy: ${response.statusText}`);
+      const initialResponse = await fetch(KUCOIN_TICKERS_PROXY_URL);
+      const initialData = await initialResponse.json();
+      if (initialData && initialData.code === "200000" && initialData.data && initialData.data.ticker) {
+        const usdtTickers = initialData.data.ticker.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        setTickers(usdtTickers);
       }
-      const data: KucoinAllTickersApiResponse = await response.json();
-      if (data && data.code === "200000" && data.data && data.data.ticker) {
-        const usdtTickers = data.data.ticker.filter(t => t.symbol.endsWith('-USDT'));
-        
-        setTickers(prevTickers => {
-          // For initial load or if previous state is empty, just set the new tickers.
-          if (isInitialLoad || prevTickers.length === 0) {
-            return usdtTickers;
-          }
-          // For subsequent updates, merge the new data.
-          const tickersMap = new Map(prevTickers.map(t => [t.symbol, t]));
-          usdtTickers.forEach(newTicker => {
-            tickersMap.set(newTicker.symbol, newTicker);
-          });
-          return Array.from(tickersMap.values());
-        });
+      setLoading(false);
 
-        // Update paper trading positions with the latest prices
-        usdtTickers.forEach(ticker => {
-          if (ticker.last) {
-            updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
-          }
-        });
 
-      } else {
-        console.error("Unexpected response structure:", data);
-        if (isInitialLoad) setTickers([]);
-      }
+      const res = await fetch('/api/kucoin-ws-token');
+      const tokenData: KucoinTokenResponse = await res.json();
+      if (tokenData.code !== "200000") throw new Error('Failed to fetch KuCoin Spot WebSocket token');
+
+      const { token, instanceServers } = tokenData.data;
+      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-spot-all-${Date.now()}`;
+
+      setWsStatus('connecting');
+      ws.current = new WebSocket(wsUrl);
+
+      ws.current.onopen = () => {
+        setWsStatus('connected');
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          ws.current?.send(JSON.stringify({ id: Date.now().toString(), type: 'ping' }));
+        }, instanceServers[0].pingInterval / 2);
+
+        const topic = `/market/ticker:all`;
+        ws.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+      };
+
+      ws.current.onmessage = (event) => {
+        const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
+        if (message.type === 'message' && message.subject === 'trade.ticker' && message.topic === '/market/ticker:all') {
+            const updatedTicker = message.data;
+            const symbol = message.topic.split(':')[1]; // This will be 'all', need to get from data
+            
+            setTickers(prev => {
+                const newTickers = [...prev];
+                const index = newTickers.findIndex(t => t.symbol === updatedTicker.symbol);
+                if (index > -1) {
+                    newTickers[index] = { ...newTickers[index], ...updatedTicker, last: updatedTicker.price };
+                }
+                return newTickers;
+            });
+        }
+      };
+
+      ws.current.onclose = () => setWsStatus('disconnected');
+      ws.current.onerror = () => setWsStatus('error');
+
     } catch (error) {
-      console.error("Error fetching tickers:", error);
-      if (isInitialLoad) setTickers([]);
-    } finally {
-      if (isInitialLoad) {
-          setLoading(false);
-      }
+      console.error('Spot All-Tickers WebSocket setup failed:', error);
+      setWsStatus('error');
+      setLoading(false);
     }
-  }, [updatePositionPrice]);
+  }, []);
 
   useEffect(() => {
-    fetchTickers(true); // Initial fetch
-    const interval = setInterval(() => fetchTickers(false), 5000); // Subsequent fetches
-
-    return () => clearInterval(interval);
-  }, [fetchTickers]);
+    connectToAllTickers();
+    return () => {
+        ws.current?.close();
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+    }
+  }, [connectToAllTickers]);
 
   return { tickers, loading };
 }
