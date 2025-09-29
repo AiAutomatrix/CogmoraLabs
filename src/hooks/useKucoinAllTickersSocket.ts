@@ -93,5 +93,3 @@ export function useKucoinTickers() {
 
   return { tickers, loading, wsStatus };
 }
-
-    
