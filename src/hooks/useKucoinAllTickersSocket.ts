@@ -13,6 +13,7 @@ export function useKucoinTickers() {
 
   const ws = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const tickersRef = useRef<Map<string, KucoinTicker>>(new Map());
 
   const connectToAllTickers = useCallback(async () => {
     if (ws.current) {
@@ -26,7 +27,12 @@ export function useKucoinTickers() {
       const initialData = await initialResponse.json();
       if (initialData && initialData.code === "200000" && initialData.data && initialData.data.ticker) {
         const usdtTickers = initialData.data.ticker.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
-        setTickers(usdtTickers);
+        
+        // Populate the ref map and initial state
+        const initialMap = new Map<string, KucoinTicker>();
+        usdtTickers.forEach((t: KucoinTicker) => initialMap.set(t.symbol, t));
+        tickersRef.current = initialMap;
+        setTickers(Array.from(initialMap.values()));
       }
       setLoading(false);
 
@@ -59,19 +65,20 @@ export function useKucoinTickers() {
         if (message.type === 'message' && message.subject === 'trade.ticker' && message.topic === '/market/ticker:all') {
             const updatedTickerData = message.data;
             
-            setTickers(prevTickers => {
-                const tickerExists = prevTickers.some(t => t.symbol === updatedTickerData.symbol);
-                if (tickerExists) {
-                    return prevTickers.map(t => {
-                        if (t.symbol === updatedTickerData.symbol) {
-                            return { ...t, ...updatedTickerData, last: updatedTickerData.price || t.last };
-                        }
-                        return t;
-                    });
-                }
-                // This case is unlikely with "ticker:all" but good practice
-                return [...prevTickers]; 
-            });
+            const currentMap = tickersRef.current;
+            const existingTicker = currentMap.get(updatedTickerData.symbol);
+
+            if (existingTicker) {
+                // Update the map with the new data
+                currentMap.set(updatedTickerData.symbol, {
+                    ...existingTicker,
+                    ...updatedTickerData,
+                    last: updatedTickerData.price || existingTicker.last,
+                });
+                
+                // Set state from the map's values to trigger re-render
+                setTickers(Array.from(currentMap.values()));
+            }
         }
       };
 
