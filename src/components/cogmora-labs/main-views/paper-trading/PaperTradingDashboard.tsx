@@ -329,18 +329,18 @@ export default function PaperTradingDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead>Side</TableHead>
-                  <TableHead className="hidden sm:table-cell">Type</TableHead>
-                  <TableHead className="text-right">Size</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">
+                  <TableHead className="px-2 py-2">Timestamp</TableHead>
+                  <TableHead className="px-2 py-2">Symbol</TableHead>
+                  <TableHead className="px-2 py-2">Side</TableHead>
+                  <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
+                  <TableHead className="text-right px-2 py-2">Size</TableHead>
+                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
                     Price
                   </TableHead>
-                  <TableHead className="hidden md:table-cell text-right">
+                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
                     Value (USD)
                   </TableHead>
-                  <TableHead className="text-right">P&L</TableHead>
+                  <TableHead className="text-right px-2 py-2">P&L</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -353,12 +353,12 @@ export default function PaperTradingDashboard() {
                       : trade.size * tradePrice;
                   return (
                     <TableRow key={trade.id}>
-                      <TableCell>
+                      <TableCell className="px-2 py-2">
                         {format(new Date(trade.timestamp), "yyyy-MM-dd HH:mm")}
                       </TableCell>
-                      <TableCell>{trade.symbolName}</TableCell>
+                      <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
                       <TableCell
-                        className={`capitalize ${
+                        className={`capitalize px-2 py-2 ${
                           trade.side === "buy" || trade.side === "long"
                             ? "text-green-500"
                             : "text-red-500"
@@ -366,7 +366,7 @@ export default function PaperTradingDashboard() {
                       >
                         {trade.side}
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell">
+                      <TableCell className="hidden sm:table-cell px-2 py-2">
                         {trade.positionType === "futures" ? (
                           <Badge variant="outline">
                             Futures {trade.leverage}x
@@ -375,13 +375,13 @@ export default function PaperTradingDashboard() {
                           <Badge variant="secondary">Spot</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right px-2 py-2">
                         {trade.size.toFixed(6)}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-right">
+                      <TableCell className="hidden md:table-cell text-right px-2 py-2">
                         {formatPrice(tradePrice)}
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-right">
+                      <TableCell className="hidden md:table-cell text-right px-2 py-2">
                         {formatCurrency(tradeValue)}
                       </TableCell>
                       <PNLCell pnl={trade.pnl} />
