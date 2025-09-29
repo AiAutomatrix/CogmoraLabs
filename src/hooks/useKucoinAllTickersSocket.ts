@@ -21,6 +21,7 @@ export function useKucoinTickers() {
     setWsStatus('fetching_token');
 
     try {
+      // 1. Initial HTTP fetch for the full list
       const initialResponse = await fetch(KUCOIN_TICKERS_PROXY_URL);
       const initialData = await initialResponse.json();
       if (initialData && initialData.code === "200000" && initialData.data && initialData.data.ticker) {
@@ -29,7 +30,7 @@ export function useKucoinTickers() {
       }
       setLoading(false);
 
-
+      // 2. Fetch WebSocket token
       const res = await fetch('/api/kucoin-ws-token');
       const tokenData: KucoinTokenResponse = await res.json();
       if (tokenData.code !== "200000") throw new Error('Failed to fetch KuCoin Spot WebSocket token');
@@ -37,6 +38,7 @@ export function useKucoinTickers() {
       const { token, instanceServers } = tokenData.data;
       const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-spot-all-${Date.now()}`;
 
+      // 3. Establish WebSocket connection
       setWsStatus('connecting');
       ws.current = new WebSocket(wsUrl);
 
@@ -47,6 +49,7 @@ export function useKucoinTickers() {
           ws.current?.send(JSON.stringify({ id: Date.now().toString(), type: 'ping' }));
         }, instanceServers[0].pingInterval / 2);
 
+        // 4. Subscribe to the all-tickers topic
         const topic = `/market/ticker:all`;
         ws.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
       };
@@ -54,14 +57,15 @@ export function useKucoinTickers() {
       ws.current.onmessage = (event) => {
         const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
         if (message.type === 'message' && message.subject === 'trade.ticker' && message.topic === '/market/ticker:all') {
-            const updatedTicker = message.data;
-            const symbol = message.topic.split(':')[1]; // This will be 'all', need to get from data
+            const updatedTickerData = message.data;
             
-            setTickers(prev => {
-                const newTickers = [...prev];
-                const index = newTickers.findIndex(t => t.symbol === updatedTicker.symbol);
+            // This is a more robust way to update the state that React will reliably detect
+            setTickers(prevTickers => {
+                const newTickers = [...prevTickers];
+                const index = newTickers.findIndex(t => t.symbol === updatedTickerData.symbol);
                 if (index > -1) {
-                    newTickers[index] = { ...newTickers[index], ...updatedTicker, last: updatedTicker.price };
+                    // Update existing ticker with new data
+                    newTickers[index] = { ...newTickers[index], ...updatedTickerData, last: updatedTickerData.price || newTickers[index].last };
                 }
                 return newTickers;
             });
