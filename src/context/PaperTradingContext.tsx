@@ -679,9 +679,25 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       id: crypto.randomUUID(),
       status: 'active',
     };
+
+    const watchlistItem = watchlist.find(item => item.symbol === newTrigger.symbol);
+    const currentPrice = watchlistItem?.currentPrice;
+
+    if (currentPrice) {
+        const conditionMet =
+            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
+            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
+
+        if (conditionMet) {
+            toast({ title: 'Trade Trigger: Instant Execution', description: `Condition for ${newTrigger.symbolName} already met. Executing now.` });
+            executeTrigger(newTrigger, currentPrice);
+            return; // Exit after instant execution
+        }
+    }
+
     setTradeTriggers(prev => [newTrigger, ...prev]);
     toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-  }, [toast]);
+  }, [toast, executeTrigger, watchlist]);
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
@@ -725,3 +741,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
