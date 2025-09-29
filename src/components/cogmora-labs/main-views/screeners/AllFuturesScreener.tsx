@@ -17,29 +17,46 @@ import {
   useKucoinFuturesContracts,
   type KucoinFuturesContract,
 } from "@/hooks/useKucoinFuturesTickers";
-import { ArrowUp, ArrowDown, Search } from "lucide-react";
+import { useKucoinFuturesSocket } from "@/hooks/useKucoinFuturesSocket";
+import { ArrowUp, ArrowDown, Search, BarChartHorizontal } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-
+import { Button } from "@/components/ui/button";
+import { FuturesTradePopup } from "../paper-trading/FuturesTradePopup";
 
 
 export default function FuturesScreener() {
   type SortKey = "markPrice" | "priceChgPct" | "openInterest" | "volumeOf24h";
 
-  const { contracts, loading } = useKucoinFuturesContracts();
+  const { contracts, loading: httpLoading } = useKucoinFuturesContracts();
+  const { liveData, loading: wsLoading } = useKucoinFuturesSocket(contracts.map(c => c.symbol));
+  
   const [filter, setFilter] = useState("");
-  const [sortedContracts, setSortedContracts] = useState<KucoinFuturesContract[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
     direction: "ascending" | "descending";
   } | null>({ key: "openInterest", direction: "descending" });
 
-  useEffect(() => {
-    setSortedContracts(contracts);
-  }, [contracts]);
+  const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<KucoinFuturesContract | null>(null);
+
+  const mergedContracts = useMemo(() => {
+    return contracts.map(contract => {
+      const liveUpdate = liveData[contract.symbol];
+      if (liveUpdate) {
+        return {
+          ...contract,
+          markPrice: liveUpdate.lastPrice,
+          priceChgPct: liveUpdate.priceChgPct,
+          volumeOf24h: liveUpdate.volume,
+        };
+      }
+      return contract;
+    });
+  }, [contracts, liveData]);
 
   const sortedMemo = useMemo(() => {
-    let sortableItems = [...contracts];
+    let sortableItems = [...mergedContracts];
 
     if (filter) {
       sortableItems = sortableItems.filter(contract =>
@@ -58,7 +75,7 @@ export default function FuturesScreener() {
       });
     }
     return sortableItems;
-  }, [contracts, sortConfig, filter]);
+  }, [mergedContracts, sortConfig, filter]);
 
   const requestSort = (key: SortKey) => {
     let direction: "ascending" | "descending" = "descending";
@@ -66,6 +83,11 @@ export default function FuturesScreener() {
       direction = "ascending";
     }
     setSortConfig({ key, direction });
+  };
+  
+  const handleTradeClick = (contract: KucoinFuturesContract) => {
+    setSelectedContract(contract);
+    setIsTradePopupOpen(true);
   };
 
   const getSortIcon = (key: SortKey) => {
@@ -102,8 +124,8 @@ export default function FuturesScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-5 sm:grid-cols-6 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="text-left font-semibold text-muted-foreground">Pair</div>
+    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+      <div className="text-left font-semibold text-muted-foreground col-span-2">Pair</div>
       {["markPrice", "priceChgPct", "openInterest", "volumeOf24h"].map((key) => (
         <div
           key={key}
@@ -119,10 +141,12 @@ export default function FuturesScreener() {
           {getSortIcon(key as SortKey)}
         </div>
       ))}
+      <div className="text-center font-semibold text-muted-foreground">Trade</div>
     </div>
   );
 
   return (
+    <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
       <CardHeader className="pb-2 space-y-4">
         <div>
@@ -146,7 +170,7 @@ export default function FuturesScreener() {
       {tableHeaders}
 
       <ScrollArea className="max-h-[350px] lg:max-h-[800px] overflow-auto rounded-md">
-        {loading && !contracts.length ? (
+        {(httpLoading && !contracts.length) ? (
           skeletonRows
         ) : (
           <Table>
@@ -154,9 +178,9 @@ export default function FuturesScreener() {
               {sortedMemo.map((contract) => (
                 <TableRow
                   key={contract.symbol}
-                  className="grid grid-cols-5 sm:grid-cols-6 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
-                  <TableCell className="text-left font-medium">
+                  <TableCell className="text-left font-medium col-span-2">
                     {contract.symbol.replace(/M$/, "")}
                   </TableCell>
                   <TableCell className="text-right font-mono">
@@ -176,6 +200,16 @@ export default function FuturesScreener() {
                   <TableCell className="text-right font-mono">
                     {formatVolume(contract.volumeOf24h)}
                   </TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleTradeClick(contract)}
+                    >
+                      <BarChartHorizontal className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -183,5 +217,13 @@ export default function FuturesScreener() {
         )}
       </ScrollArea>
     </div>
+     {selectedContract && (
+        <FuturesTradePopup
+          isOpen={isTradePopupOpen}
+          onOpenChange={setIsTradePopupOpen}
+          contract={selectedContract}
+        />
+      )}
+    </>
   );
 }

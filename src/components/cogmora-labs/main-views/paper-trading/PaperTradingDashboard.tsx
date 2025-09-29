@@ -1,34 +1,39 @@
-
 "use client";
 
 import React, { useMemo, useState } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 export default function PaperTradingDashboard() {
-  const { balance, openPositions, tradeHistory, sell } = usePaperTrading();
+  const { balance, openPositions, tradeHistory, closePosition } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
 
   const totalPositionValue = useMemo(() =>
-    openPositions.reduce((acc, pos) => acc + (pos.size * pos.currentPrice), 0),
+    openPositions.reduce((acc, pos) => {
+        if (pos.positionType === 'futures') {
+            return acc + (pos.size * pos.averageEntryPrice); // For futures, value is based on entry
+        }
+        return acc + (pos.size * pos.currentPrice); // For spot, value is based on current price
+    }, 0),
     [openPositions]
   );
 
   const totalUnrealizedPNL = useMemo(() =>
-    openPositions.reduce((acc, pos) => acc + ((pos.currentPrice - pos.averageEntryPrice) * pos.size), 0),
+    openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0),
     [openPositions]
   );
   
   const totalRealizedPNL = useMemo(() =>
-    tradeHistory.filter(t => t.status === 'closed' && t.side === 'sell').reduce((acc, trade) => acc + (trade.pnl ?? 0), 0),
+    tradeHistory.filter(t => t.status === 'closed').reduce((acc, trade) => acc + (trade.pnl ?? 0), 0),
     [tradeHistory]
   );
 
-  const equity = balance + totalPositionValue;
+  const equity = balance + totalPositionValue + totalUnrealizedPNL;
   
   const winTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
   const losingTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
@@ -47,18 +52,21 @@ export default function PaperTradingDashboard() {
       minimumFractionDigits: 2,
     };
     if (price < 0.1) {
-      options.maximumFractionDigits = 6;
+      options.maximumFractionDigits = 8;
     } else {
-      options.maximumFractionDigits = 2;
+      options.maximumFractionDigits = 4;
     }
     return new Intl.NumberFormat('en-US', options).format(price);
   }
 
-  const PNLCell = ({ pnl }: { pnl: number }) => (
-    <TableCell className={`text-right ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-      {formatCurrency(pnl)}
-    </TableCell>
-  );
+  const PNLCell = ({ pnl }: { pnl: number | undefined }) => {
+      if (pnl === undefined) return <TableCell className="text-right">-</TableCell>;
+      return (
+        <TableCell className={`text-right ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+          {formatCurrency(pnl)}
+        </TableCell>
+      );
+  }
 
   return (
     <div className="container mx-auto p-4 space-y-6">
@@ -101,9 +109,10 @@ export default function PaperTradingDashboard() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Symbol</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead className="text-right">Size</TableHead>
                   <TableHead className="text-right">Value (USD)</TableHead>
-                  <TableHead className="text-right">Entry Price (Avg)</TableHead>
+                  <TableHead className="text-right">Entry Price</TableHead>
                   <TableHead className="text-right">Current Price</TableHead>
                   <TableHead className="text-right">Unrealized P&L</TableHead>
                   <TableHead className="text-center">Actions</TableHead>
@@ -111,23 +120,33 @@ export default function PaperTradingDashboard() {
               </TableHeader>
               <TableBody>
                 {openPositions.length > 0 ? openPositions.map(pos => {
-                    const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-                    const value = pos.size * pos.averageEntryPrice;
+                    const value = pos.positionType === 'futures' 
+                        ? (pos.size * pos.averageEntryPrice) / pos.leverage!
+                        : pos.size * pos.averageEntryPrice;
                     return (
-                        <TableRow key={pos.symbol}>
-                            <TableCell>{pos.symbolName}</TableCell>
+                        <TableRow key={pos.id}>
+                            <TableCell className="font-medium">{pos.symbolName}</TableCell>
+                            <TableCell>
+                               {pos.positionType === 'futures' ? (
+                                    <Badge variant={pos.side === 'long' ? 'default' : 'destructive'} className="capitalize">
+                                        {pos.side} {pos.leverage}x
+                                    </Badge>
+                               ) : (
+                                    <Badge variant="secondary">Spot</Badge>
+                               )}
+                            </TableCell>
                             <TableCell className="text-right">{pos.size.toFixed(6)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(value)}</TableCell>
                             <TableCell className="text-right">{formatPrice(pos.averageEntryPrice)}</TableCell>
                             <TableCell className="text-right">{formatPrice(pos.currentPrice)}</TableCell>
-                            <PNLCell pnl={pnl} />
+                            <PNLCell pnl={pos.unrealizedPnl} />
                             <TableCell className="text-center">
-                                <Button size="sm" variant="destructive" onClick={() => sell(pos.symbol, pos.size, pos.currentPrice)}>Close</Button>
+                                <Button size="sm" variant="destructive" onClick={() => closePosition(pos.id)}>Close</Button>
                             </TableCell>
                         </TableRow>
                     )
                 }) : (
-                    <TableRow><TableCell colSpan={7} className="text-center">No open positions.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center">No open positions.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -148,6 +167,7 @@ export default function PaperTradingDashboard() {
                   <TableHead>Timestamp</TableHead>
                   <TableHead>Symbol</TableHead>
                   <TableHead>Side</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead className="text-right">Size</TableHead>
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Value (USD)</TableHead>
@@ -156,21 +176,26 @@ export default function PaperTradingDashboard() {
               </TableHeader>
               <TableBody>
                  {tradeHistory.slice(0, rowsToShow).map(trade => {
-                   const tradePrice = trade.side === 'buy' ? trade.entryPrice : trade.currentPrice;
-                   const tradeValue = trade.size * tradePrice;
+                   const tradePrice = trade.price;
+                   const tradeValue = trade.positionType === 'futures' 
+                    ? (trade.size * tradePrice) / trade.leverage!
+                    : trade.size * tradePrice;
                    return (
                      <TableRow key={trade.id}>
                        <TableCell>{format(new Date(trade.timestamp), 'yyyy-MM-dd HH:mm:ss')}</TableCell>
                        <TableCell>{trade.symbolName}</TableCell>
-                       <TableCell className={`capitalize ${trade.side === 'buy' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</TableCell>
+                       <TableCell className={`capitalize ${trade.side === 'buy' || trade.side === 'long' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</TableCell>
+                       <TableCell>
+                           {trade.positionType === 'futures' ? (
+                                <Badge variant="outline">Futures</Badge>
+                            ) : (
+                                <Badge variant="secondary">Spot</Badge>
+                            )}
+                       </TableCell>
                        <TableCell className="text-right">{trade.size.toFixed(6)}</TableCell>
                        <TableCell className="text-right">{formatPrice(tradePrice)}</TableCell>
                        <TableCell className="text-right">{formatCurrency(tradeValue)}</TableCell>
-                       {trade.status === 'closed' && trade.pnl !== undefined ? (
-                          <PNLCell pnl={trade.pnl} />
-                       ) : (
-                          <TableCell className="text-right">-</TableCell>
-                       )}
+                       <PNLCell pnl={trade.pnl} />
                      </TableRow>
                    )
                  })}

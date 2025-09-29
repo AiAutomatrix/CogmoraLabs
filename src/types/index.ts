@@ -1,28 +1,32 @@
-
-
-
 import { z } from 'zod';
 
 export const PaperTradeSchema = z.object({
   id: z.string(),
+  positionId: z.string(),
+  positionType: z.enum(['spot', 'futures']),
   symbol: z.string(),
   symbolName: z.string(),
-  size: z.number(), // Amount of tokens
-  entryPrice: z.number(),
-  currentPrice: z.number(),
-  side: z.enum(['buy', 'sell']),
+  size: z.number(),
+  price: z.number(),
+  side: z.enum(['buy', 'sell', 'long', 'short']),
+  leverage: z.number().optional(),
   timestamp: z.number(),
   status: z.enum(['open', 'closed']),
-  pnl: z.number().optional(), // Profit and Loss on close
+  pnl: z.number().optional(),
 });
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 
 export const OpenPositionSchema = z.object({
+  id: z.string(),
+  positionType: z.enum(['spot', 'futures']),
   symbol: z.string(),
   symbolName: z.string(),
   size: z.number(),
   averageEntryPrice: z.number(),
   currentPrice: z.number(),
+  side: z.enum(['buy', 'long', 'short']),
+  leverage: z.number().optional(),
+  unrealizedPnl: z.number().optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
@@ -190,7 +194,7 @@ export type KucoinTokenResponse = {
   data: KucoinTokenResponseData;
 };
 
-// KuCoin WebSocket Message Types
+// KuCoin SPOT WebSocket Message Types
 export type KucoinWelcomeMessage = {
   id: string; // Echoes connectId used in WebSocket URL
   type: 'welcome';
@@ -201,30 +205,9 @@ export type KucoinPongMessage = {
   type: 'pong';
 };
 
-export type KucoinSubscribeMessage = {
-  id: number;
-  type: 'subscribe';
-  topic: string;
-  privateChannel?: boolean;
-  response?: boolean;
-};
-
-export type KucoinUnsubscribeMessage = {
-    id: number;
-    type: 'unsubscribe';
-    topic: string;
-    privateChannel?: boolean;
-    response?: boolean;
-}
-
 export type KucoinAckMessage = {
   id: string; // Should match the subscribe ID
   type: 'ack';
-};
-
-export type KuCoinPingMessage = {
-  id: string; 
-  type: 'ping';
 };
 
 export type KucoinErrorMessage = {
@@ -234,7 +217,6 @@ export type KucoinErrorMessage = {
   data: string; 
 };
 
-// Based on the user provided example for /market/ticker:{symbol}
 export type KucoinRawTickerData = {
     sequence: string;
     price: string;
@@ -260,6 +242,37 @@ export type IncomingKucoinWebSocketMessage =
   | KucoinTickerMessage
   | KucoinErrorMessage;
 
+
+// KuCoin FUTURES WebSocket Message Types
+export type FuturesSnapshotData = {
+    highPrice: number;
+    lastPrice: number;
+    lowPrice: number;
+    price24HoursBefore: number;
+    priceChg: number;
+    priceChgPct: number;
+    symbol: string;
+    ts: number;
+    turnover: number;
+    volume: number;
+};
+
+export type KucoinFuturesSnapshotMessage = {
+    topic: string; // /contractMarket/snapshot:XBTUSDTM
+    type: 'message';
+    subject: 'snapshot.24h';
+    id: string;
+    data: FuturesSnapshotData;
+};
+
+export type IncomingKucoinFuturesWebSocketMessage =
+  | KucoinWelcomeMessage
+  | KucoinPongMessage
+  | KucoinAckMessage
+  | KucoinFuturesSnapshotMessage
+  | KucoinErrorMessage;
+
+
 // WebSocket connection status
 export type WebSocketStatus =
   | 'idle'
@@ -270,5 +283,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
