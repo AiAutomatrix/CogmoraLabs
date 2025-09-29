@@ -62,7 +62,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const openPositionsRef = useRef(openPositions);
   const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [spotTickers, setSpotTickers] = useState<any[]>([]);
 
   const [spotWsStatus, setSpotWsStatus] = useState("idle");
   const spotWs = useRef<WebSocket | null>(null);
@@ -447,8 +446,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
 
     setTradeHistory(prev => {
-        const newHistory: PaperTrade[] = prev.map(t => 
-            t.positionId === positionId ? { ...t, status: 'closed' as 'closed' } : t
+        const newHistory: PaperTrade[] = prev.map((t: PaperTrade) => 
+            t.positionId === positionId ? { ...t, status: 'closed' } : t
         );
         return [closingTrade, ...newHistory];
     });
