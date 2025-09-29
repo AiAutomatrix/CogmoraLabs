@@ -17,6 +17,7 @@ interface PaperTradingContextType {
   futuresSell: (symbol: string, collateral: number, entryPrice: number, leverage: number) => void;
   closePosition: (positionId: string) => void;
   clearHistory: () => void;
+  clearAllPositions: () => void; // New function
   updatePositionPrice: (symbol: string, newPrice: number) => void;
   futuresWsStatus: string;
 }
@@ -308,12 +309,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     toast({ title: "Trade History Cleared", description: "Your trade history has been successfully deleted." });
   };
 
+  const clearAllPositions = () => {
+    setOpenPositions([]);
+    toast({ title: "All Positions Cleared", description: "All open positions have been removed." });
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
   };
 
-  const value = { balance, openPositions, tradeHistory, buy, futuresBuy, futuresSell, closePosition, clearHistory, updatePositionPrice, futuresWsStatus };
+  const value = { balance, openPositions, tradeHistory, buy, futuresBuy, futuresSell, closePosition, clearHistory, clearAllPositions, updatePositionPrice, futuresWsStatus };
 
   return <PaperTradingContext.Provider value={value}>{children}</PaperTradingContext.Provider>;
 };

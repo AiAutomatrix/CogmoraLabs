@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function PaperTradingDashboard() {
-  const { balance, openPositions, tradeHistory, closePosition, clearHistory } = usePaperTrading();
+  const { balance, openPositions, tradeHistory, closePosition, clearHistory, clearAllPositions } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
 
   const totalPositionValue = useMemo(() =>
@@ -115,9 +115,31 @@ export default function PaperTradingDashboard() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Open Positions</CardTitle>
-          <CardDescription>Your currently active paper trades.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Open Positions</CardTitle>
+              <CardDescription>Your currently active paper trades.</CardDescription>
+            </div>
+             <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={openPositions.length === 0}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear All
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will remove all of your open positions. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={clearAllPositions}>Continue</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[250px] w-full">
@@ -256,4 +278,3 @@ export default function PaperTradingDashboard() {
     </div>
   );
 }
-
