@@ -50,6 +50,8 @@ export default function Watchlist() {
   const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
   const [selectedSnapshotData, setSelectedSnapshotData] = useState<{item: WatchlistItem, data: SpotSnapshotData} | null>(null);
 
+  const [openAlertPopover, setOpenAlertPopover] = useState<string | null>(null);
+
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
     const options: Intl.NumberFormatOptions = {
@@ -65,12 +67,12 @@ export default function Watchlist() {
     return new Intl.NumberFormat("en-US", options).format(price);
   };
   
-  const handleSetAlert = (symbol: string, popoverOpenSetter: (open: boolean) => void) => {
+  const handleSetAlert = (symbol: string) => {
     const price = parseFloat(alertPrice);
     if (!isNaN(price) && price > 0) {
       addPriceAlert(symbol, price, alertCondition);
       setAlertPrice('');
-      popoverOpenSetter(false); // Close the popover on save
+      setOpenAlertPopover(null); // Close the popover on save
     }
   };
 
@@ -127,7 +129,6 @@ export default function Watchlist() {
               {watchlist.length > 0 ? (
                 watchlist.map((item) => {
                   const alert = priceAlerts[item.symbol];
-                  const [isAlertPopoverOpen, setIsAlertPopoverOpen] = useState(false);
                   
                   return (
                     <TableRow key={item.symbol}>
@@ -151,10 +152,14 @@ export default function Watchlist() {
                                 <FileText className="h-4 w-4" />
                             </Button>
                            )}
-                           <Popover open={isAlertPopoverOpen} onOpenChange={(open) => {
-                              if (open && item.currentPrice > 0) { setAlertPrice(item.currentPrice.toFixed(4)); } 
-                              else if (!open) { setAlertPrice(''); }
-                              setIsAlertPopoverOpen(open);
+                           <Popover open={openAlertPopover === item.symbol} onOpenChange={(open) => {
+                              if (open) {
+                                if (item.currentPrice > 0) setAlertPrice(item.currentPrice.toFixed(4));
+                                setOpenAlertPopover(item.symbol);
+                              } else {
+                                setOpenAlertPopover(null);
+                                setAlertPrice('');
+                              }
                             }}>
                               <PopoverTrigger asChild>
                                 <Button variant="ghost" size="icon" className={`h-8 w-8 ${alert ? 'text-primary' : ''}`}><Bell className="h-4 w-4"/></Button>
@@ -184,7 +189,7 @@ export default function Watchlist() {
                                         onChange={(e) => setAlertPrice(e.target.value)} className="h-9"
                                       />
                                     </div>
-                                    <Button size="sm" onClick={() => handleSetAlert(item.symbol, setIsAlertPopoverOpen)}>Save Alert</Button>
+                                    <Button size="sm" onClick={() => handleSetAlert(item.symbol)}>Save Alert</Button>
                                     {alert && (
                                        <Button size="sm" variant="destructive" onClick={() => removePriceAlert(item.symbol)}>Remove Alert</Button>
                                     )}
