@@ -1,5 +1,4 @@
 
-
 "use client";
 import React, {
   createContext,
@@ -107,6 +106,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
 
   const notifiedAlerts = useRef(new Set());
+  const prevWatchlistRef = useRef<WatchlistItem[]>([]);
+
 
   // Load from local storage on mount
   useEffect(() => {
@@ -121,7 +122,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedBalance) setBalance(JSON.parse(savedBalance));
       if (savedPositions) setOpenPositions(JSON.parse(savedPositions));
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
-      if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
+      if (savedWatchlist) {
+        const parsedWatchlist = JSON.parse(savedWatchlist);
+        setWatchlist(parsedWatchlist);
+        prevWatchlistRef.current = parsedWatchlist;
+      }
       if (savedAlerts) setPriceAlerts(JSON.parse(savedAlerts));
       if (savedTriggers) setTradeTriggers(JSON.parse(savedTriggers));
 
@@ -162,6 +167,30 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     });
   }, [priceAlerts, watchlist, toast]);
+
+    // Effect for showing watchlist add/remove toasts
+  useEffect(() => {
+      if (!isLoaded) return;
+
+      const prevSymbols = new Set(prevWatchlistRef.current.map(item => item.symbol));
+      const currentSymbols = new Set(watchlist.map(item => item.symbol));
+
+      // Check for added items
+      watchlist.forEach(item => {
+          if (!prevSymbols.has(item.symbol)) {
+              toast({ title: 'Watchlist', description: `${item.symbolName} added to watchlist.` });
+          }
+      });
+
+      // Check for removed items
+      prevWatchlistRef.current.forEach(item => {
+          if (!currentSymbols.has(item.symbol)) {
+              toast({ title: 'Watchlist', description: `${item.symbolName} removed from watchlist.` });
+          }
+      });
+
+      prevWatchlistRef.current = watchlist;
+  }, [watchlist, isLoaded, toast]);
 
 
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
@@ -681,6 +710,34 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allSpotSymbols = useMemo(() => Array.from(new Set([...spotPositionSymbols, ...spotWatchlistSymbols, ...spotTriggerSymbols])), [spotPositionSymbols, spotWatchlistSymbols, spotTriggerSymbols]);
   const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
   
+  const unsubscribeFromSpotSnapshot = useCallback((symbol: string) => {
+    const ws = spotWs.current;
+    if (ws && ws.readyState === WebSocket.OPEN && !allSpotSymbols.includes(symbol)) {
+        ws.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`}));
+    }
+    if (spotSnapshotSubRef.current === symbol) {
+      spotSnapshotSubRef.current = null;
+      setSpotSnapshotData(null);
+    }
+  }, [allSpotSymbols]);
+  
+  const subscribeToSpotSnapshot = useCallback((symbol: string) => {
+    setSpotSnapshotData(null); // Clear previous data
+    const ws = spotWs.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      if(spotSnapshotSubRef.current && spotSnapshotSubRef.current !== symbol) {
+        unsubscribeFromSpotSnapshot(spotSnapshotSubRef.current);
+      }
+      if (!spotSubscriptionsRef.current.has(symbol)) {
+        ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true }));
+      }
+      spotSnapshotSubRef.current = symbol;
+    } else {
+        spotSnapshotSubRef.current = symbol;
+        connectToSpot(Array.from(new Set([...allSpotSymbols, symbol])));
+    }
+  }, [allSpotSymbols, connectToSpot, unsubscribeFromSpotSnapshot]);
+
   // Effect to manage Spot WebSocket connection
   useEffect(() => {
     if (!isLoaded) return;
@@ -711,36 +768,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [isLoaded, allSpotSymbols, connectToSpot]);
 
-  const subscribeToSpotSnapshot = useCallback((symbol: string) => {
-    setSpotSnapshotData(null); // Clear previous data
-    const ws = spotWs.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      if(spotSnapshotSubRef.current && spotSnapshotSubRef.current !== symbol) {
-        unsubscribeFromSpotSnapshot(spotSnapshotSubRef.current);
-      }
-      if (!spotSubscriptionsRef.current.has(symbol)) {
-        ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true }));
-      }
-      spotSnapshotSubRef.current = symbol;
-    } else {
-        spotSnapshotSubRef.current = symbol;
-        connectToSpot(Array.from(new Set([...allSpotSymbols, symbol])));
-    }
-  }, [allSpotSymbols, connectToSpot]);
-
-  const unsubscribeFromSpotSnapshot = useCallback((symbol: string) => {
-    const ws = spotWs.current;
-    if (ws && ws.readyState === WebSocket.OPEN && !allSpotSymbols.includes(symbol)) {
-        ws.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`}));
-    }
-    if (spotSnapshotSubRef.current === symbol) {
-      spotSnapshotSubRef.current = null;
-      setSpotSnapshotData(null);
-    }
-  }, [allSpotSymbols]);
-
-
-
   // Effect to manage Futures WebSocket connection
   useEffect(() => {
     if (!isLoaded) return;
@@ -767,15 +794,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setWatchlist(prev => {
       const existingIndex = prev.findIndex(item => item.symbol === symbol);
       if (existingIndex > -1) {
-        toast({ title: 'Watchlist', description: `${symbolName} removed from watchlist.` });
         return prev.filter(item => item.symbol !== symbol);
       } else {
-        toast({ title: 'Watchlist', description: `${symbolName} added to watchlist.` });
         const newItem: WatchlistItem = { symbol, symbolName, type, currentPrice: 0, high, low, priceChgPct };
         return [newItem, ...prev];
       }
     });
-  }, [toast]);
+  }, []);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
@@ -873,3 +898,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
