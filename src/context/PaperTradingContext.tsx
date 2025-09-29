@@ -146,18 +146,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers]);
   
     // Effect for showing price alert toasts
-    useEffect(() => {
-        Object.entries(priceAlerts).forEach(([symbol, alert]) => {
-          if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
-            const watchlistItem = watchlist.find(item => item.symbol === symbol);
-            toast({
-              title: "Price Alert Triggered!",
-              description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
-            });
-            notifiedAlerts.current.add(symbol); // Mark as notified
-          }
+  useEffect(() => {
+    Object.entries(priceAlerts).forEach(([symbol, alert]) => {
+      if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
+        const watchlistItem = watchlist.find(item => item.symbol === symbol);
+        toast({
+          title: "Price Alert Triggered!",
+          description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
         });
-    }, [priceAlerts, watchlist, toast]);
+        notifiedAlerts.current.add(symbol); // Mark as notified
+      }
+    });
+  }, [priceAlerts, watchlist, toast]);
 
 
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
@@ -336,7 +336,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     // Remove the executed trigger and any OCO triggers
     setTradeTriggers(prev => {
         if(trigger.cancelOthers){
-            toast({ title: 'OCO Trigger', description: `Canceling other triggers for ${trigger.symbolName}`});
             return prev.filter(t => t.symbol !== trigger.symbol);
         }
         return prev.filter(t => t.id !== trigger.id)
@@ -403,24 +402,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [toast]);
   
-  const checkSlTp = useCallback((position: OpenPosition) => {
-    const { stopLoss, takeProfit, currentPrice, side } = position;
-    
-    if (stopLoss) {
-        if (side === 'long' && currentPrice <= stopLoss) {
-            closePosition(position.id, 'Stop Loss Hit');
-        } else if (side === 'short' && currentPrice >= stopLoss) {
-            closePosition(position.id, 'Stop Loss Hit');
+  // This effect will check for SL/TP on price updates.
+  useEffect(() => {
+    openPositions.forEach(position => {
+      const { stopLoss, takeProfit, currentPrice, side } = position;
+      if (stopLoss) {
+        if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
+          closePosition(position.id, 'Stop Loss Hit');
         }
-    }
-    if (takeProfit) {
-        if (side === 'long' && currentPrice >= takeProfit) {
-            closePosition(position.id, 'Take Profit Hit');
-        } else if (side === 'short' && currentPrice <= takeProfit) {
-            closePosition(position.id, 'Take Profit Hit');
+      }
+      if (takeProfit) {
+        if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
+          closePosition(position.id, 'Take Profit Hit');
         }
-    }
-  }, [closePosition]);
+      }
+    });
+  }, [openPositions, closePosition]);
 
   const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
       setWatchlist(prev => prev.map(item => 
@@ -443,14 +440,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const pnlMultiplier = p.side === "long" ? 1 : -1;
             unrealizedPnl = (newPrice - p.averageEntryPrice) * p.size * pnlMultiplier;
           }
-          const updatedPosition = { ...p, currentPrice: newPrice, unrealizedPnl };
-          checkSlTp(updatedPosition);
-          return updatedPosition;
+          return { ...p, currentPrice: newPrice, unrealizedPnl };
         }
         return p;
       })
     );
-  }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice, checkSlTp]);
+  }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice]);
   
   const connectToSpot = useCallback(
     async (topic: string) => {
@@ -745,3 +740,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
 
     
 
+    
