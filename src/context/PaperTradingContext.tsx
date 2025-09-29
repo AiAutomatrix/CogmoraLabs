@@ -40,21 +40,27 @@ interface PaperTradingContextType {
     symbol: string,
     symbolName: string,
     amountUSD: number,
-    currentPrice: number
+    currentPrice: number,
+    stopLoss?: number,
+    takeProfit?: number,
   ) => void;
   futuresBuy: (
     symbol: string,
     collateral: number,
     entryPrice: number,
-    leverage: number
+    leverage: number,
+    stopLoss?: number,
+    takeProfit?: number,
   ) => void;
   futuresSell: (
     symbol: string,
     collateral: number,
     entryPrice: number,
-    leverage: number
+    leverage: number,
+    stopLoss?: number,
+    takeProfit?: number,
   ) => void;
-  closePosition: (positionId: string) => void;
+  closePosition: (positionId: string, reason?: string) => void;
   closeAllPositions: () => void;
   clearHistory: () => void;
   spotWsStatus: string;
@@ -172,7 +178,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
   
   const buy = useCallback(
-    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number) => {
+    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number, stopLoss?: number, takeProfit?: number) => {
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
         return;
@@ -188,6 +194,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               const totalValue = (existing.size * existing.averageEntryPrice) + (size * currentPrice);
               existing.averageEntryPrice = totalValue / totalSize;
               existing.size = totalSize;
+              // SL/TP logic on modification can be added here if needed
               return updatedPositions;
           } else {
               const newPosition: OpenPosition = {
@@ -200,6 +207,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   currentPrice,
                   side: 'buy',
                   unrealizedPnl: 0,
+                  stopLoss,
+                  takeProfit
               };
               return [...prev, newPosition];
           }
@@ -208,7 +217,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setBalance(prev => prev - amountUSD);
       setTradeHistory(prev => [{
         id: crypto.randomUUID(),
-        positionId: 'N/A',
+        positionId: 'N/A', // Spot trades might not need a persistent position ID if they are merged
         positionType: 'spot',
         symbol,
         symbolName,
@@ -223,52 +232,90 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     },
     [balance, toast]
   );
-  
-  const createFuturesTrade = useCallback(
-    (symbol: string, collateral: number, entryPrice: number, leverage: number, side: "long" | "short") => {
-      if (balance < collateral) {
-        toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
-        return;
-      }
-      const positionValue = collateral * leverage;
-      const size = positionValue / entryPrice;
 
-      const newPosition: OpenPosition = {
-        id: crypto.randomUUID(),
-        positionType: "futures",
-        symbol,
-        symbolName: symbol.replace(/M$/, ""),
-        size,
-        averageEntryPrice: entryPrice,
-        currentPrice: entryPrice,
-        side,
-        leverage,
-        unrealizedPnl: 0,
-      };
+    const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
+        if (balance < collateral) {
+            toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+            return;
+        }
+        const positionValue = collateral * leverage;
+        const size = positionValue / entryPrice;
 
-      setBalance((prev) => prev - collateral);
-      setOpenPositions((prev) => [...prev, newPosition]);
-      setTradeHistory((prev) => [{
-        id: crypto.randomUUID(),
-        positionId: newPosition.id,
-        positionType: "futures",
-        symbol,
-        symbolName: newPosition.symbolName,
-        size,
-        price: entryPrice,
-        side,
-        leverage,
-        timestamp: Date.now(),
-        status: "open",
-      }, ...prev]);
+        const newPosition: OpenPosition = {
+            id: crypto.randomUUID(),
+            positionType: "futures",
+            symbol,
+            symbolName: symbol.replace(/M$/, ""),
+            size,
+            averageEntryPrice: entryPrice,
+            currentPrice: entryPrice,
+            side: "long",
+            leverage,
+            unrealizedPnl: 0,
+            stopLoss,
+            takeProfit,
+        };
 
-      toast({ title: "Futures Trade Executed", description: `${side.toUpperCase()} ${size.toFixed(4)} ${newPosition.symbolName} with ${leverage}x leverage.` });
-    },
-    [balance, toast]
-  );
+        setBalance((prev) => prev - collateral);
+        setOpenPositions((prev) => [...prev, newPosition]);
+        setTradeHistory((prev) => [{
+            id: crypto.randomUUID(),
+            positionId: newPosition.id,
+            positionType: "futures",
+            symbol,
+            symbolName: newPosition.symbolName,
+            size,
+            price: entryPrice,
+            side: "long",
+            leverage,
+            timestamp: Date.now(),
+            status: "open",
+        }, ...prev]);
 
-  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "long"), [createFuturesTrade]);
-  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "short"), [createFuturesTrade]);
+        toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+    }, [balance, toast]);
+
+    const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
+        if (balance < collateral) {
+            toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+            return;
+        }
+        const positionValue = collateral * leverage;
+        const size = positionValue / entryPrice;
+
+        const newPosition: OpenPosition = {
+            id: crypto.randomUUID(),
+            positionType: "futures",
+            symbol,
+            symbolName: symbol.replace(/M$/, ""),
+            size,
+            averageEntryPrice: entryPrice,
+            currentPrice: entryPrice,
+            side: "short",
+            leverage,
+            unrealizedPnl: 0,
+            stopLoss,
+            takeProfit,
+        };
+
+        setBalance((prev) => prev - collateral);
+        setOpenPositions((prev) => [...prev, newPosition]);
+        setTradeHistory((prev) => [{
+            id: crypto.randomUUID(),
+            positionId: newPosition.id,
+            positionType: "futures",
+            symbol,
+            symbolName: newPosition.symbolName,
+            size,
+            price: entryPrice,
+            side: "short",
+            leverage,
+            timestamp: Date.now(),
+            status: "open",
+        }, ...prev]);
+
+        toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+    }, [balance, toast]);
 
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     toast({
@@ -276,13 +323,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
     });
 
+    if (trigger.cancelOthers) {
+      setTradeTriggers(prev => prev.filter(t => t.symbol !== trigger.symbol || t.id === trigger.id));
+      toast({ title: 'OCO Trigger', description: `Canceling other triggers for ${trigger.symbolName}`});
+    }
+
     if (trigger.type === 'spot') {
-      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice);
+      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit);
     } else if (trigger.type === 'futures') {
       if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage);
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit);
       } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage);
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit);
       }
     }
     // Remove the executed trigger
@@ -290,23 +342,83 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast, buy, futuresBuy, futuresSell]);
 
   const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
-    setTradeTriggers(prevTriggers => {
-        const triggersForSymbol = prevTriggers.filter(t => t.symbol === symbol && t.status === 'active');
-        if (triggersForSymbol.length === 0) return prevTriggers;
-
-        triggersForSymbol.forEach(trigger => {
-            const conditionMet = 
+    tradeTriggers.forEach(trigger => {
+        if (trigger.symbol === symbol && trigger.status === 'active') {
+            const conditionMet =
                 (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
                 (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
 
             if (conditionMet) {
                 executeTrigger(trigger, newPrice);
             }
+        }
+    });
+  }, [tradeTriggers, executeTrigger]);
+
+  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close') => {
+    setOpenPositions(prev => {
+        const positionToClose = prev.find(p => p.id === positionId);
+        if (!positionToClose) return prev;
+
+        const exitPrice = positionToClose.currentPrice;
+        let pnl = 0;
+        let returnedValue = 0;
+
+        if (positionToClose.positionType === 'spot') {
+          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
+          returnedValue = positionToClose.size * exitPrice;
+        } else if (positionToClose.positionType === 'futures') {
+          const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
+          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
+          const leverage = positionToClose.leverage ?? 1;
+          const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
+          returnedValue = collateral + pnl;
+        }
+
+        setBalance(bal => bal + returnedValue);
+        
+        setTradeHistory(th => {
+            const closingTrade: PaperTrade = {
+                id: crypto.randomUUID(),
+                positionId: positionToClose.id,
+                positionType: positionToClose.positionType,
+                symbol: positionToClose.symbol,
+                symbolName: positionToClose.symbolName,
+                size: positionToClose.size,
+                price: exitPrice,
+                side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
+                timestamp: Date.now(),
+                status: 'closed',
+                pnl,
+                leverage: positionToClose.leverage,
+            };
+            return [closingTrade, ...th];
         });
         
-        return prevTriggers;
+        toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+        
+        return prev.filter(p => p.id !== positionId);
     });
-  }, [executeTrigger]);
+  }, [toast]);
+  
+  const checkSlTp = useCallback((position: OpenPosition) => {
+    const { stopLoss, takeProfit, currentPrice, side } = position;
+    
+    if (stopLoss) {
+        if (side === 'long' && currentPrice <= stopLoss) {
+            closePosition(position.id, 'Stop Loss Hit');
+        } else if (side === 'short' && currentPrice >= stopLoss) {
+            closePosition(position.id, 'Stop Loss Hit');
+        }
+    }
+    if (takeProfit) {
+        if (side === 'long' && currentPrice >= takeProfit) {
+            closePosition(position.id, 'Take Profit Hit');
+        } else if (side === 'short' && currentPrice <= takeProfit) {
+            closePosition(position.id, 'Take Profit Hit');
+        }
+    }
+  }, [closePosition]);
 
   const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
       setWatchlist(prev => prev.map(item => 
@@ -329,12 +441,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const pnlMultiplier = p.side === "long" ? 1 : -1;
             unrealizedPnl = (newPrice - p.averageEntryPrice) * p.size * pnlMultiplier;
           }
-          return { ...p, currentPrice: newPrice, unrealizedPnl };
+          const updatedPosition = { ...p, currentPrice: newPrice, unrealizedPnl };
+          checkSlTp(updatedPosition);
+          return updatedPosition;
         }
         return p;
       })
     );
-  }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice]);
+  }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice, checkSlTp]);
   
   const connectToSpot = useCallback(
     async (topic: string) => {
@@ -519,51 +633,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [isLoaded, allFuturesSymbols, connectToFutures]);
   
-  const closePosition = useCallback((positionId: string) => {
-    setOpenPositions(prev => {
-        const positionToClose = prev.find(p => p.id === positionId);
-        if (!positionToClose) return prev;
-
-        const exitPrice = positionToClose.currentPrice;
-        let pnl = 0;
-        let returnedValue = 0;
-
-        if (positionToClose.positionType === 'spot') {
-          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
-          returnedValue = positionToClose.size * exitPrice;
-        } else if (positionToClose.positionType === 'futures') {
-          const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
-          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
-          const leverage = positionToClose.leverage ?? 1;
-          const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
-          returnedValue = collateral + pnl;
-        }
-
-        setBalance(bal => bal + returnedValue);
-        
-        setTradeHistory(th => {
-            const closingTrade: PaperTrade = {
-                id: crypto.randomUUID(),
-                positionId: positionToClose.id,
-                positionType: positionToClose.positionType,
-                symbol: positionToClose.symbol,
-                symbolName: positionToClose.symbolName,
-                size: positionToClose.size,
-                price: exitPrice,
-                side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
-                timestamp: Date.now(),
-                status: 'closed',
-                pnl,
-                leverage: positionToClose.leverage,
-            };
-            return [closingTrade, ...th];
-        });
-        
-        toast({ title: `Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
-        
-        return prev.filter(p => p.id !== positionId);
-    });
-  }, [toast]);
   
   const closeAllPositions = useCallback(() => {
     openPositions.forEach(p => closePosition(p.id));

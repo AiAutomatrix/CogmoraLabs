@@ -19,6 +19,8 @@ import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 
 interface WatchlistTradeTriggerPopupProps {
   isOpen: boolean;
@@ -39,6 +41,9 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   const [triggerCondition, setTriggerCondition] = useState<'above' | 'below'>('below');
   const [targetPrice, setTargetPrice] = useState('');
   const [triggerAction, setTriggerAction] = useState<'buy' | 'long' | 'short'>('buy');
+  const [stopLoss, setStopLoss] = useState('');
+  const [takeProfit, setTakeProfit] = useState('');
+  const [cancelOthers, setCancelOthers] = useState(false);
 
   if (!item) return null;
 
@@ -47,14 +52,17 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   const handleInstantTrade = () => {
     const amountUSD = parseFloat(allocation);
     if (isNaN(amountUSD) || amountUSD <= 0 || amountUSD > balance) return;
+    
+    const sl = stopLoss ? parseFloat(stopLoss) : undefined;
+    const tp = takeProfit ? parseFloat(takeProfit) : undefined;
 
     if (item.type === 'spot') {
-      buy(item.symbol, item.symbolName, amountUSD, item.currentPrice);
+      buy(item.symbol, item.symbolName, amountUSD, item.currentPrice, sl, tp);
     } else {
       if (triggerAction === 'long') {
-        futuresBuy(item.symbol, amountUSD, item.currentPrice, leverage[0]);
+        futuresBuy(item.symbol, amountUSD, item.currentPrice, leverage[0], sl, tp);
       } else if (triggerAction === 'short') {
-        futuresSell(item.symbol, amountUSD, item.currentPrice, leverage[0]);
+        futuresSell(item.symbol, amountUSD, item.currentPrice, leverage[0], sl, tp);
       }
     }
     onOpenChange(false);
@@ -65,7 +73,6 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
     const amount = parseFloat(allocation);
 
     if (isNaN(price) || price <= 0 || isNaN(amount) || amount <= 0 || amount > balance) {
-        // Basic validation feedback
         return;
     }
 
@@ -78,6 +85,9 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
         action: triggerAction,
         amount: amount,
         leverage: leverage[0],
+        cancelOthers,
+        stopLoss: stopLoss ? parseFloat(stopLoss) : undefined,
+        takeProfit: takeProfit ? parseFloat(takeProfit) : undefined,
     });
     onOpenChange(false);
   };
@@ -221,6 +231,26 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
                         />
                     </div>
                 )}
+
+                <Separator />
+
+                <div className="space-y-3">
+                    <Label>Advanced Options</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                            <Label htmlFor="stop-loss" className="text-xs">Stop Loss Price</Label>
+                            <Input id="stop-loss" type="number" placeholder="Optional" value={stopLoss} onChange={e => setStopLoss(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="take-profit" className="text-xs">Take Profit Price</Label>
+                            <Input id="take-profit" type="number" placeholder="Optional" value={takeProfit} onChange={e => setTakeProfit(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="flex items-center space-x-2 pt-2">
+                        <Checkbox id="cancel-others" checked={cancelOthers} onCheckedChange={(checked) => setCancelOthers(Boolean(checked))} />
+                        <Label htmlFor="cancel-others" className="text-sm font-normal">Cancel other triggers for this symbol on execution</Label>
+                    </div>
+                </div>
                 
                 <DialogFooter className="grid grid-cols-2 gap-2 pt-4">
                      <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>

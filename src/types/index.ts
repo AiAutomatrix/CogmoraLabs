@@ -28,6 +28,8 @@ export const OpenPositionSchema = z.object({
   side: z.enum(['buy', 'long', 'short']),
   leverage: z.number().optional(),
   unrealizedPnl: z.number().optional(),
+  stopLoss: z.number().optional(),
+  takeProfit: z.number().optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
@@ -58,6 +60,9 @@ export const TradeTriggerSchema = z.object({
   amount: z.number(), // For spot, this is USD amount. For futures, this is collateral.
   leverage: z.number(), // Only for futures
   status: z.enum(['active', 'executed', 'canceled']),
+  cancelOthers: z.boolean().optional(),
+  stopLoss: z.number().optional(),
+  takeProfit: z.number().optional(),
 });
 export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 
@@ -145,7 +150,7 @@ export type PairVolume = z.infer<typeof VolumeSchema>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
+export type PairPriceChange = z.infer<typeof PairPriceChange>;
 
 export const LiquiditySchema = z.object({
   usd: z.number().optional().nullable(),
