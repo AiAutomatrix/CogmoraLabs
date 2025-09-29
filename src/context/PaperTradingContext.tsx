@@ -384,10 +384,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [executeTrigger]);
   
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close') => {
+    let positionToClose: OpenPosition | undefined;
     setOpenPositions(prev => {
-        const positionToClose = prev.find(p => p.id === positionId);
+        positionToClose = prev.find(p => p.id === positionId);
         if (!positionToClose) return prev;
+        return prev.filter(p => p.id !== positionId);
+    });
 
+    if (positionToClose) {
         const exitPrice = positionToClose.currentPrice;
         let pnl = 0;
         let returnedValue = 0;
@@ -408,28 +412,26 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setTradeHistory(th => {
             const closingTrade: PaperTrade = {
                 id: crypto.randomUUID(),
-                positionId: positionToClose.id,
-                positionType: positionToClose.positionType,
-                symbol: positionToClose.symbol,
-                symbolName: positionToClose.symbolName,
-                size: positionToClose.size,
+                positionId: (positionToClose as OpenPosition).id,
+                positionType: (positionToClose as OpenPosition).positionType,
+                symbol: (positionToClose as OpenPosition).symbol,
+                symbolName: (positionToClose as OpenPosition).symbolName,
+                size: (positionToClose as OpenPosition).size,
                 price: exitPrice,
-                side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
+                side: (positionToClose as OpenPosition).positionType === 'futures' ? ((positionToClose as OpenPosition).side === 'long' ? 'sell' : 'buy') : 'sell',
                 timestamp: Date.now(),
                 status: 'closed',
                 pnl,
-                leverage: positionToClose.leverage,
+                leverage: (positionToClose as OpenPosition).leverage,
             };
             return [closingTrade, ...th];
         });
         
-        toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
-        
-        return prev.filter(p => p.id !== positionId);
-    });
+        toast({ title: `${reason}: Position Closed`, description: `Closed ${(positionToClose as OpenPosition).symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+    }
   }, [toast]);
   
-    const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
+  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
     let symbolName = '';
     setOpenPositions(prev =>
       prev.map(pos => {
@@ -456,17 +458,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
 
-  const checkSlTp = useCallback((positions: OpenPosition[]) => {
+  useEffect(() => {
+    if (!isLoaded || openPositions.length === 0) return;
+
     const positionsToClose = new Set<string>();
     const reasons = new Map<string, string>();
 
-    positions.forEach(position => {
+    openPositions.forEach(position => {
       const { id, details, currentPrice, side } = position;
       if (!details) return;
 
       const { stopLoss, takeProfit } = details;
 
-      if (stopLoss) {
+      if (stopLoss !== undefined) {
         if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
           if (!positionsToClose.has(id)) {
             positionsToClose.add(id);
@@ -474,7 +478,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
       }
-      if (takeProfit) {
+      if (takeProfit !== undefined) {
         if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
            if (!positionsToClose.has(id)) {
             positionsToClose.add(id);
@@ -485,11 +489,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     if (positionsToClose.size > 0) {
-      // Use useEffect to defer the closing action
       positionsToClose.forEach(id => closePosition(id, reasons.get(id)));
     }
-  }, [closePosition]);
-
+  }, [openPositions, isLoaded, closePosition]);
+  
   const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
       setWatchlist(prev => prev.map(item => 
           item.symbol === symbol ? { ...item, currentPrice: newPrice } : item
@@ -501,8 +504,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     checkTradeTriggers(symbol, newPrice);
     updateWatchlistPrice(symbol, newPrice);
 
-    setOpenPositions((prevPositions) => {
-      const updatedPositions = prevPositions.map((p) => {
+    setOpenPositions((prevPositions) => 
+      prevPositions.map((p) => {
         if (p.symbol === symbol) {
           let unrealizedPnl = 0;
           if (p.positionType === "spot") {
@@ -514,17 +517,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           return { ...p, currentPrice: newPrice, unrealizedPnl };
         }
         return p;
-      });
-       // SL/TP checks are now outside, after state has been updated.
-      return updatedPositions;
-    });
+      })
+    );
   }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice]);
-  
-  useEffect(() => {
-    if (isLoaded && openPositions.length > 0) {
-      checkSlTp(openPositions);
-    }
-  }, [openPositions, isLoaded, checkSlTp]);
   
   const connectToSpot = useCallback(
     async (topic: string) => {
@@ -828,3 +823,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
 
 
   
+
+    
