@@ -107,7 +107,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setIsLoaded(true);
   }, []);
 
-  // Save to local storage and manage WebSocket connections when state changes
+  // Save to local storage when state changes
   useEffect(() => {
     if (isLoaded) {
       localStorage.setItem("paperTrading_balance", JSON.stringify(balance));
@@ -116,18 +116,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         JSON.stringify(openPositions)
       );
       localStorage.setItem("paperTrading_history", JSON.stringify(tradeHistory));
-
-      const spotSymbols = openPositions
-        .filter((p) => p.positionType === "spot")
-        .map((p) => p.symbol);
-      connectToSpot(spotSymbols);
-
-      const futuresSymbols = openPositions
-        .filter((p) => p.positionType === "futures")
-        .map((p) => p.symbol);
-      connectToFutures(futuresSymbols);
     }
-  }, [balance, openPositions, tradeHistory, isLoaded]); // Dependencies will trigger this effect
+  }, [balance, openPositions, tradeHistory, isLoaded]);
 
   const updatePositionPrice = useCallback((symbol: string, newPrice: number) => {
     setOpenPositions((prevPositions) =>
@@ -153,10 +143,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (symbolsToSubscribe.length === 0) {
         if (spotWs.current) {
           spotWs.current.close();
-          spotWs.current = null;
-          if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-          setSpotWsStatus("disconnected");
-          spotSubscriptions.current.clear();
         }
         return;
       }
@@ -171,7 +157,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
-      if (spotWs.current) spotWs.current.close();
       setSpotWsStatus("fetching_token");
 
       try {
@@ -185,6 +170,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setSpotWsStatus("connecting");
         const ws = new WebSocket(wsUrl);
+        spotWs.current = ws;
 
         ws.onopen = () => {
           setSpotWsStatus("connected");
@@ -213,13 +199,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setSpotWsStatus("disconnected");
           if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
           spotSubscriptions.current.clear();
+          spotWs.current = null;
         };
 
         ws.onerror = () => {
           setSpotWsStatus("error");
           ws.close();
         };
-        spotWs.current = ws;
       } catch (error) {
         setSpotWsStatus("error");
       }
@@ -232,10 +218,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (symbolsToSubscribe.length === 0) {
         if (futuresWs.current) {
           futuresWs.current.close();
-          futuresWs.current = null;
-          if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-          setFuturesWsStatus("disconnected");
-          futuresSubscriptions.current.clear();
         }
         return;
       }
@@ -250,7 +232,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
-      if (futuresWs.current) futuresWs.current.close();
       setFuturesWsStatus("fetching_token");
 
       try {
@@ -264,6 +245,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setFuturesWsStatus("connecting");
         const ws = new WebSocket(wsUrl);
+        futuresWs.current = ws;
 
         ws.onopen = () => {
           setFuturesWsStatus("connected");
@@ -292,6 +274,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setFuturesWsStatus("disconnected");
           if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
           futuresSubscriptions.current.clear();
+          futuresWs.current = null;
         };
 
         ws.onerror = () => {
@@ -299,7 +282,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           ws.close();
         };
 
-        futuresWs.current = ws;
       } catch (error) {
         setFuturesWsStatus("error");
       }
@@ -307,6 +289,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     [updatePositionPrice]
   );
   
+  // Effect to manage WebSocket connections based on open positions
+  useEffect(() => {
+    if (isLoaded) {
+      const spotSymbols = openPositions
+        .filter((p) => p.positionType === "spot")
+        .map((p) => p.symbol);
+      connectToSpot(spotSymbols);
+
+      const futuresSymbols = openPositions
+        .filter((p) => p.positionType === "futures")
+        .map((p) => p.symbol);
+      connectToFutures(futuresSymbols);
+    }
+  }, [isLoaded, openPositions, connectToSpot, connectToFutures]);
+
+
   const buy = useCallback(
     (symbol: string, symbolName: string, amountUSD: number, currentPrice: number) => {
       if (balance < amountUSD) {
@@ -334,7 +332,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   size,
                   averageEntryPrice: currentPrice,
                   currentPrice,
-                  side: 'buy', // Fix: Added required 'side' property
+                  side: 'buy',
                   unrealizedPnl: 0,
               };
               return [...prev, newPosition];
@@ -420,7 +418,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } else if (positionToClose.positionType === 'futures') {
       const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
       pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
-      // Fix: Safely access leverage, default to 1 for calculation if undefined
       const leverage = positionToClose.leverage ?? 1;
       const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
       returnedValue = collateral + pnl;
@@ -440,9 +437,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             price: exitPrice,
             side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
             timestamp: Date.now(),
-            status: 'closed' as 'closed', // Explicitly type status
+            status: 'closed',
             pnl,
-            // Fix: Safely access leverage
             leverage: positionToClose.leverage,
         };
         return [closingTrade, ...prev];
@@ -452,12 +448,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   const closeAllPositions = useCallback(() => {
-    // Use the ref to get the most current list of positions
     openPositionsRef.current.forEach(p => closePosition(p.id));
   }, [closePosition]);
 
   const clearHistory = useCallback(() => {
     setTradeHistory([]);
+    localStorage.setItem("paperTrading_history", JSON.stringify([]));
     toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
   }, [toast]);
 
