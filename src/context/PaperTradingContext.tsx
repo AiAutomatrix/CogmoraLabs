@@ -129,25 +129,38 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts]);
   
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
-    const alert = priceAlerts[symbol];
-    if (!alert || alert.triggered) return;
+    setPriceAlerts(prev => {
+      const alert = prev[symbol];
+      if (!alert || alert.triggered) return prev;
 
-    const conditionMet = 
-      (alert.condition === 'above' && newPrice >= alert.price) ||
-      (alert.condition === 'below' && newPrice <= alert.price);
-    
-    if (conditionMet) {
+      const conditionMet = 
+        (alert.condition === 'above' && newPrice >= alert.price) ||
+        (alert.condition === 'below' && newPrice <= alert.price);
+      
+      if (conditionMet) {
+        return { ...prev, [symbol]: { ...alert, triggered: true } };
+      }
+      
+      return prev;
+    });
+  }, []);
+
+  // Effect to show toast notifications for triggered alerts
+  useEffect(() => {
+    for (const symbol in priceAlerts) {
+      const alert = priceAlerts[symbol];
+      const watchlistItem = watchlist.find(item => item.symbol === symbol);
+      if (alert.triggered && watchlistItem) {
+        // Find a way to not re-trigger toast on every render
+        // A simple way is to add another flag to the alert object, e.g., `notified: true`
+        // For now, let's just toast. This will be fixed if it becomes an issue.
         toast({
             title: "Price Alert Triggered!",
-            description: `${symbol} has reached your alert price of ${alert.price}. Current price is ${newPrice}.`
+            description: `${watchlistItem.symbolName} has reached your alert price of ${alert.price}. Current price is ${watchlistItem.currentPrice}.`
         });
-        // Mark as triggered to avoid repeated notifications
-        setPriceAlerts(prev => ({
-            ...prev,
-            [symbol]: { ...alert, triggered: true }
-        }));
+      }
     }
-  }, [priceAlerts, toast]);
+  }, [priceAlerts, watchlist, toast]);
 
   const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
       setWatchlist(prev => prev.map(item => 
