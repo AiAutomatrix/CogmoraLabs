@@ -103,10 +103,10 @@ export default function PaperTradingDashboard() {
 
   const PNLCell = ({ pnl }: { pnl: number | undefined }) => {
     if (pnl === undefined)
-      return <TableCell className="text-right">-</TableCell>;
+      return <TableCell className="text-right px-2 py-2">-</TableCell>;
     return (
       <TableCell
-        className={`text-right ${
+        className={`text-right px-2 py-2 ${
           pnl >= 0 ? "text-green-500" : "text-red-500"
         }`}
       >
@@ -204,20 +204,20 @@ export default function PaperTradingDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Symbol</TableHead>
-                  <TableHead className="hidden sm:table-cell">Type</TableHead>
-                  <TableHead className="text-right">Size</TableHead>
-                  <TableHead className="hidden md:table-cell text-right">
+                  <TableHead className="px-2 py-2">Symbol</TableHead>
+                  <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
+                  <TableHead className="text-right px-2 py-2">Size</TableHead>
+                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
                     Value (USD)
                   </TableHead>
-                  <TableHead className="hidden md:table-cell text-right">
+                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
                     Entry Price
                   </TableHead>
-                  <TableHead className="hidden md:table-cell text-right">
+                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
                     Current Price
                   </TableHead>
-                  <TableHead className="text-right">Unrealized P&L</TableHead>
-                  <TableHead className="text-center min-w-[100px]">
+                  <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
+                  <TableHead className="text-center min-w-[100px] px-2 py-2">
                     Actions
                   </TableHead>
                 </TableRow>
@@ -231,10 +231,10 @@ export default function PaperTradingDashboard() {
                         : pos.size * pos.currentPrice;
                     return (
                       <TableRow key={`${pos.id}-${pos.symbolName}`}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium px-2 py-2">
                           {pos.symbolName}
                         </TableCell>
-                        <TableCell className="hidden sm:table-cell">
+                        <TableCell className="hidden sm:table-cell px-2 py-2">
                           {pos.positionType === "futures" ? (
                             <Badge
                               variant={
@@ -248,20 +248,20 @@ export default function PaperTradingDashboard() {
                             <Badge variant="secondary">Spot</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right px-2 py-2">
                           {pos.size.toFixed(6)}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-right">
+                        <TableCell className="hidden md:table-cell text-right px-2 py-2">
                           {formatCurrency(value)}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-right">
+                        <TableCell className="hidden md:table-cell text-right px-2 py-2">
                           {formatPrice(pos.averageEntryPrice)}
                         </TableCell>
-                        <TableCell className="hidden md:table-cell text-right">
+                        <TableCell className="hidden md:table-cell text-right px-2 py-2">
                           {formatPrice(pos.currentPrice)}
                         </TableCell>
                         <PNLCell pnl={pos.unrealizedPnl} />
-                        <TableCell className="text-center min-w-[100px]">
+                        <TableCell className="text-center min-w-[100px] px-2 py-2">
                           <Button
                             size="sm"
                             variant="outline"
@@ -415,5 +415,3 @@ export default function PaperTradingDashboard() {
     </div>
   );
 }
-
-    
