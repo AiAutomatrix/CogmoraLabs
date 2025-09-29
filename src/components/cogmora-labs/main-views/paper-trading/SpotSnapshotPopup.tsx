@@ -30,6 +30,15 @@ const formatCurrency = (value?: number) => {
     return formatValue(value, { style: 'currency', currency: 'USD', maximumFractionDigits: 8 });
 }
 
+const formatVolume = (value?: number) => {
+    if (value === undefined || value === null) return 'N/A';
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
+    return value.toFixed(2);
+};
+
+
 const formatPercent = (value?: number) => {
     if (value === undefined || value === null) return 'N/A';
     return `${(value * 100).toFixed(2)}%`;
@@ -52,7 +61,7 @@ const MarketChangeBlock: React.FC<{ title: string; data?: { changePrice?: number
                 <InfoRow label="High" value={formatCurrency(data.high)} />
                 <InfoRow label="Low" value={formatCurrency(data.low)} />
                 <InfoRow label="Open" value={formatCurrency(data.open)} />
-                <InfoRow label="Volume" value={formatCurrency(data.volValue)} />
+                <InfoRow label="Volume" value={formatVolume(data.volValue)} />
             </div>
         ) : (
             <p className="text-muted-foreground text-sm">Data not available.</p>
@@ -80,7 +89,7 @@ export const SpotSnapshotPopup: React.FC<SpotSnapshotPopupProps> = ({ isOpen, on
                     <InfoRow label="Avg. Price" value={formatCurrency(data.averagePrice)} />
                     <InfoRow label="Buy" value={formatCurrency(data.buy)} />
                     <InfoRow label="Sell" value={formatCurrency(data.sell)} />
-                    <InfoRow label="24h Volume" value={formatCurrency(data.volValue)} />
+                    <InfoRow label="24h Volume" value={formatVolume(data.volValue)} />
                     <InfoRow label="Trading" value={data.trading ? 'Yes' : 'No'} />
                 </div>
                 <Separator />
