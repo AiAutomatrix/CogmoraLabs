@@ -436,25 +436,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || openPositions.length === 0) return;
   
-    const positionsToClose: { id: string, reason: string }[] = [];
+    const positionsToClose: { id: string; reason: string }[] = [];
   
     openPositions.forEach(position => {
+      if (!position.details) return;
       const { id, details, currentPrice, side } = position;
-      if (!details) return;
   
       const { stopLoss, takeProfit } = details;
   
-      let slHit = false;
       if (stopLoss !== undefined) {
         if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-          slHit = true;
           positionsToClose.push({ id, reason: 'Stop Loss Hit' });
+          return; // Stop checking this position if SL is hit
         }
       }
   
-      if (!slHit && takeProfit !== undefined) {
+      if (takeProfit !== undefined) {
         if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
           positionsToClose.push({ id, reason: 'Take Profit Hit' });
         }
@@ -462,11 +461,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   
     if (positionsToClose.length > 0) {
+      // Use a timeout to ensure this runs after the current render cycle
       setTimeout(() => {
         positionsToClose.forEach(p => closePosition(p.id, p.reason));
       }, 0);
     }
   }, [openPositions, isLoaded, closePosition]);
+
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
     let symbolName = '';
