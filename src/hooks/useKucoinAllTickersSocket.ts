@@ -59,15 +59,18 @@ export function useKucoinTickers() {
         if (message.type === 'message' && message.subject === 'trade.ticker' && message.topic === '/market/ticker:all') {
             const updatedTickerData = message.data;
             
-            // This is a more robust way to update the state that React will reliably detect
             setTickers(prevTickers => {
-                const newTickers = [...prevTickers];
-                const index = newTickers.findIndex(t => t.symbol === updatedTickerData.symbol);
-                if (index > -1) {
-                    // Update existing ticker with new data
-                    newTickers[index] = { ...newTickers[index], ...updatedTickerData, last: updatedTickerData.price || newTickers[index].last };
+                const tickerExists = prevTickers.some(t => t.symbol === updatedTickerData.symbol);
+                if (tickerExists) {
+                    return prevTickers.map(t => {
+                        if (t.symbol === updatedTickerData.symbol) {
+                            return { ...t, ...updatedTickerData, last: updatedTickerData.price || t.last };
+                        }
+                        return t;
+                    });
                 }
-                return newTickers;
+                // This case is unlikely with "ticker:all" but good practice
+                return [...prevTickers]; 
             });
         }
       };
