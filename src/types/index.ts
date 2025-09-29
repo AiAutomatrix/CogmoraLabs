@@ -42,51 +42,51 @@ export const OpenPositionSchema = z.object({
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
 export const MarketChangeSchema = z.object({
-    changePrice: z.number(),
-    changeRate: z.number(),
-    high: z.number(),
-    low: z.number(),
-    open: z.number(),
-    vol: z.number(),
-    volValue: z.number(),
+    changePrice: z.number().nullable(),
+    changeRate: z.number().nullable(),
+    high: z.number().nullable(),
+    low: z.number().nullable(),
+    open: z.number().nullable(),
+    vol: z.number().nullable(),
+    volValue: z.number().nullable(),
 });
 export type MarketChange = z.infer<typeof MarketChangeSchema>;
 
 export const SpotSnapshotDataSchema = z.object({
-    askSize: z.number().optional(),
-    averagePrice: z.number().optional(),
-    baseCurrency: z.string().optional(),
-    bidSize: z.number().optional(),
-    board: z.number().optional(),
-    buy: z.number().optional(),
-    changePrice: z.number().optional(),
-    changeRate: z.number().optional(),
-    close: z.number().optional(),
-    datetime: z.number().optional(),
-    high: z.number().optional(),
-    lastTradedPrice: z.number().optional(),
-    low: z.number().optional(),
-    makerCoefficient: z.number().optional(),
-    makerFeeRate: z.number().optional(),
-    marginTrade: z.boolean().optional(),
-    mark: z.number().optional(),
-    market: z.string().optional(),
-    marketChange1h: MarketChangeSchema.optional(),
-    marketChange24h: MarketChangeSchema.optional(),
-    marketChange4h: MarketChangeSchema.optional(),
-    markets: z.array(z.string()).optional(),
-    open: z.number().optional(),
-    quoteCurrency: z.string().optional(),
-    sell: z.number().optional(),
-    siteTypes: z.array(z.string()).optional(),
-    sort: z.number().optional(),
-    symbol: z.string().optional(),
-    symbolCode: z.string().optional(),
-    takerCoefficient: z.number().optional(),
-    takerFeeRate: z.number().optional(),
-    trading: z.boolean().optional(),
-    vol: z.number().optional(),
-    volValue: z.number().optional(),
+    askSize: z.number().optional().nullable(),
+    averagePrice: z.number().optional().nullable(),
+    baseCurrency: z.string().optional().nullable(),
+    bidSize: z.number().optional().nullable(),
+    board: z.number().optional().nullable(),
+    buy: z.number().optional().nullable(),
+    changePrice: z.number().optional().nullable(),
+    changeRate: z.number().optional().nullable(),
+    close: z.number().optional().nullable(),
+    datetime: z.number().optional().nullable(),
+    high: z.number().optional().nullable(),
+    lastTradedPrice: z.number().optional().nullable(),
+    low: z.number().optional().nullable(),
+    makerCoefficient: z.number().optional().nullable(),
+    makerFeeRate: z.number().optional().nullable(),
+    marginTrade: z.boolean().optional().nullable(),
+    mark: z.number().optional().nullable(),
+    market: z.string().optional().nullable(),
+    marketChange1h: MarketChangeSchema.optional().nullable(),
+    marketChange24h: MarketChangeSchema.optional().nullable(),
+    marketChange4h: MarketChangeSchema.optional().nullable(),
+    markets: z.array(z.string()).optional().nullable(),
+    open: z.number().optional().nullable(),
+    quoteCurrency: z.string().optional().nullable(),
+    sell: z.number().optional().nullable(),
+    siteTypes: z.array(z.string()).optional().nullable(),
+    sort: z.number().optional().nullable(),
+    symbol: z.string().optional().nullable(),
+    symbolCode: z.string().optional().nullable(),
+    takerCoefficient: z.number().optional().nullable(),
+    takerFeeRate: z.number().optional().nullable(),
+    trading: z.boolean().optional().nullable(),
+    vol: z.number().optional().nullable(),
+    volValue: z.number().optional().nullable(),
 });
 export type SpotSnapshotData = z.infer<typeof SpotSnapshotDataSchema>;
 
@@ -219,7 +219,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof PairLiquidity>;
+export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -342,7 +342,7 @@ export interface KucoinTicker {
 
 export type KucoinSnapshotDataWrapper = {
     data: SpotSnapshotData;
-    sequence: number;
+    sequence: string;
 }
 
 export type KucoinTickerMessage = {

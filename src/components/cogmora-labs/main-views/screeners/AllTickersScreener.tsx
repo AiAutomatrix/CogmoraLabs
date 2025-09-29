@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   CardHeader,
   CardDescription,
@@ -23,14 +23,19 @@ import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import { SpotSnapshotPopup } from "../paper-trading/SpotSnapshotPopup";
-import type { WatchlistItem } from "@/types";
 
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
-  const { watchlist, toggleWatchlist } = usePaperTrading();
+  const { 
+    watchlist, 
+    toggleWatchlist, 
+    spotSnapshotData,
+    subscribeToSpotSnapshot,
+    unsubscribeFromSpotSnapshot 
+  } = usePaperTrading();
   const [filter, setFilter] = useState("");
   
   const [sortConfig, setSortConfig] = useState<{
@@ -39,10 +44,10 @@ export default function AllTickersScreener() {
   } | null>({ key: "volValue", direction: "descending" });
 
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
-  const [selectedTicker, setSelectedTicker] = useState<KucoinTicker | null>(null);
+  const [selectedTickerForTrade, setSelectedTickerForTrade] = useState<KucoinTicker | null>(null);
 
   const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
-  const [selectedSnapshotItem, setSelectedSnapshotItem] = useState<WatchlistItem | null>(null);
+  const [selectedTickerForSnapshot, setSelectedTickerForSnapshot] = useState<KucoinTicker | null>(null);
 
   const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
 
@@ -86,31 +91,24 @@ export default function AllTickersScreener() {
   };
 
   const handleBuyClick = (ticker: KucoinTicker) => {
-    setSelectedTicker(ticker);
+    setSelectedTickerForTrade(ticker);
     setIsTradePopupOpen(true);
   };
   
-  const handleSnapshotClick = (ticker: KucoinTicker) => {
-    // The popup expects a WatchlistItem, so we create one on the fly.
-    // The snapshot data is embedded in the ticker object from the websocket.
-    const watchlistItem: WatchlistItem = {
-      symbol: ticker.symbol,
-      symbolName: ticker.symbolName,
-      type: 'spot',
-      currentPrice: parseFloat(ticker.last),
-      snapshotData: {
-        ...ticker,
-        lastTradedPrice: parseFloat(ticker.last),
-        high: parseFloat(ticker.high),
-        low: parseFloat(ticker.low),
-        changeRate: parseFloat(ticker.changeRate),
-        changePrice: parseFloat(ticker.changePrice),
-        volValue: parseFloat(ticker.volValue),
-      }
-    };
-    setSelectedSnapshotItem(watchlistItem);
+  const handleSnapshotClick = useCallback((ticker: KucoinTicker) => {
+    setSelectedTickerForSnapshot(ticker);
     setIsSnapshotPopupOpen(true);
-  };
+    subscribeToSpotSnapshot(ticker.symbol);
+  }, [subscribeToSpotSnapshot]);
+
+  const handleCloseSnapshot = useCallback(() => {
+    if (selectedTickerForSnapshot) {
+      unsubscribeFromSpotSnapshot(selectedTickerForSnapshot.symbol);
+    }
+    setIsSnapshotPopupOpen(false);
+    setSelectedTickerForSnapshot(null);
+  }, [selectedTickerForSnapshot, unsubscribeFromSpotSnapshot]);
+
 
   const formatPrice = (priceStr: string) => {
     const price = parseFloat(priceStr);
@@ -171,14 +169,29 @@ export default function AllTickersScreener() {
   );
 
   const tradePopup = useMemo(() => {
-    return selectedTicker && (
+    return selectedTickerForTrade && (
       <TradePopup
         isOpen={isTradePopupOpen}
         onOpenChange={setIsTradePopupOpen}
-        ticker={selectedTicker}
+        ticker={selectedTickerForTrade}
       />
     );
-  }, [selectedTicker, isTradePopupOpen]);
+  }, [selectedTickerForTrade, isTradePopupOpen]);
+
+  const snapshotPopup = useMemo(() => {
+    if (!selectedTickerForSnapshot) return null;
+    const [base, quote] = selectedTickerForSnapshot.symbolName.split('-');
+    return (
+      <SpotSnapshotPopup
+        isOpen={isSnapshotPopupOpen}
+        onOpenChange={handleCloseSnapshot}
+        symbolName={selectedTickerForSnapshot.symbolName}
+        baseCurrency={base}
+        quoteCurrency={quote}
+        data={spotSnapshotData}
+      />
+    )
+  }, [isSnapshotPopupOpen, selectedTickerForSnapshot, spotSnapshotData, handleCloseSnapshot]);
 
   return (
     <>
@@ -271,17 +284,7 @@ export default function AllTickersScreener() {
       </ScrollArea>
     </div>
     {tradePopup}
-     {selectedSnapshotItem && (
-        <SpotSnapshotPopup
-          isOpen={isSnapshotPopupOpen}
-          onOpenChange={setIsSnapshotPopupOpen}
-          item={selectedSnapshotItem}
-        />
-      )}
+    {snapshotPopup}
     </>
   );
 }
-
-    
-
-    

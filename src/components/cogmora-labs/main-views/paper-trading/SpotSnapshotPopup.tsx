@@ -11,36 +11,41 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { WatchlistItem } from '@/types';
+import type { SpotSnapshotData } from '@/types';
 import { Separator } from '@/components/ui/separator';
 
 interface SpotSnapshotPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  item: WatchlistItem | null;
+  symbolName: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  data: SpotSnapshotData | null;
 }
 
-const formatValue = (value: number | undefined, options: Intl.NumberFormatOptions = {}) => {
+const formatValue = (value: number | undefined | null, options: Intl.NumberFormatOptions = {}) => {
   if (value === undefined || value === null) return 'N/A';
   return new Intl.NumberFormat('en-US', options).format(value);
 };
 
-const formatCurrency = (value?: number) => {
+const formatCurrency = (value?: number | null) => {
     if (value === undefined || value === null) return 'N/A';
     const options: Intl.NumberFormatOptions = {
         style: 'currency',
         currency: 'USD',
         minimumFractionDigits: 2,
     };
-    if (value > 0.1) {
+    if (Math.abs(value) >= 10) {
         options.maximumFractionDigits = 2;
+    } else if (Math.abs(value) >= 0.1) {
+        options.maximumFractionDigits = 4;
     } else {
         options.maximumFractionDigits = 8;
     }
     return formatValue(value, options);
 }
 
-const formatVolume = (value?: number) => {
+const formatVolume = (value?: number | null) => {
     if (value === undefined || value === null) return 'N/A';
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -48,8 +53,7 @@ const formatVolume = (value?: number) => {
     return value.toFixed(2);
 };
 
-
-const formatPercent = (value?: number) => {
+const formatPercent = (value?: number | null) => {
     if (value === undefined || value === null) return 'N/A';
     return `${(value * 100).toFixed(2)}%`;
 }
@@ -61,7 +65,7 @@ const InfoRow: React.FC<{ label: string; value: React.ReactNode; className?: str
   </div>
 );
 
-const MarketChangeBlock: React.FC<{ title: string; data?: { changePrice?: number; changeRate?: number; high?: number; low?: number; open?: number; volValue?: number; } }> = ({ title, data }) => (
+const MarketChangeBlock: React.FC<{ title: string; data?: { changePrice?: number | null; changeRate?: number | null; high?: number | null; low?: number | null; open?: number | null; volValue?: number | null; } | null }> = ({ title, data }) => (
     <div className="p-3 bg-muted/50 rounded-lg">
         <h4 className="font-semibold mb-2 text-primary">{title}</h4>
         {data ? (
@@ -79,16 +83,15 @@ const MarketChangeBlock: React.FC<{ title: string; data?: { changePrice?: number
     </div>
 );
 
-export const SpotSnapshotPopup: React.FC<SpotSnapshotPopupProps> = ({ isOpen, onOpenChange, item }) => {
-  const data = item?.snapshotData;
+export const SpotSnapshotPopup: React.FC<SpotSnapshotPopupProps> = ({ isOpen, onOpenChange, symbolName, baseCurrency, quoteCurrency, data }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Snapshot: {item?.symbolName}</DialogTitle>
+          <DialogTitle>Snapshot: {symbolName}</DialogTitle>
           <DialogDescription>
-            Detailed market data for {item?.baseCurrency}/{item?.quoteCurrency}.
+            Detailed market data for {baseCurrency}/{quoteCurrency}.
           </DialogDescription>
         </DialogHeader>
 
@@ -111,7 +114,7 @@ export const SpotSnapshotPopup: React.FC<SpotSnapshotPopupProps> = ({ isOpen, on
             </div>
         ) : (
             <div className="flex items-center justify-center h-full">
-                <p className="text-muted-foreground">Snapshot data not yet available.</p>
+                <p className="text-muted-foreground">Waiting for snapshot data...</p>
             </div>
         )}
         
