@@ -436,7 +436,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   useEffect(() => {
-    if (!isLoaded || openPositions.length === 0) return;
+    if (!isLoaded) return;
   
     const positionsToClose: { id: string; reason: string }[] = [];
   
@@ -535,7 +535,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [checkPriceAlerts, checkTradeTriggers]);
   
   const connectToSpot = useCallback(
-    async (topic: string) => {
+    async (symbolsToSubscribe: string[]) => {
       setSpotWsStatus("fetching_token");
       try {
         const res = await fetch("/api/kucoin-ws-token");
@@ -557,15 +557,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
           }, instanceServers[0].pingInterval / 2);
 
-          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, response: true }));
+          symbolsToSubscribe.forEach((symbol) => {
+             ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
+          });
         };
 
         ws.onmessage = (event: MessageEvent) => {
           const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
-          if (message.type === "message" && message.subject === "trade.ticker") {
-            const tickerData = message.data;
+          if (message.type === "message" && message.subject === "trade.snapshot") {
+            const tickerData = message.data.data;
             const symbol = message.topic.split(":")[1];
-             processUpdate(symbol, tickerData);
+             processUpdate(symbol, {
+                 last: tickerData.lastTradedPrice,
+                 high: tickerData.high,
+                 low: tickerData.low,
+                 changeRate: tickerData.changeRate
+             });
           }
         };
 
@@ -668,15 +675,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     spotSubscriptionsRef.current = requiredSubs;
     
     if (spotWs.current && spotWs.current.readyState === WebSocket.OPEN) {
-      if (currentSubs.size > 0) {
-        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/ticker:${Array.from(currentSubs).join(',')}`}));
-      }
-      if (requiredSubs.size > 0) {
-        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/ticker:${Array.from(requiredSubs).join(',')}`, response: true }));
-      }
+        const symbolsToUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
+        const symbolsToSub = [...requiredSubs].filter(s => !currentSubs.has(s));
+        symbolsToUnsub.forEach(symbol => {
+          spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`}));
+        });
+        symbolsToSub.forEach(symbol => {
+          spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true }));
+        });
     } else if (requiredSubs.size > 0) {
       if (spotWs.current) spotWs.current.close();
-      connectToSpot(`/market/ticker:${Array.from(requiredSubs).join(',')}`);
+      connectToSpot(Array.from(requiredSubs));
     } else if (spotWs.current) {
       spotWs.current.close();
     }
@@ -831,6 +840,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
-    

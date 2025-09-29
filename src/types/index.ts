@@ -264,6 +264,7 @@ export type KucoinErrorMessage = {
   data: string; 
 };
 
+// This interface is a bit of a union of the snapshot and ticker data
 export interface KucoinTicker {
   symbol: string;
   symbolName: string;
@@ -283,14 +284,21 @@ export interface KucoinTicker {
   makerFeeRate?: string;
   takerCoefficient?: string;
   makerCoefficient?: string;
-  price?: string; // Add price to match websocket data structure
+  price?: string; // Add price to match ticker data structure
+  lastTradedPrice?: string;
+  datetime?: number;
+}
+
+export type KucoinSnapshotData = {
+    data: KucoinTicker;
+    sequence: number;
 }
 
 export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
-  subject: 'trade.ticker';
-  data: KucoinTicker;
+  subject: 'trade.ticker' | 'trade.snapshot';
+  data: KucoinTicker | KucoinSnapshotData;
 };
 
 export type IncomingKucoinWebSocketMessage =
@@ -341,5 +349,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
