@@ -1,69 +1,51 @@
-
 # Paper Trading System Documentation
 
-This document outlines the architecture and functionality of the paper trading feature within the Cogmora Labs application. It enables users to simulate cryptocurrency trades using live data from KuCoin without risking real money.
+This document outlines the architecture and functionality of the paper trading feature within the Cogmora Labs application. It enables users to simulate both spot and leveraged futures cryptocurrency trades using live data from KuCoin without risking real money.
 
-## How the Paper Trading Engine Works
+## Core Architecture: The `PaperTradingContext`
 
-The paper trading engine is a client-side system built using React Context and browser local storage for persistence. It manages a virtual account, executes trades, and tracks performance.
+The entire paper trading engine is a self-contained, client-side system built using React's Context API. This approach centralizes state management and logic, making the system responsive and persistent across browser sessions.
 
-- **`PaperTradingContext.tsx`**: This is the core of the engine. It creates a React context that provides the account balance, open positions, trade history, and functions to execute trades (`buy`, `sell`).
-- **Local Storage**: The entire state of the paper trading account (balance, positions, history) is saved to the browser's `localStorage`. This ensures that the user's data persists across sessions.
-- **Initial Balance**: New users start with a default virtual balance of **$100,000**.
+- **`PaperTradingContext.tsx`**: This file is the heart and brain of the entire system. It is a React Context provider that manages:
+  -   **Virtual Account**: Tracks the user's cash `balance`. New users start with a default of **$100,000**.
+  -   **State Management**: Holds the state for `openPositions` (both spot and futures) and the complete `tradeHistory`.
+  -   **Trade Execution**: Contains the core logic for all trade functions: `buy` (for spot), `futuresBuy` (for long futures), `futuresSell` (for short futures), and `closePosition`.
+  -   **WebSocket Connections**: **Crucially, the context itself manages the live WebSocket connections** to KuCoin for both spot and futures price feeds, ensuring real-time data is piped directly into the state.
+- **Local Storage Persistence**: The entire state of the paper trading account (balance, positions, and history) is automatically serialized and saved to the browser's `localStorage` whenever it changes. This ensures a user's portfolio and trade log are preserved between visits.
 
-## Trade Flow
+## Real-Time Data Flow via WebSockets
 
-The process of executing a paper trade is designed to be simple and intuitive:
+To provide a live trading experience, the system establishes and maintains direct WebSocket connections to KuCoin's public feeds. This logic is managed entirely within `PaperTradingContext.tsx`.
 
-1.  **Initiate Trade**: The user clicks the **"Buy"** button next to a coin in the **KuCoin Spot Screener**.
-2.  **Enter Allocation**: A `TradePopup` modal appears, asking the user, "How much money do you want to allocate?"
-3.  **Calculation**: The system uses the current price of the coin (fetched from the KuCoin Ticker data) to calculate the corresponding amount of tokens the user will receive.
-4.  **Confirmation**: The user reviews the details and clicks "Confirm Buy".
-5.  **Trade Execution**: The `buy` function in the `PaperTradingContext` is called.
-    - The allocated amount is subtracted from the user's cash balance.
-    - A new trade is added to the `tradeHistory`.
-    - An `openPositions` entry is created or updated. If a position for that coin already exists, the new trade is averaged into the existing position (size and average entry price are updated).
-6.  **Dashboard Update**: The **Paper Trading Dashboard** updates in real-time, reflecting the new position and updated account metrics.
+1.  **Connection Management**: The context manages two independent WebSocket instances:
+    -   A **Spot WebSocket** that subscribes to the `/market/ticker:{symbol}` topic for all currently open spot positions.
+    -   A **Futures WebSocket** that subscribes to the `/contractMarket/snapshot:{symbol}` topic for all open futures positions.
+2.  **Dynamic Subscriptions**: The context is intelligent. When a new position is opened, it subscribes to that specific symbol's feed. When a position is closed, it unsubscribes, keeping the connections efficient and minimizing data overhead.
+3.  **Live Price Updates**: The `onmessage` event handlers for both WebSockets listen for new price data.
+4.  **`updatePositionPrice` Function**: When a new price is received, this utility function is called. It iterates through the `openPositions` array, finds the matching position by its symbol, and updates its `currentPrice`. It then instantly recalculates the `unrealizedPnl` for that position.
+5.  **Reactive UI**: Because `openPositions` is a state variable, this update automatically triggers a re-render in the `PaperTradingDashboard`, ensuring all metrics—especially Unrealized P&L—are always live.
 
-## WebSocket and Real-Time Data
+## Trade Execution Flow
 
-The system leverages the existing data fetching mechanism for KuCoin to get near real-time price updates.
+### Spot Trading
+1.  **Initiation**: User clicks the **Buy** (<ShoppingCart /> icon) button in the `AllTickersScreener.tsx` component.
+2.  **Input**: The `TradePopup.tsx` modal appears, asking the user for a USD allocation amount.
+3.  **Execution**: Upon confirmation, the `buy` function in the context is called. It subtracts the allocation from the balance, creates a new `OpenPosition` with `positionType: 'spot'`, and logs the transaction in `tradeHistory`.
 
-- **`useKucoinTickers` Hook**: This hook, which powers the screener, is also used by the paper trading system. It fetches ticker data from the proxied KuCoin API every 5 seconds.
-- **Live Price Updates**: Each time the `useKucoinTickers` hook fetches new data, it calls the `updatePositionPrice` function from the `PaperTradingContext`.
-- **`updatePositionPrice`**: This function iterates through all open positions and updates their `currentPrice`. This change triggers a re-render of the dashboard, ensuring that **Unrealized P&L** and **Equity** are always up-to-date.
+### Futures Trading (Leveraged)
+1.  **Initiation**: User clicks the **Trade** (<BarChartHorizontal /> icon) button in the `AllFuturesScreener.tsx` component.
+2.  **Input**: The `FuturesTradePopup.tsx` modal appears, which prompts for **collateral allocation** (USD) and desired **leverage**.
+3.  **Execution**: The user chooses to **"Buy / Long"** or **"Sell / Short"**. This calls either `futuresBuy` or `futuresSell` from the context. The collateral is subtracted from the balance, and a new `OpenPosition` is created with `positionType: 'futures'`, the specified `side` ('long' or 'short'), and the chosen `leverage`.
 
-## Dashboard Metrics and Formulas
-
-The `PaperTradingDashboard.tsx` component displays several key performance indicators:
-
--   **Total Balance**: The amount of cash available to trade.
-    -   `balance`
--   **Equity**: The total value of the account if all positions were closed at the current market price.
-    -   `Equity = balance + (sum of (position.size * position.currentPrice))`
--   **Unrealized P&L**: The current profit or loss on all open positions.
-    -   `Unrealized P&L = sum of ((position.currentPrice - position.averageEntryPrice) * position.size)`
--   **Realized P&L**: The total profit or loss from all closed trades.
-    -   `Realized P&L = sum of all closed_trade.pnl`
--   **Win Rate**: The percentage of closed trades that were profitable.
-    -   `Win Rate = (Number of profitable closed trades / Total number of closed trades) * 100`
+## Position Closing
+-   **Manual Close**: Each row in the "Open Positions" table has a "Close" button. Clicking this calls the `closePosition` function with the unique `positionId`.
+-   **`closePosition` Logic**: This function calculates the final P&L based on the position type (spot vs. futures, long vs. short). The proceeds (initial value +/- P&L) are added back to the cash `balance`, the position is removed from `openPositions`, and the trade is logged as "closed" in the `tradeHistory`.
 
 ## Component Relationships
 
-The paper trading feature is composed of several interconnected components:
-
--   **`AllTickersScreener.tsx`** (KuCoin Spot Screener)
-    -   Contains the "Buy" button for each coin.
-    -   Triggers the `TradePopup`.
--   **`TradePopup.tsx`**
-    -   Gathers the trade allocation from the user.
-    -   Calls the `buy` function from the `usePaperTrading` hook.
--   **`PaperTradingContext.tsx`** (The "Engine")
-    -   Manages all state and logic for the paper trading account.
-    -   Provides the `usePaperTrading` hook for components to interact with the engine.
--   **`PaperTradingDashboard.tsx`**
-    -   Consumes data from the `usePaperTrading` hook.
-    -   Displays account metrics, open positions, and trade history.
-    -   Allows users to close positions.
-
-This modular structure ensures that the trading logic is decoupled from the UI, making the system maintainable and easy to expand in the future.
+-   **`PaperTradingProvider`**: Wraps the main application in `page.tsx` to provide the context.
+-   **`PaperTradingDashboard.tsx`**: The primary UI. Consumes all data from the `usePaperTrading` hook to display metrics, open positions, and history. Contains "Close All" and "Clear History" buttons.
+-   **`AllTickersScreener.tsx`**: Originates spot trades.
+-   **`AllFuturesScreener.tsx`**: Originates futures trades.
+-   **`TradePopup.tsx` & `FuturesTradePopup.tsx`**: Modals for entering and confirming trades.
+-   **`PaperTradingContext.tsx`**: The central engine that drives all functionality described above.
