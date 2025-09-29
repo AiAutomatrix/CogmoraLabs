@@ -146,7 +146,7 @@ export default function PaperTradingDashboard() {
                         </TableRow>
                     )
                 }) : (
-                    <TableRow><TableCell colSpan={8} className="text-center">No open positions.</TableCell></TableRow>
+                    <TableRow key="no-open-positions"><TableCell colSpan={8} className="text-center">No open positions.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -199,6 +199,11 @@ export default function PaperTradingDashboard() {
                      </TableRow>
                    )
                  })}
+                 {tradeHistory.length === 0 && (
+                    <TableRow key="no-trade-history">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No trade history yet.</TableCell>
+                    </TableRow>
+                )}
               </TableBody>
             </Table>
              {tradeHistory.length > rowsToShow && (
@@ -206,9 +211,7 @@ export default function PaperTradingDashboard() {
                     <Button variant="outline" onClick={() => setRowsToShow(prev => prev + 10)}>Load More</Button>
                 </div>
             )}
-            {tradeHistory.length === 0 && (
-                <div className="text-center text-muted-foreground py-8">No trade history yet.</div>
-            )}
+            
           </ScrollArea>
         </CardContent>
       </Card>
