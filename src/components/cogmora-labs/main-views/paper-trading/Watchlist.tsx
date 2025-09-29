@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import type { WatchlistItem } from '@/types';
 import {
@@ -29,6 +29,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { WatchlistTradeTriggerPopup } from './WatchlistTradeTriggerPopup';
 import { SpotSnapshotPopup } from './SpotSnapshotPopup';
+import type { SpotSnapshotData } from '@/types';
 
 
 export default function Watchlist() {
@@ -47,7 +48,7 @@ export default function Watchlist() {
   const [selectedWatchlistItem, setSelectedWatchlistItem] = useState<WatchlistItem | null>(null);
 
   const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
-  const [selectedSnapshotItem, setSelectedSnapshotItem] = useState<WatchlistItem | null>(null);
+  const [selectedSnapshotData, setSelectedSnapshotData] = useState<{item: WatchlistItem, data: SpotSnapshotData} | null>(null);
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
@@ -78,10 +79,21 @@ export default function Watchlist() {
     setIsTradePopupOpen(true);
   };
 
-  const handleSnapshotClick = (item: WatchlistItem) => {
-    setSelectedSnapshotItem(item);
-    setIsSnapshotPopupOpen(true);
-  }
+  const handleSnapshotClick = useCallback((item: WatchlistItem) => {
+    if (item.snapshotData) {
+      const [base, quote] = item.symbolName.split('-');
+      setSelectedSnapshotData({ 
+          item: { ...item, baseCurrency: base, quoteCurrency: quote },
+          data: item.snapshotData 
+      });
+      setIsSnapshotPopupOpen(true);
+    }
+  }, []);
+
+  const handleCloseSnapshot = useCallback(() => {
+    setIsSnapshotPopupOpen(false);
+    setSelectedSnapshotData(null);
+  }, []);
 
   const formatChange = (changeRate: number | undefined) => {
     if (changeRate === undefined) return "N/A";
@@ -135,22 +147,17 @@ export default function Watchlist() {
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                            {item.type === 'spot' && (
-                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSnapshotClick(item)}>
+                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSnapshotClick(item)} disabled={!item.snapshotData}>
                                 <FileText className="h-4 w-4" />
                             </Button>
                            )}
-                          {alert ? (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => removePriceAlert(item.symbol)}>
-                                  <BellOff className="h-4 w-4" />
-                              </Button>
-                          ) : (
-                            <Popover open={isAlertPopoverOpen} onOpenChange={(open) => {
+                           <Popover open={isAlertPopoverOpen} onOpenChange={(open) => {
                               if (open && item.currentPrice > 0) { setAlertPrice(item.currentPrice.toFixed(4)); } 
                               else if (!open) { setAlertPrice(''); }
                               setIsAlertPopoverOpen(open);
                             }}>
                               <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8"><Bell className="h-4 w-4"/></Button>
+                                <Button variant="ghost" size="icon" className={`h-8 w-8 ${alert ? 'text-primary' : ''}`}><Bell className="h-4 w-4"/></Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-60">
                                 <div className="grid gap-4">
@@ -178,11 +185,13 @@ export default function Watchlist() {
                                       />
                                     </div>
                                     <Button size="sm" onClick={() => handleSetAlert(item.symbol, setIsAlertPopoverOpen)}>Save Alert</Button>
+                                    {alert && (
+                                       <Button size="sm" variant="destructive" onClick={() => removePriceAlert(item.symbol)}>Remove Alert</Button>
+                                    )}
                                   </div>
                                 </div>
                               </PopoverContent>
                             </Popover>
-                          )}
 
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(item)}>
                             <BarChartHorizontal className="h-4 w-4" />
@@ -222,11 +231,14 @@ export default function Watchlist() {
           item={selectedWatchlistItem}
         />
       )}
-      {selectedSnapshotItem && (
+      {selectedSnapshotData && (
         <SpotSnapshotPopup
           isOpen={isSnapshotPopupOpen}
-          onOpenChange={setIsSnapshotPopupOpen}
-          item={selectedSnapshotItem}
+          onOpenChange={handleCloseSnapshot}
+          symbolName={selectedSnapshotData.item.symbolName}
+          baseCurrency={selectedSnapshotData.item.baseCurrency!}
+          quoteCurrency={selectedSnapshotData.item.quoteCurrency!}
+          data={selectedSnapshotData.data}
         />
       )}
     </>

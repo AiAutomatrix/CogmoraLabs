@@ -100,6 +100,8 @@ export const WatchlistItemSchema = z.object({
     low: z.number().optional(),
     priceChgPct: z.number().optional(),
     snapshotData: SpotSnapshotDataSchema.optional(),
+    baseCurrency: z.string().optional(),
+    quoteCurrency: z.string().optional(),
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 
@@ -212,14 +214,14 @@ export type PairVolume = z.infer<typeof VolumeSchema>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairPriceChange = z.infer<typeof PairPriceChange>;
+export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
 
 export const LiquiditySchema = z.object({
   usd: z.number().optional().nullable(),
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof LiquiditySchema>;
+export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),

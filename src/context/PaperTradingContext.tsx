@@ -19,7 +19,6 @@ import type {
   WatchlistItem,
   PriceAlert,
   TradeTrigger,
-  KucoinTicker,
   SpotSnapshotData,
   KucoinSnapshotDataWrapper,
 } from "@/types";
@@ -34,9 +33,6 @@ interface PaperTradingContextType {
   watchlist: WatchlistItem[];
   priceAlerts: Record<string, PriceAlert>;
   tradeTriggers: TradeTrigger[];
-  spotSnapshotData: SpotSnapshotData | null;
-  subscribeToSpotSnapshot: (symbol: string) => void;
-  unsubscribeFromSpotSnapshot: (symbol: string) => void;
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
@@ -92,13 +88,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [priceAlerts, setPriceAlerts] = useState<Record<string, PriceAlert>>({});
   const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [spotSnapshotData, setSpotSnapshotData] = useState<SpotSnapshotData | null>(null);
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const spotSubscriptionsRef = useRef<Set<string>>(new Set());
-  const spotSnapshotSubRef = useRef<string | null>(null);
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
@@ -532,25 +526,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   
-  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<KucoinTicker> | SpotSnapshotData) => {
+  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData>) => {
     let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
-
-    if (symbol === spotSnapshotSubRef.current) {
-        setSpotSnapshotData(data as SpotSnapshotData);
-    }
 
     if (isSpot) {
       const spotData = data as SpotSnapshotData;
       newPrice = spotData.lastTradedPrice;
-      high = spotData.high;
-      low = spotData.low;
-      priceChgPct = spotData.changeRate;
+      high = spotData.high ?? undefined;
+      low = spotData.low ?? undefined;
+      priceChgPct = spotData.changeRate ?? undefined;
     } else { // Futures
-      const futuresData = data as Partial<KucoinTicker>;
-      newPrice = parseFloat(futuresData.last || futuresData.price || '0');
-      high = futuresData.high ? parseFloat(futuresData.high) : undefined;
-      low = futuresData.low ? parseFloat(futuresData.low) : undefined;
-      priceChgPct = futuresData.changeRate ? parseFloat(futuresData.changeRate) : undefined;
+      const futuresData = data as any; // Using any as the futures data structure is different
+      newPrice = parseFloat(futuresData.lastPrice || '0');
+      high = futuresData.highPrice ? parseFloat(futuresData.highPrice) : undefined;
+      low = futuresData.lowPrice ? parseFloat(futuresData.lowPrice) : undefined;
+      priceChgPct = futuresData.priceChgPct ? parseFloat(futuresData.priceChgPct) : undefined;
     }
     
     if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
@@ -672,10 +662,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onmessage = (event: MessageEvent) => {
           const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
           if (message.type === "message" && message.subject === 'snapshot.24h') {
-            const { symbol, lastPrice, highPrice, lowPrice, priceChgPct } = message.data;
-            if (lastPrice !== undefined) {
-              processUpdate(symbol, false, { last: String(lastPrice), high: String(highPrice), low: String(lowPrice), changeRate: String(priceChgPct) });
-            }
+            processUpdate(message.data.symbol, false, message.data as any);
           }
         };
 
@@ -710,41 +697,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allSpotSymbols = useMemo(() => Array.from(new Set([...spotPositionSymbols, ...spotWatchlistSymbols, ...spotTriggerSymbols])), [spotPositionSymbols, spotWatchlistSymbols, spotTriggerSymbols]);
   const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
   
-  const unsubscribeFromSpotSnapshot = useCallback((symbol: string) => {
-    const ws = spotWs.current;
-    if (ws && ws.readyState === WebSocket.OPEN && !allSpotSymbols.includes(symbol)) {
-        ws.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`}));
-    }
-    if (spotSnapshotSubRef.current === symbol) {
-      spotSnapshotSubRef.current = null;
-      setSpotSnapshotData(null);
-    }
-  }, [allSpotSymbols]);
   
-  const subscribeToSpotSnapshot = useCallback((symbol: string) => {
-    setSpotSnapshotData(null); // Clear previous data
-    const ws = spotWs.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      if(spotSnapshotSubRef.current && spotSnapshotSubRef.current !== symbol) {
-        unsubscribeFromSpotSnapshot(spotSnapshotSubRef.current);
-      }
-      if (!spotSubscriptionsRef.current.has(symbol)) {
-        ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true }));
-      }
-      spotSnapshotSubRef.current = symbol;
-    } else {
-        spotSnapshotSubRef.current = symbol;
-        connectToSpot(Array.from(new Set([...allSpotSymbols, symbol])));
-    }
-  }, [allSpotSymbols, connectToSpot, unsubscribeFromSpotSnapshot]);
-
   // Effect to manage Spot WebSocket connection
   useEffect(() => {
     if (!isLoaded) return;
     const requiredSubs = new Set(allSpotSymbols);
-    if (spotSnapshotSubRef.current) {
-        requiredSubs.add(spotSnapshotSubRef.current);
-    }
     
     if (requiredSubs.size === 0) {
         if (spotWs.current) spotWs.current.close();
@@ -775,8 +732,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (futuresWs.current) futuresWs.current.close();
         return;
     }
+
     if (!futuresWs.current || futuresWs.current.readyState === WebSocket.CLOSED) {
         connectToFutures(allFuturesSymbols);
+        return;
+    }
+
+    if (futuresWs.current.readyState === WebSocket.OPEN) {
+        const currentSubs = futuresSubscriptionsRef.current;
+        const requiredSubs = new Set(allFuturesSymbols);
+        const symbolsToUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
+        const symbolsToSub = [...requiredSubs].filter(s => !currentSubs.has(s));
+
+        symbolsToUnsub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/contractMarket/snapshot:${symbol}`})));
+        symbolsToSub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/contractMarket/snapshot:${symbol}`, response: true })));
+
+        futuresSubscriptionsRef.current = requiredSubs;
     }
   }, [isLoaded, allFuturesSymbols, connectToFutures]);
   
@@ -867,9 +838,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist,
         priceAlerts,
         tradeTriggers,
-        spotSnapshotData,
-        subscribeToSpotSnapshot,
-        unsubscribeFromSpotSnapshot,
         toggleWatchlist,
         addPriceAlert,
         removePriceAlert,
@@ -898,5 +866,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    

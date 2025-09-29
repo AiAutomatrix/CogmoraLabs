@@ -23,19 +23,15 @@ import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import { SpotSnapshotPopup } from "../paper-trading/SpotSnapshotPopup";
+import { useSpotSnapshot } from "@/hooks/useSpotSnapshot";
 
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
-  const { 
-    watchlist, 
-    toggleWatchlist, 
-    spotSnapshotData,
-    subscribeToSpotSnapshot,
-    unsubscribeFromSpotSnapshot 
-  } = usePaperTrading();
+  const { watchlist, toggleWatchlist } = usePaperTrading();
+  
   const [filter, setFilter] = useState("");
   
   const [sortConfig, setSortConfig] = useState<{
@@ -47,7 +43,9 @@ export default function AllTickersScreener() {
   const [selectedTickerForTrade, setSelectedTickerForTrade] = useState<KucoinTicker | null>(null);
 
   const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
-  const [selectedTickerForSnapshot, setSelectedTickerForSnapshot] = useState<KucoinTicker | null>(null);
+  const [selectedSymbolForSnapshot, setSelectedSymbolForSnapshot] = useState<string | null>(null);
+  
+  const { snapshotData, status: snapshotStatus, subscribe, unsubscribe } = useSpotSnapshot(selectedSymbolForSnapshot);
 
   const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
 
@@ -96,18 +94,16 @@ export default function AllTickersScreener() {
   };
   
   const handleSnapshotClick = useCallback((ticker: KucoinTicker) => {
-    setSelectedTickerForSnapshot(ticker);
+    setSelectedSymbolForSnapshot(ticker.symbol);
     setIsSnapshotPopupOpen(true);
-    subscribeToSpotSnapshot(ticker.symbol);
-  }, [subscribeToSpotSnapshot]);
+    subscribe(ticker.symbol);
+  }, [subscribe]);
 
   const handleCloseSnapshot = useCallback(() => {
-    if (selectedTickerForSnapshot) {
-      unsubscribeFromSpotSnapshot(selectedTickerForSnapshot.symbol);
-    }
+    unsubscribe();
     setIsSnapshotPopupOpen(false);
-    setSelectedTickerForSnapshot(null);
-  }, [selectedTickerForSnapshot, unsubscribeFromSpotSnapshot]);
+    setSelectedSymbolForSnapshot(null);
+  }, [unsubscribe]);
 
 
   const formatPrice = (priceStr: string) => {
@@ -179,19 +175,19 @@ export default function AllTickersScreener() {
   }, [selectedTickerForTrade, isTradePopupOpen]);
 
   const snapshotPopup = useMemo(() => {
-    if (!selectedTickerForSnapshot) return null;
-    const [base, quote] = selectedTickerForSnapshot.symbolName.split('-');
+    if (!selectedSymbolForSnapshot) return null;
+    const [base, quote] = selectedSymbolForSnapshot.split('-');
     return (
       <SpotSnapshotPopup
         isOpen={isSnapshotPopupOpen}
         onOpenChange={handleCloseSnapshot}
-        symbolName={selectedTickerForSnapshot.symbolName}
+        symbolName={selectedSymbolForSnapshot}
         baseCurrency={base}
         quoteCurrency={quote}
-        data={spotSnapshotData}
+        data={snapshotData}
       />
     )
-  }, [isSnapshotPopupOpen, selectedTickerForSnapshot, spotSnapshotData, handleCloseSnapshot]);
+  }, [isSnapshotPopupOpen, selectedSymbolForSnapshot, snapshotData, handleCloseSnapshot]);
 
   return (
     <>
