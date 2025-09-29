@@ -102,7 +102,13 @@ export default function Watchlist() {
                           </Button>
                         </div>
                       ) : (
-                        <Popover onOpenChange={() => setAlertPrice('')}>
+                        <Popover onOpenChange={(open) => {
+                          if (open && item.currentPrice > 0) {
+                            setAlertPrice(item.currentPrice.toString());
+                          } else if (!open) {
+                            setAlertPrice('');
+                          }
+                        }}>
                           <PopoverTrigger asChild>
                             <Button variant="outline" size="sm"><Bell className="h-4 w-4 mr-1"/> Set Alert</Button>
                           </PopoverTrigger>
