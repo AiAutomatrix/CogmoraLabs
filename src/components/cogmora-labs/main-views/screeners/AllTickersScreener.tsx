@@ -137,6 +137,16 @@ export default function AllTickersScreener() {
     </div>
   );
 
+  const tradePopup = useMemo(() => {
+    return selectedTicker && (
+      <TradePopup
+        isOpen={isTradePopupOpen}
+        onOpenChange={setIsTradePopupOpen}
+        ticker={selectedTicker}
+      />
+    );
+  }, [selectedTicker, isTradePopupOpen]);
+
   return (
     <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
@@ -210,13 +220,7 @@ export default function AllTickersScreener() {
         )}
       </ScrollArea>
     </div>
-    {selectedTicker && (
-        <TradePopup
-          isOpen={isTradePopupOpen}
-          onOpenChange={setIsTradePopupOpen}
-          ticker={selectedTicker}
-        />
-      )}
+    {tradePopup}
     </>
   );
 }
