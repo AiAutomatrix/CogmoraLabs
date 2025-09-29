@@ -58,9 +58,12 @@ export const PositionDetailsPopup: React.FC<PositionDetailsPopupProps> = ({ isOp
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Trade Details: {position.symbolName}</DialogTitle>
-          <DialogDescription>
-            Manage Stop Loss and Take Profit for this position.
-             Triggered via: <Badge variant="outline" className="capitalize">{position.details?.triggeredBy || 'Manual'}</Badge>
+          <DialogDescription asChild>
+            <div>
+              Manage Stop Loss and Take Profit for this position.
+              <br />
+              Triggered via: <Badge variant="outline" className="capitalize">{position.details?.triggeredBy || 'Manual'}</Badge>
+            </div>
           </DialogDescription>
         </DialogHeader>
         
