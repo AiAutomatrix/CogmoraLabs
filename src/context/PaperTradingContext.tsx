@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import type { OpenPosition, PaperTrade, KucoinTokenResponse, IncomingKucoinFuturesWebSocketMessage } from '@/types';
 import { useToast } from "@/hooks/use-toast";
+import { useKucoinTickers } from '@/hooks/useKucoinAllTickersSocket'; // Import the spot ticker hook
 
 const INITIAL_BALANCE = 100000;
 
@@ -30,13 +31,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
   
   const [futuresWsStatus, setFuturesWsStatus] = useState('idle');
 
+  // Consume the spot tickers hook directly in the context
+  const { tickers: spotTickers } = useKucoinTickers();
+
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const updatePositionPrice = useCallback((symbol: string, newPrice: number) => {
     setOpenPositions(prevPositions =>
       prevPositions.map(p => {
-        if (p.symbol === symbol) { // Match by symbol, not ID
+        if (p.symbol === symbol) { // Match by symbol
             let unrealizedPnl = p.unrealizedPnl;
             if (p.positionType === 'spot') {
                 unrealizedPnl = (newPrice - p.averageEntryPrice) * p.size;
@@ -50,6 +54,25 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
       })
     );
   }, []);
+
+  // Effect to update spot positions from the global spot tickers data
+  useEffect(() => {
+    if (spotTickers.length > 0 && openPositions.length > 0) {
+        const openSpotPositions = openPositions.filter(p => p.positionType === 'spot');
+        if (openSpotPositions.length > 0) {
+            spotTickers.forEach(ticker => {
+                if (ticker.last) {
+                    // Check if there is an open position for this ticker
+                    const positionExists = openSpotPositions.some(p => p.symbol === ticker.symbol);
+                    if (positionExists) {
+                        updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
+                    }
+                }
+            });
+        }
+    }
+  }, [spotTickers, openPositions, updatePositionPrice]);
+
 
   const connectToFutures = useCallback(async (positionsToConnect: OpenPosition[]) => {
     const futuresSymbols = positionsToConnect.filter(p => p.positionType === 'futures').map(p => p.symbol);
