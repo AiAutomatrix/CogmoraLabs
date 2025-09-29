@@ -10,7 +10,7 @@ import {
   fetchTokenPairPools,
   // Removed fetchPairDetailsByPairAddress and fetchPairsByTokenAddresses as per user request
 } from '@/app/actions/dexScreenerActions';
-import type { TokenProfileItem, TokenBoostItem, DexLink, OrderInfoItem, PairDataSchema, PairDetail } from '@/types'; // Ensure all types are imported
+import type { TokenProfileItem, TokenBoostItem, DexLink, OrderInfoItem, PairData as PairDataSchema, PairDetail } from '@/types'; // Ensure all types are imported
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -249,7 +249,7 @@ const DexScreenerContent: React.FC = () => {
 
   const getPairsArray = (currentData: DexScreenerData, viewType: DexScreenerViewType): PairDetail[] => {
     if (!currentData) return [];
-    if ( (viewType === 'searchPairs' || viewType === 'pairDetailsByPairAddress') && currentData && typeof currentData === 'object' && 'pairs' in (currentData as PairDataSchema) ) {
+    if ( (viewType === 'searchPairs') && currentData && typeof currentData === 'object' && 'pairs' in (currentData as PairDataSchema) ) {
       return (currentData as PairDataSchema).pairs || [];
     }
     // For 'tokenPairPools' and 'pairsByTokenAddresses', data is already PairDetail[]
