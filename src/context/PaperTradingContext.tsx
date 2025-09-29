@@ -1,4 +1,5 @@
 
+
 "use client";
 import React, {
   createContext,
@@ -19,6 +20,8 @@ import type {
   WatchlistItem,
   PriceAlert,
   TradeTrigger,
+  KucoinTicker,
+  FuturesSnapshotData,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,7 +34,7 @@ interface PaperTradingContextType {
   watchlist: WatchlistItem[];
   priceAlerts: Record<string, PriceAlert>;
   tradeTriggers: TradeTrigger[];
-  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures') => void;
+  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'status'>) => void;
@@ -360,6 +363,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const activeTriggers = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
   
       activeTriggers.forEach(trigger => {
+        if (executedTriggerIds.has(trigger.id)) return; // Already processed
+        
         const conditionMet =
           (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
           (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
@@ -377,7 +382,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
       return prevTriggers.filter(t => {
         if (executedTriggerIds.has(t.id)) return false; // Remove executed
-        if (cancelSymbols.has(t.symbol) && t.id !== Array.from(executedTriggerIds)[0]) return false; // Remove OCO triggers for the same symbol
+        if (cancelSymbols.has(t.symbol) && !executedTriggerIds.has(t.id)) return false; // Remove other triggers for the same symbol
         return true;
       });
     });
@@ -459,50 +464,51 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   useEffect(() => {
-    if (!isLoaded || openPositions.length === 0) return;
-
-    const positionsToClose = new Set<string>();
-    const reasons = new Map<string, string>();
-
+    if (!isLoaded) return;
+  
+    const positionsToClose: { id: string, reason: string }[] = [];
+  
     openPositions.forEach(position => {
       const { id, details, currentPrice, side } = position;
       if (!details) return;
-
+  
       const { stopLoss, takeProfit } = details;
-
+  
+      let slHit = false;
       if (stopLoss !== undefined) {
         if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-          if (!positionsToClose.has(id)) {
-            positionsToClose.add(id);
-            reasons.set(id, 'Stop Loss Hit');
-          }
+          slHit = true;
+          positionsToClose.push({ id, reason: 'Stop Loss Hit' });
         }
       }
-      if (takeProfit !== undefined) {
+  
+      if (!slHit && takeProfit !== undefined) {
         if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-           if (!positionsToClose.has(id)) {
-            positionsToClose.add(id);
-            reasons.set(id, 'Take Profit Hit');
-          }
+          positionsToClose.push({ id, reason: 'Take Profit Hit' });
         }
       }
     });
-
-    if (positionsToClose.size > 0) {
-      positionsToClose.forEach(id => closePosition(id, reasons.get(id)));
+  
+    if (positionsToClose.length > 0) {
+      // Use a timeout to decouple the close action from the current render cycle
+      setTimeout(() => {
+        positionsToClose.forEach(p => closePosition(p.id, p.reason));
+      }, 0);
     }
   }, [openPositions, isLoaded, closePosition]);
   
-  const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
-      setWatchlist(prev => prev.map(item => 
-          item.symbol === symbol ? { ...item, currentPrice: newPrice } : item
-      ));
-  }, []);
-
-  const updatePositionPrice = useCallback((symbol: string, newPrice: number) => {
+  const processUpdate = useCallback((symbol: string, newPrice: number, high?: number, low?: number) => {
     checkPriceAlerts(symbol, newPrice);
     checkTradeTriggers(symbol, newPrice);
-    updateWatchlistPrice(symbol, newPrice);
+
+    setWatchlist(prev => prev.map(item =>
+        item.symbol === symbol ? {
+          ...item,
+          currentPrice: newPrice,
+          high: high ?? item.high,
+          low: low ?? item.low
+        } : item
+    ));
 
     setOpenPositions((prevPositions) => 
       prevPositions.map((p) => {
@@ -519,7 +525,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice]);
+  }, [checkPriceAlerts, checkTradeTriggers]);
   
   const connectToSpot = useCallback(
     async (topic: string) => {
@@ -551,10 +557,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
           if (message.type === "message" && message.subject === "trade.ticker") {
             const tickerData = message.data;
-            if (tickerData.price) {
-              const price = parseFloat(tickerData.price);
-              const symbol = message.topic.split(":")[1];
-              if (!isNaN(price)) updatePositionPrice(symbol, price);
+            const price = parseFloat(tickerData.price || tickerData.last);
+            const symbol = message.topic.split(":")[1];
+            if (!isNaN(price)) {
+              processUpdate(symbol, price, parseFloat(tickerData.high), parseFloat(tickerData.low));
             }
           }
         };
@@ -573,7 +579,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setSpotWsStatus("error");
       }
     },
-    [updatePositionPrice]
+    [processUpdate]
   );
   
   const connectToFutures = useCallback(
@@ -607,9 +613,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onmessage = (event: MessageEvent) => {
           const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
           if (message.type === "message" && message.subject === 'snapshot.24h') {
-            const { symbol, lastPrice } = message.data;
+            const { symbol, lastPrice, highPrice, lowPrice } = message.data;
             if (lastPrice !== undefined) {
-              updatePositionPrice(symbol, lastPrice);
+              processUpdate(symbol, lastPrice, highPrice, lowPrice);
             }
           }
         };
@@ -629,7 +635,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setFuturesWsStatus("error");
       }
     },
-    [updatePositionPrice]
+    [processUpdate]
   );
 
   const spotPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
@@ -714,7 +720,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
   }, [toast]);
 
-  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures') => {
+  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number) => {
     setWatchlist(prev => {
       const existingIndex = prev.findIndex(item => item.symbol === symbol);
       if (existingIndex > -1) {
@@ -722,7 +728,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return prev.filter(item => item.symbol !== symbol);
       } else {
         toast({ title: 'Watchlist', description: `${symbolName} added to watchlist.` });
-        const newItem: WatchlistItem = { symbol, symbolName, type, currentPrice: 0 };
+        const newItem: WatchlistItem = { symbol, symbolName, type, currentPrice: 0, high, low };
         return [newItem, ...prev];
       }
     });
@@ -765,15 +771,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             executeTrigger(newTrigger, currentPrice);
             executedInstantly = true;
             if (newTrigger.cancelOthers) {
-                // Remove other triggers for the same symbol
                 setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
             }
         }
     }
 
     if (!executedInstantly) {
-        setTradeTriggers(prev => [newTrigger, ...prev]);
-        toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+        setTradeTriggers(prev => {
+           let newTriggers = [newTrigger, ...prev];
+           if(newTrigger.cancelOthers) {
+               toast({ title: 'OCO Trigger Set', description: `Trigger set for ${trigger.symbolName}. Other triggers for this symbol will be cancelled.` });
+           } else {
+               toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+           }
+           return newTriggers;
+        });
     }
   }, [watchlist, executeTrigger, toast]);
 

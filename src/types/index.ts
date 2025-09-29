@@ -1,4 +1,5 @@
 
+
 import { z } from 'zod';
 
 export const PaperTradeSchema = z.object({
@@ -45,6 +46,8 @@ export const WatchlistItemSchema = z.object({
     symbolName: z.string(),
     type: z.enum(['spot', 'futures']),
     currentPrice: z.number(),
+    high: z.number().optional(),
+    low: z.number().optional(),
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 

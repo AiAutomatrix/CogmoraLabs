@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState } from 'react';
@@ -44,8 +45,8 @@ export default function Watchlist() {
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
   const [selectedWatchlistItem, setSelectedWatchlistItem] = useState<WatchlistItem | null>(null);
 
-  const formatPrice = (price: number) => {
-    if (!price || isNaN(price)) return "$0.00";
+  const formatPrice = (price: number | undefined) => {
+    if (price === undefined || isNaN(price)) return "$0.00";
     const options: Intl.NumberFormatOptions = {
       style: "currency",
       currency: "USD",
@@ -88,6 +89,8 @@ export default function Watchlist() {
               <TableHead>Symbol</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Current Price</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">24h High</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">24h Low</TableHead>
               <TableHead className="text-center">Price Alert</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -101,6 +104,8 @@ export default function Watchlist() {
                     <TableCell className="font-medium">{item.symbolName}</TableCell>
                     <TableCell><Badge variant="secondary">{item.type}</Badge></TableCell>
                     <TableCell className="text-right">{formatPrice(item.currentPrice)}</TableCell>
+                    <TableCell className="text-right hidden sm:table-cell text-green-500">{formatPrice(item.high)}</TableCell>
+                    <TableCell className="text-right hidden sm:table-cell text-red-500">{formatPrice(item.low)}</TableCell>
                     <TableCell className="text-center">
                       {alert ? (
                         <div className="flex items-center justify-center gap-2">
@@ -180,7 +185,7 @@ export default function Watchlist() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center h-24">
+                <TableCell colSpan={7} className="text-center h-24">
                   Your watchlist is empty.
                 </TableCell>
               </TableRow>

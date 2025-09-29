@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -52,6 +53,8 @@ export default function FuturesScreener() {
         return {
           ...contract,
           markPrice: liveUpdate.lastPrice,
+          highPrice: liveUpdate.highPrice,
+          lowPrice: liveUpdate.lowPrice,
           priceChgPct: liveUpdate.priceChgPct,
           volumeOf24h: liveUpdate.volume,
         };
@@ -218,7 +221,7 @@ export default function FuturesScreener() {
                       variant="outline"
                       size="icon"
                       className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`}
-                      onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures')}
+                      onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice)}
                     >
                         <Eye className="h-4 w-4" />
                     </Button>
