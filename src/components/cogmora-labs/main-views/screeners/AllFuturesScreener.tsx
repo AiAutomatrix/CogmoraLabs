@@ -221,7 +221,7 @@ export default function FuturesScreener() {
                       variant="outline"
                       size="icon"
                       className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`}
-                      onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice)}
+                      onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice, contract.priceChgPct)}
                     >
                         <Eye className="h-4 w-4" />
                     </Button>

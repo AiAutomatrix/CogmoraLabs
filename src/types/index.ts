@@ -48,6 +48,7 @@ export const WatchlistItemSchema = z.object({
     currentPrice: z.number(),
     high: z.number().optional(),
     low: z.number().optional(),
+    priceChgPct: z.number().optional(),
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 
@@ -156,7 +157,7 @@ export type PairTxns = z.infer<typeof TxnsSchema>;
 
 // Allows keys like "h24", "h6", "h1", "m5"
 export const VolumeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairVolume = z.infer<typeof PairVolume>;
+export type PairVolume = z.infer<typeof VolumeSchema>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
@@ -340,3 +341,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    

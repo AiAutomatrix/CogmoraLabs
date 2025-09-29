@@ -73,6 +73,11 @@ export default function Watchlist() {
     setIsTradePopupOpen(true);
   };
 
+  const formatChange = (changeRate: number | undefined) => {
+    if (changeRate === undefined) return "N/A";
+    return `${changeRate >= 0 ? "+" : ""}${(changeRate * 100).toFixed(2)}%`;
+  };
+
   return (
     <>
     <Card>
@@ -89,6 +94,7 @@ export default function Watchlist() {
               <TableHead>Symbol</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Current Price</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">24h Change</TableHead>
               <TableHead className="text-right hidden sm:table-cell">24h High</TableHead>
               <TableHead className="text-right hidden sm:table-cell">24h Low</TableHead>
               <TableHead className="text-center">Price Alert</TableHead>
@@ -104,6 +110,13 @@ export default function Watchlist() {
                     <TableCell className="font-medium">{item.symbolName}</TableCell>
                     <TableCell><Badge variant="secondary">{item.type}</Badge></TableCell>
                     <TableCell className="text-right">{formatPrice(item.currentPrice)}</TableCell>
+                    <TableCell
+                      className={`text-right font-mono hidden sm:table-cell ${
+                        item.priceChgPct === undefined ? '' : (item.priceChgPct >= 0 ? "text-green-500" : "text-red-500")
+                      }`}
+                    >
+                      {formatChange(item.priceChgPct)}
+                    </TableCell>
                     <TableCell className="text-right hidden sm:table-cell text-green-500">{formatPrice(item.high)}</TableCell>
                     <TableCell className="text-right hidden sm:table-cell text-red-500">{formatPrice(item.low)}</TableCell>
                     <TableCell className="text-center">
@@ -185,7 +198,7 @@ export default function Watchlist() {
               })
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="text-center h-24">
+                <TableCell colSpan={8} className="text-center h-24">
                   Your watchlist is empty.
                 </TableCell>
               </TableRow>
@@ -204,3 +217,5 @@ export default function Watchlist() {
     </>
   );
 }
+
+    
