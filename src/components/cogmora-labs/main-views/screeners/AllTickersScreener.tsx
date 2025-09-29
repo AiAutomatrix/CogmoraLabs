@@ -16,12 +16,15 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
-import { ArrowUp, ArrowDown, ShoppingCart, Search, Eye } from "lucide-react";
+import { ArrowUp, ArrowDown, ShoppingCart, Search, Eye, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 import { usePaperTrading } from "@/context/PaperTradingContext";
+import { SpotSnapshotPopup } from "../paper-trading/SpotSnapshotPopup";
+import type { WatchlistItem } from "@/types";
+
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
@@ -37,6 +40,9 @@ export default function AllTickersScreener() {
 
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState<KucoinTicker | null>(null);
+
+  const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
+  const [selectedSnapshotItem, setSelectedSnapshotItem] = useState<WatchlistItem | null>(null);
 
   const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
 
@@ -82,6 +88,28 @@ export default function AllTickersScreener() {
   const handleBuyClick = (ticker: KucoinTicker) => {
     setSelectedTicker(ticker);
     setIsTradePopupOpen(true);
+  };
+  
+  const handleSnapshotClick = (ticker: KucoinTicker) => {
+    // The popup expects a WatchlistItem, so we create one on the fly.
+    // The snapshot data is embedded in the ticker object from the websocket.
+    const watchlistItem: WatchlistItem = {
+      symbol: ticker.symbol,
+      symbolName: ticker.symbolName,
+      type: 'spot',
+      currentPrice: parseFloat(ticker.last),
+      snapshotData: {
+        ...ticker,
+        lastTradedPrice: parseFloat(ticker.last),
+        high: parseFloat(ticker.high),
+        low: parseFloat(ticker.low),
+        changeRate: parseFloat(ticker.changeRate),
+        changePrice: parseFloat(ticker.changePrice),
+        volValue: parseFloat(ticker.volValue),
+      }
+    };
+    setSelectedSnapshotItem(watchlistItem);
+    setIsSnapshotPopupOpen(true);
   };
 
   const formatPrice = (priceStr: string) => {
@@ -214,6 +242,14 @@ export default function AllTickersScreener() {
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 mr-1"
+                      onClick={() => handleSnapshotClick(token)}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 mr-1"
                       onClick={() => handleBuyClick(token)}
                     >
                       <ShoppingCart className="h-4 w-4" />
@@ -235,8 +271,17 @@ export default function AllTickersScreener() {
       </ScrollArea>
     </div>
     {tradePopup}
+     {selectedSnapshotItem && (
+        <SpotSnapshotPopup
+          isOpen={isSnapshotPopupOpen}
+          onOpenChange={setIsSnapshotPopupOpen}
+          item={selectedSnapshotItem}
+        />
+      )}
     </>
   );
 }
+
+    
 
     
