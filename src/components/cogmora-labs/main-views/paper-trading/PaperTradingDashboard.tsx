@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useMemo, useState } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -16,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +33,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import Watchlist from "./Watchlist";
+
 
 export default function PaperTradingDashboard() {
   const {
@@ -164,254 +168,267 @@ export default function PaperTradingDashboard() {
         </CardContent>
       </Card>
 
-      {/* Open Positions */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Open Positions</CardTitle>
-            <CardDescription>Your currently active paper trades.</CardDescription>
-          </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={openPositions.length === 0}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Close All
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will close all of your open positions and log them into
-                  trade history. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={closeAllPositions}>
-                  Continue
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="px-2 py-2">Symbol</TableHead>
-                  <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
-                  <TableHead className="text-right px-2 py-2">Size</TableHead>
-                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                    Value (USD)
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                    Entry Price
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                    Current Price
-                  </TableHead>
-                  <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
-                  <TableHead className="text-center min-w-[100px] px-2 py-2">
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {openPositions.length > 0 ? (
-                  openPositions.map((pos) => {
-                    const value =
-                      pos.positionType === "futures"
-                        ? pos.size * pos.averageEntryPrice
-                        : pos.size * pos.currentPrice;
-                    return (
-                      <TableRow key={`${pos.id}-${pos.symbolName}`}>
-                        <TableCell className="font-medium px-2 py-2">
-                          {pos.symbolName}
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell px-2 py-2">
-                          {pos.positionType === "futures" ? (
-                            <Badge
-                              variant={
-                                pos.side === "long" ? "default" : "destructive"
-                              }
-                              className="capitalize"
-                            >
-                              {pos.side} {pos.leverage}x
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Spot</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right px-2 py-2">
-                          {pos.size.toFixed(6)}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                          {formatCurrency(value)}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                          {formatPrice(pos.averageEntryPrice)}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                          {formatPrice(pos.currentPrice)}
-                        </TableCell>
-                        <PNLCell pnl={pos.unrealizedPnl} />
-                        <TableCell className="text-center min-w-[100px] px-2 py-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => closePosition(pos.id)}
-                            className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
-                          >
-                            Close
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center">
-                      No open positions.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Trade History */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Trade History</CardTitle>
-            <CardDescription>
-              A log of all your executed paper trades.
-            </CardDescription>
-          </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="destructive"
-                size="sm"
-                disabled={tradeHistory.length === 0}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Clear History
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete your
-                  entire trade history.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={clearHistory}>
-                  Continue
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="px-2 py-2">Timestamp</TableHead>
-                  <TableHead className="px-2 py-2">Symbol</TableHead>
-                  <TableHead className="px-2 py-2">Side</TableHead>
-                  <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
-                  <TableHead className="text-right px-2 py-2">Size</TableHead>
-                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                    Price
-                  </TableHead>
-                  <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                    Value (USD)
-                  </TableHead>
-                  <TableHead className="text-right px-2 py-2">P&L</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tradeHistory.length > 0 ? (
-                  tradeHistory.slice(0, rowsToShow).map((trade) => {
-                  const tradePrice = trade.price;
-                  const tradeValue =
-                    trade.positionType === "futures"
-                      ? trade.size * tradePrice
-                      : trade.size * tradePrice;
-                  return (
-                    <TableRow key={trade.id}>
-                      <TableCell className="px-2 py-2">
-                        {format(new Date(trade.timestamp), "yyyy-MM-dd HH:mm")}
-                      </TableCell>
-                      <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
-                      <TableCell
-                        className={`capitalize px-2 py-2 ${
-                          trade.side === "buy" || trade.side === "long"
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {trade.side}
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell px-2 py-2">
-                        {trade.positionType === "futures" ? (
-                          <Badge variant="outline">
-                            Futures {trade.leverage}x
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary">Spot</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right px-2 py-2">
-                        {trade.size.toFixed(6)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                        {formatPrice(tradePrice)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                        {formatCurrency(tradeValue)}
-                      </TableCell>
-                      <PNLCell pnl={trade.pnl} />
-                    </TableRow>
-                  );
-                })) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="text-center text-muted-foreground py-8"
+      <Tabs defaultValue="positions" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="positions">Open Positions</TabsTrigger>
+          <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
+          <TabsTrigger value="history">Trade History</TabsTrigger>
+        </TabsList>
+        <TabsContent value="positions">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Open Positions</CardTitle>
+                    <CardDescription>Your currently active paper trades.</CardDescription>
+                </div>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={openPositions.length === 0}
                     >
-                      No trade history yet.
-                    </TableCell>
-                  </TableRow>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Close All
+                    </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        This will close all of your open positions and log them into
+                        trade history. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={closeAllPositions}>
+                        Continue
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                </CardHeader>
+                <CardContent>
+                <div className="overflow-x-auto">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead className="px-2 py-2">Symbol</TableHead>
+                        <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
+                        <TableHead className="text-right px-2 py-2">Size</TableHead>
+                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                            Value (USD)
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                            Entry Price
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                            Current Price
+                        </TableHead>
+                        <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
+                        <TableHead className="text-center min-w-[100px] px-2 py-2">
+                            Actions
+                        </TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {openPositions.length > 0 ? (
+                        openPositions.map((pos) => {
+                            const value =
+                            pos.positionType === "futures"
+                                ? pos.size * pos.averageEntryPrice
+                                : pos.size * pos.currentPrice;
+                            return (
+                            <TableRow key={`${pos.id}-${pos.symbolName}`}>
+                                <TableCell className="font-medium px-2 py-2">
+                                {pos.symbolName}
+                                </TableCell>
+                                <TableCell className="hidden sm:table-cell px-2 py-2">
+                                {pos.positionType === "futures" ? (
+                                    <Badge
+                                    variant={
+                                        pos.side === "long" ? "default" : "destructive"
+                                    }
+                                    className="capitalize"
+                                    >
+                                    {pos.side} {pos.leverage}x
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="secondary">Spot</Badge>
+                                )}
+                                </TableCell>
+                                <TableCell className="text-right px-2 py-2">
+                                {pos.size.toFixed(6)}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                {formatCurrency(value)}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                {formatPrice(pos.averageEntryPrice)}
+                                </TableCell>
+                                <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                {formatPrice(pos.currentPrice)}
+                                </TableCell>
+                                <PNLCell pnl={pos.unrealizedPnl} />
+                                <TableCell className="text-center min-w-[100px] px-2 py-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => closePosition(pos.id)}
+                                    className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
+                                >
+                                    Close
+                                </Button>
+                                </TableCell>
+                            </TableRow>
+                            );
+                        })
+                        ) : (
+                        <TableRow>
+                            <TableCell colSpan={8} className="text-center">
+                            No open positions.
+                            </TableCell>
+                        </TableRow>
+                        )}
+                    </TableBody>
+                    </Table>
+                </div>
+                </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="watchlist">
+            <Watchlist />
+        </TabsContent>
+        <TabsContent value="history">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Trade History</CardTitle>
+                    <CardDescription>
+                    A log of all your executed paper trades.
+                    </CardDescription>
+                </div>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        disabled={tradeHistory.length === 0}
+                    >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Clear History
+                    </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete your
+                        entire trade history.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={clearHistory}>
+                        Continue
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                </CardHeader>
+                <CardContent>
+                <div className="overflow-x-auto">
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead className="px-2 py-2">Timestamp</TableHead>
+                        <TableHead className="px-2 py-2">Symbol</TableHead>
+                        <TableHead className="px-2 py-2">Side</TableHead>
+                        <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
+                        <TableHead className="text-right px-2 py-2">Size</TableHead>
+                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                            Price
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                            Value (USD)
+                        </TableHead>
+                        <TableHead className="text-right px-2 py-2">P&L</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {tradeHistory.length > 0 ? (
+                        tradeHistory.slice(0, rowsToShow).map((trade) => {
+                        const tradePrice = trade.price;
+                        const tradeValue =
+                            trade.positionType === "futures"
+                            ? trade.size * tradePrice
+                            : trade.size * tradePrice;
+                        return (
+                            <TableRow key={trade.id}>
+                            <TableCell className="px-2 py-2">
+                                {format(new Date(trade.timestamp), "yyyy-MM-dd HH:mm")}
+                            </TableCell>
+                            <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
+                            <TableCell
+                                className={`capitalize px-2 py-2 ${
+                                trade.side === "buy" || trade.side === "long"
+                                    ? "text-green-500"
+                                    : "text-red-500"
+                                }`}
+                            >
+                                {trade.side}
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell px-2 py-2">
+                                {trade.positionType === "futures" ? (
+                                <Badge variant="outline">
+                                    Futures {trade.leverage}x
+                                </Badge>
+                                ) : (
+                                <Badge variant="secondary">Spot</Badge>
+                                )}
+                            </TableCell>
+                            <TableCell className="text-right px-2 py-2">
+                                {trade.size.toFixed(6)}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                {formatPrice(tradePrice)}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                {formatCurrency(tradeValue)}
+                            </TableCell>
+                            <PNLCell pnl={trade.pnl} />
+                            </TableRow>
+                        );
+                        })) : (
+                        <TableRow>
+                            <TableCell
+                            colSpan={8}
+                            className="text-center text-muted-foreground py-8"
+                            >
+                            No trade history yet.
+                            </TableCell>
+                        </TableRow>
+                        )}
+                    </TableBody>
+                    </Table>
+                </div>
+                {tradeHistory.length > rowsToShow && (
+                    <div className="text-center mt-4">
+                    <Button
+                        variant="outline"
+                        onClick={() => setRowsToShow((prev) => prev + 10)}
+                    >
+                        Load More
+                    </Button>
+                    </div>
                 )}
-              </TableBody>
-            </Table>
-          </div>
-          {tradeHistory.length > rowsToShow && (
-            <div className="text-center mt-4">
-              <Button
-                variant="outline"
-                onClick={() => setRowsToShow((prev) => prev + 10)}
-              >
-                Load More
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
+
+    

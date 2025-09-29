@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -18,11 +19,12 @@ import {
   type KucoinFuturesContract,
 } from "@/hooks/useKucoinFuturesTickers";
 import { useKucoinFuturesSocket } from "@/hooks/useKucoinFuturesSocket";
-import { ArrowUp, ArrowDown, Search, BarChartHorizontal } from "lucide-react";
+import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FuturesTradePopup } from "../paper-trading/FuturesTradePopup";
+import { usePaperTrading } from "@/context/PaperTradingContext";
 
 
 export default function FuturesScreener() {
@@ -30,6 +32,7 @@ export default function FuturesScreener() {
 
   const { contracts, loading: httpLoading } = useKucoinFuturesContracts();
   const { liveData, loading: wsLoading } = useKucoinFuturesSocket(contracts.map(c => c.symbol));
+  const { watchlist, toggleWatchlist } = usePaperTrading();
   
   const [filter, setFilter] = useState("");
   const [sortConfig, setSortConfig] = useState<{
@@ -39,6 +42,8 @@ export default function FuturesScreener() {
 
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<KucoinFuturesContract | null>(null);
+
+  const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
 
   const mergedContracts = useMemo(() => {
     return contracts.map(contract => {
@@ -124,7 +129,7 @@ export default function FuturesScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+    <div className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
       <div className="text-left font-semibold text-muted-foreground col-span-2">Pair</div>
       {["markPrice", "priceChgPct", "openInterest", "volumeOf24h"].map((key) => (
         <div
@@ -141,7 +146,7 @@ export default function FuturesScreener() {
           {getSortIcon(key as SortKey)}
         </div>
       ))}
-      <div className="text-center font-semibold text-muted-foreground">Trade</div>
+      <div className="text-center font-semibold text-muted-foreground col-span-2">Actions</div>
     </div>
   );
 
@@ -178,7 +183,7 @@ export default function FuturesScreener() {
               {sortedMemo.map((contract) => (
                 <TableRow
                   key={contract.symbol}
-                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
                   <TableCell className="text-left font-medium col-span-2">
                     {contract.symbol.replace(/M$/, "")}
@@ -200,14 +205,22 @@ export default function FuturesScreener() {
                   <TableCell className="text-right font-mono">
                     {formatVolume(contract.volumeOf24h)}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center col-span-2">
                     <Button
                       variant="outline"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-8 w-8 mr-1"
                       onClick={() => handleTradeClick(contract)}
                     >
                       <BarChartHorizontal className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`}
+                      onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures')}
+                    >
+                        <Eye className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -227,3 +240,5 @@ export default function FuturesScreener() {
     </>
   );
 }
+
+    

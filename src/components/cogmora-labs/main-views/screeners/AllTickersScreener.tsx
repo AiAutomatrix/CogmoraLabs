@@ -15,16 +15,18 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
-import { ArrowUp, ArrowDown, ShoppingCart, Search } from "lucide-react";
+import { ArrowUp, ArrowDown, ShoppingCart, Search, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
+import { usePaperTrading } from "@/context/PaperTradingContext";
 
 export default function AllTickersScreener() {
   type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
+  const { watchlist, toggleWatchlist } = usePaperTrading();
   const [filter, setFilter] = useState("");
   
   const [sortConfig, setSortConfig] = useState<{
@@ -34,6 +36,8 @@ export default function AllTickersScreener() {
 
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState<KucoinTicker | null>(null);
+
+  const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
 
   const sortedMemo = useMemo(() => {
     let sortableItems = [...tickers];
@@ -113,7 +117,7 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+    <div className="grid grid-cols-8 sm:grid-cols-9 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
       <div className="text-left font-semibold text-muted-foreground col-span-1 sm:col-span-2">
         Pair
       </div>
@@ -133,7 +137,7 @@ export default function AllTickersScreener() {
           {getSortIcon(key as SortKey)}
         </div>
       ))}
-      <div className="text-center font-semibold text-muted-foreground">Trade</div>
+      <div className="text-center font-semibold text-muted-foreground col-span-2">Actions</div>
     </div>
   );
 
@@ -180,7 +184,7 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-8 sm:grid-cols-9 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
                   <TableCell className="text-left font-medium col-span-1 sm:col-span-2">
                     {token.symbolName}
@@ -204,15 +208,24 @@ export default function AllTickersScreener() {
                   <TableCell className="text-right font-mono col-span-1">
                     {formatVolume(token.volValue)}
                   </TableCell>
-                   <TableCell className="text-center">
+                   <TableCell className="text-center col-span-2">
                     <Button
                       variant="outline"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-8 w-8 mr-1"
                       onClick={() => handleBuyClick(token)}
                     >
                       <ShoppingCart className="h-4 w-4" />
-                    </Button>                  </TableCell>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={`h-8 w-8 ${watchedSymbols.has(token.symbol) ? 'text-primary' : ''}`}
+                      onClick={() => toggleWatchlist(token.symbol, token.symbolName, 'spot')}
+                    >
+                        <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -224,3 +237,5 @@ export default function AllTickersScreener() {
     </>
   );
 }
+
+    

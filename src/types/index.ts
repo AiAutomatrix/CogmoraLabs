@@ -31,6 +31,21 @@ export const OpenPositionSchema = z.object({
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
+export const WatchlistItemSchema = z.object({
+    symbol: z.string(),
+    symbolName: z.string(),
+    type: z.enum(['spot', 'futures']),
+    currentPrice: z.number(),
+});
+export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
+
+export const PriceAlertSchema = z.object({
+    price: z.number(),
+    condition: z.enum(['above', 'below']),
+    triggered: z.boolean(),
+});
+export type PriceAlert = z.infer<typeof PriceAlertSchema>;
+
 // Original TradeSchema, keeping if used elsewhere, but papertrade is more specific
 export const TradeSchema = z.object({
   id: z.string(),
@@ -295,3 +310,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    
