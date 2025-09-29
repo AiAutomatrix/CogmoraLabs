@@ -41,27 +41,27 @@ interface PaperTradingContextType {
     symbolName: string,
     amountUSD: number,
     currentPrice: number,
-    triggeredBy?: string,
     stopLoss?: number,
     takeProfit?: number,
+    triggeredBy?: string,
   ) => void;
   futuresBuy: (
     symbol: string,
     collateral: number,
     entryPrice: number,
     leverage: number,
-    triggeredBy?: string,
     stopLoss?: number,
     takeProfit?: number,
+    triggeredBy?: string,
   ) => void;
   futuresSell: (
     symbol: string,
     collateral: number,
     entryPrice: number,
     leverage: number,
-    triggeredBy?: string,
     stopLoss?: number,
     takeProfit?: number,
+    triggeredBy?: string,
   ) => void;
   closePosition: (positionId: string, reason?: string) => void;
   updatePositionSlTp: (positionId: string, sl?: number, tp?: number) => void;
@@ -173,7 +173,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const buy = useCallback(
-    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number, triggeredBy = 'manual', stopLoss?: number, takeProfit?: number) => {
+    (
+      symbol: string,
+      symbolName: string,
+      amountUSD: number,
+      currentPrice: number,
+      stopLoss?: number,
+      takeProfit?: number,
+      triggeredBy = 'manual',
+    ) => {
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
         return;
@@ -228,7 +236,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     [balance, toast]
   );
 
-  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, triggeredBy = 'manual', stopLoss?: number, takeProfit?: number) => {
+  const futuresBuy = useCallback((
+    symbol: string,
+    collateral: number,
+    entryPrice: number,
+    leverage: number,
+    stopLoss?: number,
+    takeProfit?: number,
+    triggeredBy = 'manual',
+  ) => {
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -269,7 +285,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast]);
 
-  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, triggeredBy = 'manual', stopLoss?: number, takeProfit?: number) => {
+  const futuresSell = useCallback((
+    symbol: string,
+    collateral: number,
+    entryPrice: number,
+    leverage: number,
+    stopLoss?: number,
+    takeProfit?: number,
+    triggeredBy = 'manual',
+  ) => {
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -318,48 +342,46 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     const triggeredBy = `trigger:${trigger.condition}`;
     if (trigger.type === 'spot') {
-      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, triggeredBy, trigger.stopLoss, trigger.takeProfit);
+      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, triggeredBy);
     } else if (trigger.type === 'futures') {
       if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, triggeredBy, trigger.stopLoss, trigger.takeProfit);
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy);
       } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, triggeredBy, trigger.stopLoss, trigger.takeProfit);
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy);
       }
     }
   }, [toast, buy, futuresBuy, futuresSell]);
 
   const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
+    let executedTriggerIds = new Set<string>();
+    let cancelSymbols = new Set<string>();
+  
     setTradeTriggers(prevTriggers => {
-        let executedTriggerIds = new Set<string>();
-        let cancelSymbols = new Set<string>();
-
-        const activeTriggers = prevTriggers.filter(t => t.status === 'active');
-
-        activeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol) {
-                const conditionMet =
-                    (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
-                    (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
-
-                if (conditionMet) {
-                    executeTrigger(trigger, newPrice);
-                    executedTriggerIds.add(trigger.id);
-                    if (trigger.cancelOthers) {
-                        cancelSymbols.add(trigger.symbol);
-                    }
-                }
-            }
-        });
-
-        if (executedTriggerIds.size === 0) return prevTriggers;
-
-        return prevTriggers.filter(t => {
-            if (executedTriggerIds.has(t.id)) return false; // Remove executed
-            if (cancelSymbols.has(t.symbol)) return false; // Remove OCO triggers
-            return true;
-        });
+      const activeTriggers = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
+  
+      activeTriggers.forEach(trigger => {
+        const conditionMet =
+          (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
+          (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+  
+        if (conditionMet) {
+          executeTrigger(trigger, newPrice);
+          executedTriggerIds.add(trigger.id);
+          if (trigger.cancelOthers) {
+            cancelSymbols.add(trigger.symbol);
+          }
+        }
+      });
+  
+      if (executedTriggerIds.size === 0) return prevTriggers;
+  
+      return prevTriggers.filter(t => {
+        if (executedTriggerIds.has(t.id)) return false; // Remove executed
+        if (cancelSymbols.has(t.symbol) && t.id !== Array.from(executedTriggerIds)[0]) return false; // Remove OCO triggers for the same symbol
+        return true;
+      });
     });
-}, [executeTrigger]);
+  }, [executeTrigger]);
   
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close') => {
     setOpenPositions(prev => {
@@ -408,13 +430,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
     const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
+    let symbolName = '';
     setOpenPositions(prev =>
       prev.map(pos => {
         if (pos.id === positionId) {
-          toast({
-            title: "Position Updated",
-            description: `SL/TP updated for ${pos.symbolName}.`
-          });
+          symbolName = pos.symbolName;
           return {
             ...pos,
             details: {
@@ -427,6 +447,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return pos;
       })
     );
+  
+    if (symbolName) {
+      toast({
+        title: "Position Updated",
+        description: `SL/TP updated for ${symbolName}.`
+      });
+    }
   }, [toast]);
 
   const checkSlTp = useCallback((positions: OpenPosition[]) => {
@@ -458,7 +485,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     if (positionsToClose.size > 0) {
-        positionsToClose.forEach(id => closePosition(id, reasons.get(id)));
+      // Use useEffect to defer the closing action
+      positionsToClose.forEach(id => closePosition(id, reasons.get(id)));
     }
   }, [closePosition]);
 
@@ -797,3 +825,6 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+
+  
