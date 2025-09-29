@@ -18,7 +18,7 @@ import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickers
 import { ArrowUp, ArrowDown, ShoppingCart, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { TradePopup } from "../../paper-trading/TradePopup";
+import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 
 export default function AllTickersScreener() {
