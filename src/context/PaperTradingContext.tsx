@@ -8,6 +8,7 @@ import React, {
   ReactNode,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 import type {
   OpenPosition,
@@ -59,23 +60,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const { toast } = useToast();
   const [balance, setBalance] = useState<number>(INITIAL_BALANCE);
   const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
-  const openPositionsRef = useRef<OpenPosition[]>(openPositions);
   const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const spotSubscriptions = useRef<Set<string>>(new Set());
+  const spotSubscriptionsRef = useRef<Set<string>>(new Set());
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const futuresSubscriptions = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    openPositionsRef.current = openPositions;
-  }, [openPositions]);
+  const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
 
   // Load from local storage on mount
   useEffect(() => {
@@ -87,7 +83,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedBalance) setBalance(JSON.parse(savedBalance));
       if (savedPositions) {
         const parsedPositions = JSON.parse(savedPositions);
-        // Ensure old positions have a side property for type safety
         const validatedPositions = parsedPositions.map((pos: any) => {
           if (pos.positionType === 'spot' && !pos.side) {
             return { ...pos, side: 'buy' };
@@ -99,7 +94,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
-      // Reset to defaults if loading fails
       setBalance(INITIAL_BALANCE);
       setOpenPositions([]);
       setTradeHistory([]);
@@ -136,29 +130,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       })
     );
   }, []);
-
+  
   const connectToSpot = useCallback(
-    async (symbolsToSubscribe: string[]) => {
-      // Close connection if no symbols are needed
-      if (symbolsToSubscribe.length === 0) {
-        if (spotWs.current) {
-          spotWs.current.close();
-        }
-        return;
-      }
-      
-      const topic = `/market/ticker:${symbolsToSubscribe.join(",")}`;
-
-      // If already connected, just subscribe/unsubscribe
-      if (spotWs.current && spotWs.current.readyState === WebSocket.OPEN) {
-        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/ticker:${Array.from(spotSubscriptions.current).join(',')}`}));
-        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
-        spotSubscriptions.current = new Set(symbolsToSubscribe);
-        return;
-      }
-
+    async (topic: string) => {
       setSpotWsStatus("fetching_token");
-
       try {
         const res = await fetch("/api/kucoin-ws-token");
         const tokenData: KucoinTokenResponse = await res.json();
@@ -180,7 +155,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }, instanceServers[0].pingInterval / 2);
 
           ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, response: true }));
-          spotSubscriptions.current = new Set(symbolsToSubscribe);
         };
 
         ws.onmessage = (event: MessageEvent) => {
@@ -198,7 +172,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onclose = () => {
           setSpotWsStatus("disconnected");
           if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-          spotSubscriptions.current.clear();
           spotWs.current = null;
         };
 
@@ -215,25 +188,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const connectToFutures = useCallback(
     async (symbolsToSubscribe: string[]) => {
-      if (symbolsToSubscribe.length === 0) {
-        if (futuresWs.current) {
-          futuresWs.current.close();
-        }
-        return;
-      }
-      
-      const symbolsToAdd = symbolsToSubscribe.filter(s => !futuresSubscriptions.current.has(s));
-      
-      if (futuresWs.current && futuresWs.current.readyState === WebSocket.OPEN) {
-        symbolsToAdd.forEach(symbol => {
-          futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/contractMarket/snapshot:${symbol}`, response: true }));
-          futuresSubscriptions.current.add(symbol);
-        });
-        return;
-      }
-
       setFuturesWsStatus("fetching_token");
-
       try {
         const res = await fetch("/api/kucoin-futures-ws-token", { method: "POST" });
         const tokenData: KucoinTokenResponse = await res.json();
@@ -256,7 +211,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
           symbolsToSubscribe.forEach((symbol) => {
             ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/contractMarket/snapshot:${symbol}`, response: true }));
-            futuresSubscriptions.current.add(symbol);
           });
         };
 
@@ -273,7 +227,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onclose = () => {
           setFuturesWsStatus("disconnected");
           if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-          futuresSubscriptions.current.clear();
           futuresWs.current = null;
         };
 
@@ -288,22 +241,70 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     },
     [updatePositionPrice]
   );
-  
-  // Effect to manage WebSocket connections based on open positions
+
+  const spotSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
+  const futuresSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'futures').map(p => p.symbol), [openPositions]);
+
+  // Effect to manage Spot WebSocket connection
   useEffect(() => {
-    if (isLoaded) {
-      const spotSymbols = openPositions
-        .filter((p) => p.positionType === "spot")
-        .map((p) => p.symbol);
-      connectToSpot(spotSymbols);
+    if (!isLoaded) return;
 
-      const futuresSymbols = openPositions
-        .filter((p) => p.positionType === "futures")
-        .map((p) => p.symbol);
-      connectToFutures(futuresSymbols);
+    const currentSubs = spotSubscriptionsRef.current;
+    const requiredSubs = new Set(spotSymbols);
+
+    if (JSON.stringify(Array.from(currentSubs)) === JSON.stringify(Array.from(requiredSubs))) {
+      return; // No change in subscriptions
     }
-  }, [isLoaded, openPositions, connectToSpot, connectToFutures]);
 
+    spotSubscriptionsRef.current = requiredSubs;
+    
+    if (spotWs.current && spotWs.current.readyState === WebSocket.OPEN) {
+      // Unsubscribe from all and resubscribe to new list
+      if (currentSubs.size > 0) {
+        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/ticker:${Array.from(currentSubs).join(',')}`}));
+      }
+      if (requiredSubs.size > 0) {
+        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/ticker:${Array.from(requiredSubs).join(',')}`, response: true }));
+      }
+    } else if (requiredSubs.size > 0) {
+      // Connect if not already connected
+      connectToSpot(`/market/ticker:${Array.from(requiredSubs).join(',')}`);
+    } else if (spotWs.current) {
+      // Disconnect if no subscriptions are required
+      spotWs.current.close();
+    }
+  }, [isLoaded, spotSymbols, connectToSpot]);
+
+  // Effect to manage Futures WebSocket connection
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    const currentSubs = futuresSubscriptionsRef.current;
+    const requiredSubs = new Set(futuresSymbols);
+
+    if (JSON.stringify(Array.from(currentSubs)) === JSON.stringify(Array.from(requiredSubs))) {
+      return; // No change
+    }
+
+    futuresSubscriptionsRef.current = requiredSubs;
+
+    if (futuresWs.current && futuresWs.current.readyState === WebSocket.OPEN) {
+        const symbolsToUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
+        const symbolsToSub = [...requiredSubs].filter(s => !currentSubs.has(s));
+
+        symbolsToUnsub.forEach(symbol => {
+          futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/contractMarket/snapshot:${symbol}`}));
+        });
+        symbolsToSub.forEach(symbol => {
+          futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/contractMarket/snapshot:${symbol}`, response: true }));
+        });
+
+    } else if (requiredSubs.size > 0) {
+      connectToFutures(Array.from(requiredSubs));
+    } else if (futuresWs.current) {
+      futuresWs.current.close();
+    }
+  }, [isLoaded, futuresSymbols, connectToFutures]);
 
   const buy = useCallback(
     (symbol: string, symbolName: string, amountUSD: number, currentPrice: number) => {
@@ -405,55 +406,61 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "short"), [createFuturesTrade]);
 
   const closePosition = useCallback((positionId: string) => {
-    const positionToClose = openPositionsRef.current.find(p => p.id === positionId);
-    if (!positionToClose) return;
+    setOpenPositions(prev => {
+        const positionToClose = prev.find(p => p.id === positionId);
+        if (!positionToClose) return prev;
 
-    const exitPrice = positionToClose.currentPrice;
-    let pnl = 0;
-    let returnedValue = 0;
+        const exitPrice = positionToClose.currentPrice;
+        let pnl = 0;
+        let returnedValue = 0;
 
-    if (positionToClose.positionType === 'spot') {
-      pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
-      returnedValue = positionToClose.size * exitPrice;
-    } else if (positionToClose.positionType === 'futures') {
-      const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
-      pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
-      const leverage = positionToClose.leverage ?? 1;
-      const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
-      returnedValue = collateral + pnl;
-    }
+        if (positionToClose.positionType === 'spot') {
+          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
+          returnedValue = positionToClose.size * exitPrice;
+        } else if (positionToClose.positionType === 'futures') {
+          const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
+          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
+          const leverage = positionToClose.leverage ?? 1;
+          const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
+          returnedValue = collateral + pnl;
+        }
 
-    setBalance(prev => prev + returnedValue);
-    setOpenPositions(prev => prev.filter(p => p.id !== positionId));
-
-    setTradeHistory(prev => {
-        const closingTrade: PaperTrade = {
-            id: crypto.randomUUID(),
-            positionId: positionToClose.id,
-            positionType: positionToClose.positionType,
-            symbol: positionToClose.symbol,
-            symbolName: positionToClose.symbolName,
-            size: positionToClose.size,
-            price: exitPrice,
-            side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
-            timestamp: Date.now(),
-            status: 'closed',
-            pnl,
-            leverage: positionToClose.leverage,
-        };
-        return [closingTrade, ...prev];
+        setBalance(bal => bal + returnedValue);
+        
+        setTradeHistory(th => {
+            const closingTrade: PaperTrade = {
+                id: crypto.randomUUID(),
+                positionId: positionToClose.id,
+                positionType: positionToClose.positionType,
+                symbol: positionToClose.symbol,
+                symbolName: positionToClose.symbolName,
+                size: positionToClose.size,
+                price: exitPrice,
+                side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
+                timestamp: Date.now(),
+                status: 'closed',
+                pnl,
+                leverage: positionToClose.leverage,
+            };
+            return [closingTrade, ...th];
+        });
+        
+        toast({ title: `Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+        
+        return prev.filter(p => p.id !== positionId);
     });
-
-    toast({ title: `Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
   }, [toast]);
   
   const closeAllPositions = useCallback(() => {
-    openPositionsRef.current.forEach(p => closePosition(p.id));
+    // This now safely gets the latest positions state for iteration
+    setOpenPositions(currentPositions => {
+        currentPositions.forEach(p => closePosition(p.id));
+        return currentPositions; // This will get overwritten by the individual closePosition calls, but is safe
+    });
   }, [closePosition]);
 
   const clearHistory = useCallback(() => {
     setTradeHistory([]);
-    localStorage.setItem("paperTrading_history", JSON.stringify([]));
     toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
   }, [toast]);
 
