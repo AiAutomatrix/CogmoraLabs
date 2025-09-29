@@ -237,7 +237,7 @@ export default function PaperTradingDashboard() {
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
                             Current Price
                         </TableHead>
-                        <TableHead className="text-center">Conditions</TableHead>
+                        <TableHead className="text-center">TP/SL</TableHead>
                         <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
                         <TableHead className="text-center min-w-[100px] px-2 py-2">
                             Actions
@@ -462,3 +462,5 @@ export default function PaperTradingDashboard() {
     </>
   );
 }
+
+    
