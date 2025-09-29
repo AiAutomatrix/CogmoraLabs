@@ -176,7 +176,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return prev;
     });
   }, []);
-  
+
   const buy = useCallback(
     (symbol: string, symbolName: string, amountUSD: number, currentPrice: number, stopLoss?: number, takeProfit?: number) => {
       if (balance < amountUSD) {
@@ -233,100 +233,95 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     [balance, toast]
   );
 
-    const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
-        if (balance < collateral) {
-            toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
-            return;
-        }
-        const positionValue = collateral * leverage;
-        const size = positionValue / entryPrice;
+  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
+      if (balance < collateral) {
+          toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+          return;
+      }
+      const positionValue = collateral * leverage;
+      const size = positionValue / entryPrice;
 
-        const newPosition: OpenPosition = {
-            id: crypto.randomUUID(),
-            positionType: "futures",
-            symbol,
-            symbolName: symbol.replace(/M$/, ""),
-            size,
-            averageEntryPrice: entryPrice,
-            currentPrice: entryPrice,
-            side: "long",
-            leverage,
-            unrealizedPnl: 0,
-            stopLoss,
-            takeProfit,
-        };
+      const newPosition: OpenPosition = {
+          id: crypto.randomUUID(),
+          positionType: "futures",
+          symbol,
+          symbolName: symbol.replace(/M$/, ""),
+          size,
+          averageEntryPrice: entryPrice,
+          currentPrice: entryPrice,
+          side: "long",
+          leverage,
+          unrealizedPnl: 0,
+          stopLoss,
+          takeProfit,
+      };
 
-        setBalance((prev) => prev - collateral);
-        setOpenPositions((prev) => [...prev, newPosition]);
-        setTradeHistory((prev) => [{
-            id: crypto.randomUUID(),
-            positionId: newPosition.id,
-            positionType: "futures",
-            symbol,
-            symbolName: newPosition.symbolName,
-            size,
-            price: entryPrice,
-            side: "long",
-            leverage,
-            timestamp: Date.now(),
-            status: "open",
-        }, ...prev]);
+      setBalance((prev) => prev - collateral);
+      setOpenPositions((prev) => [...prev, newPosition]);
+      setTradeHistory((prev) => [{
+          id: crypto.randomUUID(),
+          positionId: newPosition.id,
+          positionType: "futures",
+          symbol,
+          symbolName: newPosition.symbolName,
+          size,
+          price: entryPrice,
+          side: "long",
+          leverage,
+          timestamp: Date.now(),
+          status: "open",
+      }, ...prev]);
 
-        toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-    }, [balance, toast]);
+      toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+  }, [balance, toast]);
 
-    const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
-        if (balance < collateral) {
-            toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
-            return;
-        }
-        const positionValue = collateral * leverage;
-        const size = positionValue / entryPrice;
+  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
+      if (balance < collateral) {
+          toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+          return;
+      }
+      const positionValue = collateral * leverage;
+      const size = positionValue / entryPrice;
 
-        const newPosition: OpenPosition = {
-            id: crypto.randomUUID(),
-            positionType: "futures",
-            symbol,
-            symbolName: symbol.replace(/M$/, ""),
-            size,
-            averageEntryPrice: entryPrice,
-            currentPrice: entryPrice,
-            side: "short",
-            leverage,
-            unrealizedPnl: 0,
-            stopLoss,
-            takeProfit,
-        };
+      const newPosition: OpenPosition = {
+          id: crypto.randomUUID(),
+          positionType: "futures",
+          symbol,
+          symbolName: symbol.replace(/M$/, ""),
+          size,
+          averageEntryPrice: entryPrice,
+          currentPrice: entryPrice,
+          side: "short",
+          leverage,
+          unrealizedPnl: 0,
+          stopLoss,
+          takeProfit,
+      };
 
-        setBalance((prev) => prev - collateral);
-        setOpenPositions((prev) => [...prev, newPosition]);
-        setTradeHistory((prev) => [{
-            id: crypto.randomUUID(),
-            positionId: newPosition.id,
-            positionType: "futures",
-            symbol,
-            symbolName: newPosition.symbolName,
-            size,
-            price: entryPrice,
-            side: "short",
-            leverage,
-            timestamp: Date.now(),
-            status: "open",
-        }, ...prev]);
+      setBalance((prev) => prev - collateral);
+      setOpenPositions((prev) => [...prev, newPosition]);
+      setTradeHistory((prev) => [{
+          id: crypto.randomUUID(),
+          positionId: newPosition.id,
+          positionType: "futures",
+          symbol,
+          symbolName: newPosition.symbolName,
+          size,
+          price: entryPrice,
+          side: "short",
+          leverage,
+          timestamp: Date.now(),
+          status: "open",
+      }, ...prev]);
 
-        toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-    }, [balance, toast]);
-
+      toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+  }, [balance, toast]);
+  
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     toast({
       title: 'Trade Trigger Executed!',
       description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
     });
-
-    if (trigger.cancelOthers) {
-      setTradeTriggers(prev => prev.filter(t => t.symbol !== trigger.symbol || t.id === trigger.id));
-      toast({ title: 'OCO Trigger', description: `Canceling other triggers for ${trigger.symbolName}`});
-    }
 
     if (trigger.type === 'spot') {
       buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit);
@@ -337,8 +332,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit);
       }
     }
-    // Remove the executed trigger
-    setTradeTriggers(prev => prev.filter(t => t.id !== trigger.id));
+    
+    // Remove the executed trigger and any OCO triggers
+    setTradeTriggers(prev => {
+        if(trigger.cancelOthers){
+            toast({ title: 'OCO Trigger', description: `Canceling other triggers for ${trigger.symbolName}`});
+            return prev.filter(t => t.symbol !== trigger.symbol);
+        }
+        return prev.filter(t => t.id !== trigger.id)
+    });
   }, [toast, buy, futuresBuy, futuresSell]);
 
   const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
@@ -689,7 +691,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
 
         if (conditionMet) {
-            toast({ title: 'Trade Trigger: Instant Execution', description: `Condition for ${newTrigger.symbolName} already met. Executing now.` });
             executeTrigger(newTrigger, currentPrice);
             return; // Exit after instant execution
         }
@@ -743,3 +744,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
 };
 
     
+
