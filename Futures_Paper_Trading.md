@@ -35,12 +35,12 @@ The process for executing a leveraged futures trade is as follows:
 Futures contracts require a separate WebSocket connection, as they use a different data feed from spot tickers.
 
 -   **Dedicated Futures WebSocket**: The `PaperTradingContext` manages a second, independent WebSocket connection specifically for futures contracts.
--   **Subscription Logic**: When a futures position is opened, the context subscribes to the `/contractMarket/snapshot:{symbol}` topic for that specific contract (e.g., `/contractMarket/snapshot:XBTUSDTM`).
--   **Live Price Updates**: The context's `onmessage` handler for the futures WebSocket listens for snapshot updates and passes the new `lastPrice` to the `updatePositionPrice` function.
--   **`updatePositionPrice`**: This function identifies the open futures position by its symbol and updates its `currentPrice`. It then calculates the `unrealizedPnl` based on the position's side:
+-   **Subscription Logic**: When a futures position is opened (or added to the watchlist), the context subscribes to the `/contractMarket/snapshot:{symbol}` topic for that specific contract (e.g., `/contractMarket/snapshot:XBTUSDTM`).
+-   **Live Price Updates**: The context's `onmessage` handler for the futures WebSocket listens for snapshot updates and passes the new data to the `processUpdate` function.
+-   **`processUpdate`**: This function identifies the open futures position by its symbol and updates its `currentPrice`. It then calculates the `unrealizedPnl` based on the position's side:
     -   **Long**: `(currentPrice - averageEntryPrice) * size`
     -   **Short**: `(averageEntryPrice - currentPrice) * size`
--   **Connection Management**: When a futures position is closed, the context sends an `unsubscribe` message for that contract's topic to the WebSocket, ensuring the connection remains efficient.
+-   **Connection Management**: When a futures position is closed (or removed from the watchlist), the context sends an `unsubscribe` message for that contract's topic to the WebSocket, ensuring the connection remains efficient.
 
 ## Component Relationships
 

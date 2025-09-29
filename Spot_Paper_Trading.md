@@ -29,9 +29,9 @@ The process for initiating and executing a spot trade is designed to be straight
 To ensure that Unrealized P&L and position values are always current, the system establishes a direct WebSocket connection to KuCoin's public ticker feed.
 
 -   **Dedicated WebSocket in Context**: The `PaperTradingContext` itself is responsible for managing the WebSocket connection for spot prices.
--   **Subscription Logic**: When a new spot position is opened, the context adds the symbol (e.g., `BTC-USDT`) to a subscription list. It establishes a connection to the KuCoin WebSocket (`/market/ticker:{symbol1},{symbol2},...`) and subscribes to price updates for all currently open spot positions.
--   **Live Price Updates**: As the WebSocket pushes new ticker data, the `onmessage` handler in the context calls the `updatePositionPrice` function.
--   **`updatePositionPrice`**: This function iterates through the `openPositions` state, finds the matching position, and updates its `currentPrice` and `unrealizedPnl`. This state update triggers a re-render in the `PaperTradingDashboard`, ensuring all financial metrics are live.
+-   **Subscription Logic**: When a new spot position is opened (or added to the watchlist), the context adds the symbol (e.g., `BTC-USDT`) to a subscription list. It establishes a connection to the KuCoin WebSocket and subscribes to the `/market/snapshot:{symbol}` topic for a full data snapshot for all relevant symbols.
+-   **Live Price Updates**: As the WebSocket pushes new ticker data, the `onmessage` handler in the context calls the `processUpdate` function.
+-   **`processUpdate`**: This function iterates through the `openPositions` and `watchlist` state, finds the matching item, and updates its `currentPrice`, `unrealizedPnl`, `high`, `low`, and `priceChgPct`. This state update triggers a re-render in the `PaperTradingDashboard`, ensuring all financial metrics are live.
 -   **Connection Management**: The context also handles automatically unsubscribing from a symbol's feed when its position is closed, keeping the connection efficient.
 
 ## Component Relationships

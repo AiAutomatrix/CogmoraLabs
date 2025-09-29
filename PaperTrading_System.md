@@ -1,6 +1,6 @@
 # Paper Trading System Documentation
 
-This document outlines the architecture and functionality of the paper trading feature within the Cogmora Labs application. It enables users to simulate both spot and leveraged futures cryptocurrency trades using live data from KuCoin without risking real money.
+This document outlines the architecture and functionality of the paper trading feature within the Cogmora Labs application. It enables users to simulate both spot and leveraged futures cryptocurrency trades using live market data from KuCoin without risking real money.
 
 ## Core Architecture: The `PaperTradingContext`
 
@@ -18,12 +18,12 @@ The entire paper trading engine is a self-contained, client-side system built us
 To provide a live trading experience, the system establishes and maintains direct WebSocket connections to KuCoin's public feeds. This logic is managed entirely within `PaperTradingContext.tsx`.
 
 1.  **Connection Management**: The context manages two independent WebSocket instances:
-    -   A **Spot WebSocket** that subscribes to the `/market/ticker:{symbol}` topic for all currently open spot positions.
+    -   A **Spot WebSocket** that subscribes to the `/market/snapshot:{symbol}` topic for all currently open spot positions.
     -   A **Futures WebSocket** that subscribes to the `/contractMarket/snapshot:{symbol}` topic for all open futures positions.
-2.  **Dynamic Subscriptions**: The context is intelligent. When a new position is opened, it subscribes to that specific symbol's feed. When a position is closed, it unsubscribes, keeping the connections efficient and minimizing data overhead.
+2.  **Dynamic Subscriptions**: The context is intelligent. When a new position is opened (or an item is added to the watchlist), it subscribes to that specific symbol's feed. When a position is closed (or removed from the watchlist), it unsubscribes, keeping the connections efficient and minimizing data overhead.
 3.  **Live Price Updates**: The `onmessage` event handlers for both WebSockets listen for new price data.
-4.  **`updatePositionPrice` Function**: When a new price is received, this utility function is called. It iterates through the `openPositions` array, finds the matching position by its symbol, and updates its `currentPrice`. It then instantly recalculates the `unrealizedPnl` for that position.
-5.  **Reactive UI**: Because `openPositions` is a state variable, this update automatically triggers a re-render in the `PaperTradingDashboard`, ensuring all metrics—especially Unrealized P&L—are always live.
+4.  **`processUpdate` Function**: When a new price is received, this utility function is called. It iterates through the `openPositions` and `watchlist` arrays, finds the matching item by its symbol, and updates its `currentPrice`, `high`, `low`, and `priceChgPct`. It then instantly recalculates the `unrealizedPnl` for any open positions.
+5.  **Reactive UI**: Because `openPositions` and `watchlist` are state variables, this update automatically triggers a re-render in the `PaperTradingDashboard`, ensuring all metrics—especially Unrealized P&L—are always live.
 
 ## Trade Execution Flow
 
