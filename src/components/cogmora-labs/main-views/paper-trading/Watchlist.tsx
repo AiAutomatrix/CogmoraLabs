@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState } from 'react';
@@ -60,11 +59,12 @@ export default function Watchlist() {
     return new Intl.NumberFormat("en-US", options).format(price);
   };
   
-  const handleSetAlert = (symbol: string) => {
+  const handleSetAlert = (symbol: string, popoverOpenSetter: (open: boolean) => void) => {
     const price = parseFloat(alertPrice);
     if (!isNaN(price) && price > 0) {
       addPriceAlert(symbol, price, alertCondition);
       setAlertPrice('');
+      popoverOpenSetter(false); // Close the popover on save
     }
   };
 
@@ -88,123 +88,116 @@ export default function Watchlist() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Symbol</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Current Price</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">24h Change</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">24h High</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">24h Low</TableHead>
-              <TableHead className="text-center">Price Alert</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {watchlist.length > 0 ? (
-              watchlist.map((item) => {
-                const alert = priceAlerts[item.symbol];
-                return (
-                  <TableRow key={item.symbol}>
-                    <TableCell className="font-medium">{item.symbolName}</TableCell>
-                    <TableCell><Badge variant="secondary">{item.type}</Badge></TableCell>
-                    <TableCell className="text-right">{formatPrice(item.currentPrice)}</TableCell>
-                    <TableCell
-                      className={`text-right font-mono hidden sm:table-cell ${
-                        item.priceChgPct === undefined ? '' : (item.priceChgPct >= 0 ? "text-green-500" : "text-red-500")
-                      }`}
-                    >
-                      {formatChange(item.priceChgPct)}
-                    </TableCell>
-                    <TableCell className="text-right hidden sm:table-cell text-green-500">{formatPrice(item.high)}</TableCell>
-                    <TableCell className="text-right hidden sm:table-cell text-red-500">{formatPrice(item.low)}</TableCell>
-                    <TableCell className="text-center">
-                      {alert ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <Badge variant={alert.triggered ? "default" : "outline"} className={`border-primary ${alert.triggered ? 'animate-pulse' : ''}`}>
-                            {alert.condition === 'above' ? <ArrowUp className="h-3 w-3 mr-1"/> : <ArrowDown className="h-3 w-3 mr-1"/>}
-                            {formatPrice(alert.price)}
-                          </Badge>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removePriceAlert(item.symbol)}>
-                            <BellOff className="h-4 w-4 text-destructive" />
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Symbol</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Current Price</TableHead>
+                <TableHead className="text-right hidden sm:table-cell">24h Change</TableHead>
+                <TableHead className="text-right hidden sm:table-cell">24h High</TableHead>
+                <TableHead className="text-right hidden sm:table-cell">24h Low</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {watchlist.length > 0 ? (
+                watchlist.map((item) => {
+                  const alert = priceAlerts[item.symbol];
+                  const [isAlertPopoverOpen, setIsAlertPopoverOpen] = useState(false);
+                  
+                  return (
+                    <TableRow key={item.symbol}>
+                      <TableCell className="font-medium">{item.symbolName}</TableCell>
+                      <TableCell><Badge variant="secondary">{item.type}</Badge></TableCell>
+                      <TableCell className="text-right">{formatPrice(item.currentPrice)}</TableCell>
+                      <TableCell
+                        className={`text-right font-mono hidden sm:table-cell ${
+                          item.priceChgPct === undefined ? '' : (item.priceChgPct >= 0 ? "text-green-500" : "text-red-500")
+                        }`}
+                      >
+                        {formatChange(item.priceChgPct)}
+                      </TableCell>
+                      <TableCell className="text-right hidden sm:table-cell text-green-500">{formatPrice(item.high)}</TableCell>
+                      <TableCell className="text-right hidden sm:table-cell text-red-500">{formatPrice(item.low)}</TableCell>
+                      
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          {alert ? (
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => removePriceAlert(item.symbol)}>
+                                  <BellOff className="h-4 w-4" />
+                              </Button>
+                          ) : (
+                            <Popover open={isAlertPopoverOpen} onOpenChange={(open) => {
+                              if (open && item.currentPrice > 0) { setAlertPrice(item.currentPrice.toFixed(4)); } 
+                              else if (!open) { setAlertPrice(''); }
+                              setIsAlertPopoverOpen(open);
+                            }}>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><Bell className="h-4 w-4"/></Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-60">
+                                <div className="grid gap-4">
+                                  <div className="space-y-2">
+                                    <h4 className="font-medium leading-none">Set Alert for {item.symbolName}</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                      Notify when price is...
+                                    </p>
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <div className="grid grid-cols-2 items-center gap-4">
+                                      <RadioGroup defaultValue="above" onValueChange={(val: 'above' | 'below') => setAlertCondition(val)}>
+                                          <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="above" id={`above-${item.symbol}`} />
+                                            <Label htmlFor={`above-${item.symbol}`}>Above</Label>
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <RadioGroupItem value="below" id={`below-${item.symbol}`} />
+                                            <Label htmlFor={`below-${item.symbol}`}>Below</Label>
+                                          </div>
+                                      </RadioGroup>
+                                      <Input
+                                        id="price" type="number" placeholder="Price" value={alertPrice}
+                                        onChange={(e) => setAlertPrice(e.target.value)} className="h-9"
+                                      />
+                                    </div>
+                                    <Button size="sm" onClick={() => handleSetAlert(item.symbol, setIsAlertPopoverOpen)}>Save Alert</Button>
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(item)}>
+                            <BarChartHorizontal className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleWatchlist(item.symbol, item.symbolName, item.type)}>
+                            <EyeOff className="h-4 w-4" />
                           </Button>
                         </div>
-                      ) : (
-                        <Popover onOpenChange={(open) => {
-                          if (open && item.currentPrice > 0) {
-                            setAlertPrice(item.currentPrice.toFixed(4));
-                          } else if (!open) {
-                            setAlertPrice('');
-                          }
-                        }}>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm"><Bell className="h-4 w-4 mr-1"/> Set Alert</Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-60">
-                            <div className="grid gap-4">
-                              <div className="space-y-2">
-                                <h4 className="font-medium leading-none">Set Alert for {item.symbolName}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  Notify when price is...
-                                </p>
-                              </div>
-                              <div className="grid gap-2">
-                                <div className="grid grid-cols-2 items-center gap-4">
-                                  <RadioGroup defaultValue="above" onValueChange={(val: 'above' | 'below') => setAlertCondition(val)}>
-                                      <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="above" id="above" />
-                                        <Label htmlFor="above">Above</Label>
-                                      </div>
-                                      <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="below" id="below" />
-                                        <Label htmlFor="below">Below</Label>
-                                      </div>
-                                  </RadioGroup>
-                                  <Input
-                                    id="price"
-                                    type="number"
-                                    placeholder="Price"
-                                    value={alertPrice}
-                                    onChange={(e) => setAlertPrice(e.target.value)}
-                                    className="h-9"
-                                  />
-                                </div>
-                                <Button size="sm" onClick={() => handleSetAlert(item.symbol)}>Save Alert</Button>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                       <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleTradeClick(item)}
-                      >
-                        <BarChartHorizontal className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => toggleWatchlist(item.symbol, item.symbolName, item.type)}
-                      >
-                        <EyeOff className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center h-24">
-                  Your watchlist is empty.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                        {alert && (
+                          <div className="flex justify-end mt-1">
+                            <Badge variant={alert.triggered ? "default" : "outline"} className={`border-primary ${alert.triggered ? 'animate-pulse' : ''}`}>
+                              {alert.condition === 'above' ? <ArrowUp className="h-3 w-3 mr-1"/> : <ArrowDown className="h-3 w-3 mr-1"/>}
+                              {formatPrice(alert.price)}
+                            </Badge>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center h-24">
+                    Your watchlist is empty.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
      {selectedWatchlistItem && (
@@ -217,5 +210,3 @@ export default function Watchlist() {
     </>
   );
 }
-
-    
