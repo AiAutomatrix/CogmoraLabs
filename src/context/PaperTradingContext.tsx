@@ -64,16 +64,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Effect to update spot positions from the global spot tickers data
   useEffect(() => {
-    if (spotTickers.length > 0) {
-        const openSpotPositions = openPositionsRef.current.filter(p => p.positionType === 'spot');
-        if (openSpotPositions.length > 0) {
-            const openSpotSymbols = new Set(openSpotPositions.map(p => p.symbol));
-            spotTickers.forEach(ticker => {
-                if (openSpotSymbols.has(ticker.symbol) && ticker.last) {
-                    updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
-                }
-            });
+    const openSpotPositions = openPositionsRef.current.filter(p => p.positionType === 'spot');
+    if (openSpotPositions.length > 0 && spotTickers.length > 0) {
+      const openSpotSymbols = new Set(openSpotPositions.map(p => p.symbol));
+      spotTickers.forEach(ticker => {
+        if (openSpotSymbols.has(ticker.symbol)) {
+          const newPrice = parseFloat(ticker.last);
+          if (!isNaN(newPrice)) {
+            // Find the current position in state to check if price is different
+            const currentPosition = openPositionsRef.current.find(p => p.symbol === ticker.symbol);
+            if (currentPosition && currentPosition.currentPrice !== newPrice) {
+              updatePositionPrice(ticker.symbol, newPrice);
+            }
+          }
         }
+      });
     }
   }, [spotTickers, updatePositionPrice]);
 
@@ -310,8 +315,30 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
   };
 
   const clearAllPositions = () => {
+    // Before clearing, we need to calculate the current value of all positions to return to balance
+    let totalValueToReturn = 0;
+    openPositions.forEach(position => {
+       const finalPnl = position.unrealizedPnl || 0;
+       const value = position.positionType === 'spot' 
+        ? position.size * position.currentPrice
+        : (position.size * position.averageEntryPrice) / position.leverage! + finalPnl;
+       totalValueToReturn += value;
+    });
+
+    setBalance(prev => prev + totalValueToReturn);
     setOpenPositions([]);
-    toast({ title: "All Positions Cleared", description: "All open positions have been removed." });
+
+    // Unsubscribe from all futures topics
+    if (futuresWs.current?.readyState === WebSocket.OPEN) {
+        openPositions.forEach(pos => {
+            if (pos.positionType === 'futures') {
+                 const topic = `/contractMarket/snapshot:${pos.symbol}`;
+                 futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic, response: true }));
+            }
+        });
+    }
+
+    toast({ title: "All Positions Cleared", description: "All open positions have been closed and their value returned to your balance." });
   };
 
   const formatCurrency = (value: number) => {
@@ -330,3 +357,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
