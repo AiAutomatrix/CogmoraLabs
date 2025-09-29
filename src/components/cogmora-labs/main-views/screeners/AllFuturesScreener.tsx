@@ -17,8 +17,9 @@ import {
   useKucoinFuturesContracts,
   type KucoinFuturesContract,
 } from "@/hooks/useKucoinFuturesTickers";
-import { ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUp, ArrowDown, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 
 
 
@@ -26,6 +27,7 @@ export default function FuturesScreener() {
   type SortKey = "markPrice" | "priceChgPct" | "openInterest" | "volumeOf24h";
 
   const { contracts, loading } = useKucoinFuturesContracts();
+  const [filter, setFilter] = useState("");
   const [sortedContracts, setSortedContracts] = useState<KucoinFuturesContract[]>([]);
   const [sortConfig, setSortConfig] = useState<{
     key: SortKey;
@@ -37,7 +39,14 @@ export default function FuturesScreener() {
   }, [contracts]);
 
   const sortedMemo = useMemo(() => {
-    let sortableItems = [...sortedContracts];
+    let sortableItems = [...contracts];
+
+    if (filter) {
+      sortableItems = sortableItems.filter(contract =>
+        contract.symbol.toLowerCase().includes(filter.toLowerCase())
+      );
+    }
+    
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
         const aValue = parseFloat(a[sortConfig.key] as string);
@@ -49,7 +58,7 @@ export default function FuturesScreener() {
       });
     }
     return sortableItems;
-  }, [sortedContracts, sortConfig]);
+  }, [contracts, sortConfig, filter]);
 
   const requestSort = (key: SortKey) => {
     let direction: "ascending" | "descending" = "descending";
@@ -115,17 +124,29 @@ export default function FuturesScreener() {
 
   return (
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
-      <CardHeader className="pb-2">
-        <CardTitle className="font-headline">KuCoin Futures Screener</CardTitle>
-        <CardDescription>
-          Live KuCoin futures data. Click headers to sort.
-        </CardDescription>
+      <CardHeader className="pb-2 space-y-4">
+        <div>
+          <CardTitle className="font-headline">KuCoin Futures Screener</CardTitle>
+          <CardDescription>
+            Live KuCoin futures data. Click headers to sort.
+          </CardDescription>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search contracts..."
+            className="pl-8"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
       </CardHeader>
 
       {tableHeaders}
 
       <ScrollArea className="max-h-[350px] lg:max-h-[800px] overflow-auto rounded-md">
-        {loading ? (
+        {loading && !contracts.length ? (
           skeletonRows
         ) : (
           <Table>
