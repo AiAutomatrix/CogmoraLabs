@@ -49,7 +49,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
 
   const maxLeverage = item.type === 'futures' ? 100 : 1; // Assuming max 100 for futures, can be dynamic later
 
-  const handleInstantTrade = () => {
+  const handleInstantTrade = (side?: 'long' | 'short') => {
     const amountUSD = parseFloat(allocation);
     if (isNaN(amountUSD) || amountUSD <= 0 || amountUSD > balance) return;
     
@@ -59,9 +59,9 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
     if (item.type === 'spot') {
       buy(item.symbol, item.symbolName, amountUSD, item.currentPrice, sl, tp);
     } else {
-      if (triggerAction === 'long') {
+      if (side === 'long') {
         futuresBuy(item.symbol, amountUSD, item.currentPrice, leverage[0], sl, tp);
-      } else if (triggerAction === 'short') {
+      } else if (side === 'short') {
         futuresSell(item.symbol, amountUSD, item.currentPrice, leverage[0], sl, tp);
       }
     }
@@ -153,15 +153,15 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
                     <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <div className="grid grid-cols-2 gap-2">
                         {item.type === 'spot' ? (
-                            <Button type="button" onClick={handleInstantTrade} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="col-span-2">
+                            <Button type="button" onClick={() => handleInstantTrade()} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="col-span-2">
                                 Buy
                             </Button>
                         ) : (
                             <>
-                            <Button type="button" onClick={() => { setTriggerAction('long'); handleInstantTrade(); }} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-green-600 hover:bg-green-700">
+                            <Button type="button" onClick={() => handleInstantTrade('long')} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-green-600 hover:bg-green-700">
                                 Buy / Long
                             </Button>
-                            <Button type="button" onClick={() => { setTriggerAction('short'); handleInstantTrade(); }} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-red-600 hover:bg-red-700">
+                            <Button type="button" onClick={() => handleInstantTrade('short')} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-red-600 hover:bg-red-700">
                                 Sell / Short
                             </Button>
                             </>
