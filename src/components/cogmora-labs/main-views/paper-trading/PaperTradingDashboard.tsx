@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useMemo, useState } from 'react';
@@ -8,17 +9,31 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function PaperTradingDashboard() {
-  const { balance, openPositions, tradeHistory, closePosition } = usePaperTrading();
+  const { balance, openPositions, tradeHistory, closePosition, clearHistory } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
 
   const totalPositionValue = useMemo(() =>
     openPositions.reduce((acc, pos) => {
         if (pos.positionType === 'futures') {
-            return acc + (pos.size * pos.averageEntryPrice); // For futures, value is based on entry
+            // For futures, the "value" tied up from your balance is the collateral
+            return acc + (pos.size * pos.averageEntryPrice) / pos.leverage!;
         }
-        return acc + (pos.size * pos.currentPrice); // For spot, value is based on current price
+        // For spot, the value is the full market value of the assets
+        return acc + (pos.size * pos.currentPrice);
     }, 0),
     [openPositions]
   );
@@ -46,6 +61,7 @@ export default function PaperTradingDashboard() {
   };
   
   const formatPrice = (price: number) => {
+    if (!price || isNaN(price)) return '$0.00';
     const options: Intl.NumberFormatOptions = {
       style: 'currency',
       currency: 'USD',
@@ -121,8 +137,8 @@ export default function PaperTradingDashboard() {
               <TableBody>
                 {openPositions.length > 0 ? openPositions.map(pos => {
                     const value = pos.positionType === 'futures' 
-                        ? (pos.size * pos.averageEntryPrice) / pos.leverage!
-                        : pos.size * pos.averageEntryPrice;
+                        ? (pos.size * pos.averageEntryPrice)
+                        : pos.size * pos.currentPrice;
                     return (
                         <TableRow key={`${pos.id}-${pos.symbolName}`}>
                             <TableCell className="font-medium">{pos.symbolName}</TableCell>
@@ -155,9 +171,31 @@ export default function PaperTradingDashboard() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Trade History</CardTitle>
-           <CardDescription>A log of all your executed paper trades.</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle>Trade History</CardTitle>
+                <CardDescription>A log of all your executed paper trades.</CardDescription>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={tradeHistory.length === 0}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear History
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete your entire trade history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={clearHistory}>Continue</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
         </CardHeader>
         <CardContent>
           <ScrollArea className="h-[300px] w-full">
@@ -178,7 +216,7 @@ export default function PaperTradingDashboard() {
                  {tradeHistory.slice(0, rowsToShow).map(trade => {
                    const tradePrice = trade.price;
                    const tradeValue = trade.positionType === 'futures' 
-                    ? (trade.size * tradePrice) / trade.leverage!
+                    ? (trade.size * tradePrice)
                     : trade.size * tradePrice;
                    return (
                      <TableRow key={trade.id}>
@@ -187,7 +225,7 @@ export default function PaperTradingDashboard() {
                        <TableCell className={`capitalize ${trade.side === 'buy' || trade.side === 'long' ? 'text-green-500' : 'text-red-500'}`}>{trade.side}</TableCell>
                        <TableCell>
                            {trade.positionType === 'futures' ? (
-                                <Badge variant="outline">Futures</Badge>
+                                <Badge variant="outline">Futures {trade.leverage}x</Badge>
                             ) : (
                                 <Badge variant="secondary">Spot</Badge>
                             )}
@@ -218,3 +256,4 @@ export default function PaperTradingDashboard() {
     </div>
   );
 }
+
