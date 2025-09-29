@@ -17,6 +17,14 @@ export const PaperTradeSchema = z.object({
 });
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 
+export const OpenPositionDetailsSchema = z.object({
+  stopLoss: z.number().optional(),
+  takeProfit: z.number().optional(),
+  triggeredBy: z.string().optional(), // e.g., 'manual', 'trigger:above', 'trigger:below'
+});
+export type OpenPositionDetails = z.infer<typeof OpenPositionDetailsSchema>;
+
+
 export const OpenPositionSchema = z.object({
   id: z.string(),
   positionType: z.enum(['spot', 'futures']),
@@ -28,8 +36,7 @@ export const OpenPositionSchema = z.object({
   side: z.enum(['buy', 'long', 'short']),
   leverage: z.number().optional(),
   unrealizedPnl: z.number().optional(),
-  stopLoss: z.number().optional(),
-  takeProfit: z.number().optional(),
+  details: OpenPositionDetailsSchema.optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
@@ -146,7 +153,7 @@ export type PairTxns = z.infer<typeof TxnsSchema>;
 
 // Allows keys like "h24", "h6", "h1", "m5"
 export const VolumeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairVolume = z.infer<typeof VolumeSchema>;
+export type PairVolume = z.infer<typeof PairVolume>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();

@@ -41,6 +41,7 @@ interface PaperTradingContextType {
     symbolName: string,
     amountUSD: number,
     currentPrice: number,
+    triggeredBy?: string,
     stopLoss?: number,
     takeProfit?: number,
   ) => void;
@@ -49,6 +50,7 @@ interface PaperTradingContextType {
     collateral: number,
     entryPrice: number,
     leverage: number,
+    triggeredBy?: string,
     stopLoss?: number,
     takeProfit?: number,
   ) => void;
@@ -57,10 +59,12 @@ interface PaperTradingContextType {
     collateral: number,
     entryPrice: number,
     leverage: number,
+    triggeredBy?: string,
     stopLoss?: number,
     takeProfit?: number,
   ) => void;
   closePosition: (positionId: string, reason?: string) => void;
+  updatePositionSlTp: (positionId: string, sl?: number, tp?: number) => void;
   closeAllPositions: () => void;
   clearHistory: () => void;
   spotWsStatus: string;
@@ -106,16 +110,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const savedTriggers = localStorage.getItem("paperTrading_tradeTriggers");
 
       if (savedBalance) setBalance(JSON.parse(savedBalance));
-      if (savedPositions) {
-        const parsedPositions = JSON.parse(savedPositions);
-        const validatedPositions = parsedPositions.map((pos: any) => {
-          if (pos.positionType === 'spot' && !pos.side) {
-            return { ...pos, side: 'buy' };
-          }
-          return pos;
-        });
-        setOpenPositions(validatedPositions);
-      }
+      if (savedPositions) setOpenPositions(JSON.parse(savedPositions));
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
       if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
       if (savedAlerts) setPriceAlerts(JSON.parse(savedAlerts));
@@ -178,7 +173,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const buy = useCallback(
-    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number, stopLoss?: number, takeProfit?: number) => {
+    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number, triggeredBy = 'manual', stopLoss?: number, takeProfit?: number) => {
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
         return;
@@ -194,7 +189,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               const totalValue = (existing.size * existing.averageEntryPrice) + (size * currentPrice);
               existing.averageEntryPrice = totalValue / totalSize;
               existing.size = totalSize;
-              // SL/TP logic on modification can be added here if needed
+              if (stopLoss) existing.details.stopLoss = stopLoss;
+              if (takeProfit) existing.details.takeProfit = takeProfit;
               return updatedPositions;
           } else {
               const newPosition: OpenPosition = {
@@ -207,8 +203,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   currentPrice,
                   side: 'buy',
                   unrealizedPnl: 0,
-                  stopLoss,
-                  takeProfit
+                  details: { stopLoss, takeProfit, triggeredBy },
               };
               return [...prev, newPosition];
           }
@@ -217,7 +212,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setBalance(prev => prev - amountUSD);
       setTradeHistory(prev => [{
         id: crypto.randomUUID(),
-        positionId: 'N/A', // Spot trades might not need a persistent position ID if they are merged
+        positionId: 'N/A',
         positionType: 'spot',
         symbol,
         symbolName,
@@ -233,7 +228,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     [balance, toast]
   );
 
-  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
+  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, triggeredBy = 'manual', stopLoss?: number, takeProfit?: number) => {
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -252,8 +247,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           side: "long",
           leverage,
           unrealizedPnl: 0,
-          stopLoss,
-          takeProfit,
+          details: { stopLoss, takeProfit, triggeredBy },
       };
 
       setBalance((prev) => prev - collateral);
@@ -275,7 +269,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast]);
 
-  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, stopLoss?: number, takeProfit?: number) => {
+  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number, triggeredBy = 'manual', stopLoss?: number, takeProfit?: number) => {
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -294,8 +288,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           side: "short",
           leverage,
           unrealizedPnl: 0,
-          stopLoss,
-          takeProfit,
+          details: { stopLoss, takeProfit, triggeredBy },
       };
 
       setBalance((prev) => prev - collateral);
@@ -323,39 +316,51 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
     });
 
+    const triggeredBy = `trigger:${trigger.condition}`;
     if (trigger.type === 'spot') {
-      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit);
+      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, triggeredBy, trigger.stopLoss, trigger.takeProfit);
     } else if (trigger.type === 'futures') {
       if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit);
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, triggeredBy, trigger.stopLoss, trigger.takeProfit);
       } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit);
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, triggeredBy, trigger.stopLoss, trigger.takeProfit);
       }
     }
-    
-    // Remove the executed trigger and any OCO triggers
-    setTradeTriggers(prev => {
-        if(trigger.cancelOthers){
-            return prev.filter(t => t.symbol !== trigger.symbol);
-        }
-        return prev.filter(t => t.id !== trigger.id)
-    });
   }, [toast, buy, futuresBuy, futuresSell]);
 
   const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
-    tradeTriggers.forEach(trigger => {
-        if (trigger.symbol === symbol && trigger.status === 'active') {
-            const conditionMet =
-                (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
-                (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+    setTradeTriggers(prevTriggers => {
+        let executedTriggerIds = new Set<string>();
+        let cancelSymbols = new Set<string>();
 
-            if (conditionMet) {
-                executeTrigger(trigger, newPrice);
+        const activeTriggers = prevTriggers.filter(t => t.status === 'active');
+
+        activeTriggers.forEach(trigger => {
+            if (trigger.symbol === symbol) {
+                const conditionMet =
+                    (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
+                    (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+
+                if (conditionMet) {
+                    executeTrigger(trigger, newPrice);
+                    executedTriggerIds.add(trigger.id);
+                    if (trigger.cancelOthers) {
+                        cancelSymbols.add(trigger.symbol);
+                    }
+                }
             }
-        }
-    });
-  }, [tradeTriggers, executeTrigger]);
+        });
 
+        if (executedTriggerIds.size === 0) return prevTriggers;
+
+        return prevTriggers.filter(t => {
+            if (executedTriggerIds.has(t.id)) return false; // Remove executed
+            if (cancelSymbols.has(t.symbol)) return false; // Remove OCO triggers
+            return true;
+        });
+    });
+}, [executeTrigger]);
+  
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close') => {
     setOpenPositions(prev => {
         const positionToClose = prev.find(p => p.id === positionId);
@@ -402,22 +407,60 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [toast]);
   
-  // This effect will check for SL/TP on price updates.
-  useEffect(() => {
-    openPositions.forEach(position => {
-      const { stopLoss, takeProfit, currentPrice, side } = position;
+    const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
+    setOpenPositions(prev =>
+      prev.map(pos => {
+        if (pos.id === positionId) {
+          toast({
+            title: "Position Updated",
+            description: `SL/TP updated for ${pos.symbolName}.`
+          });
+          return {
+            ...pos,
+            details: {
+              ...pos.details,
+              stopLoss: sl,
+              takeProfit: tp,
+            }
+          };
+        }
+        return pos;
+      })
+    );
+  }, [toast]);
+
+  const checkSlTp = useCallback((positions: OpenPosition[]) => {
+    const positionsToClose = new Set<string>();
+    const reasons = new Map<string, string>();
+
+    positions.forEach(position => {
+      const { id, details, currentPrice, side } = position;
+      if (!details) return;
+
+      const { stopLoss, takeProfit } = details;
+
       if (stopLoss) {
         if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-          closePosition(position.id, 'Stop Loss Hit');
+          if (!positionsToClose.has(id)) {
+            positionsToClose.add(id);
+            reasons.set(id, 'Stop Loss Hit');
+          }
         }
       }
       if (takeProfit) {
         if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-          closePosition(position.id, 'Take Profit Hit');
+           if (!positionsToClose.has(id)) {
+            positionsToClose.add(id);
+            reasons.set(id, 'Take Profit Hit');
+          }
         }
       }
     });
-  }, [openPositions, closePosition]);
+
+    if (positionsToClose.size > 0) {
+        positionsToClose.forEach(id => closePosition(id, reasons.get(id)));
+    }
+  }, [closePosition]);
 
   const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
       setWatchlist(prev => prev.map(item => 
@@ -430,8 +473,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     checkTradeTriggers(symbol, newPrice);
     updateWatchlistPrice(symbol, newPrice);
 
-    setOpenPositions((prevPositions) =>
-      prevPositions.map((p) => {
+    setOpenPositions((prevPositions) => {
+      const updatedPositions = prevPositions.map((p) => {
         if (p.symbol === symbol) {
           let unrealizedPnl = 0;
           if (p.positionType === "spot") {
@@ -443,9 +486,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           return { ...p, currentPrice: newPrice, unrealizedPnl };
         }
         return p;
-      })
-    );
+      });
+       // SL/TP checks are now outside, after state has been updated.
+      return updatedPositions;
+    });
   }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice]);
+  
+  useEffect(() => {
+    if (isLoaded && openPositions.length > 0) {
+      checkSlTp(openPositions);
+    }
+  }, [openPositions, isLoaded, checkSlTp]);
   
   const connectToSpot = useCallback(
     async (topic: string) => {
@@ -676,10 +727,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       id: crypto.randomUUID(),
       status: 'active',
     };
-
+    
+    let executedInstantly = false;
+    
+    // Check for instant execution
     const watchlistItem = watchlist.find(item => item.symbol === newTrigger.symbol);
     const currentPrice = watchlistItem?.currentPrice;
-
     if (currentPrice) {
         const conditionMet =
             (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
@@ -687,13 +740,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         if (conditionMet) {
             executeTrigger(newTrigger, currentPrice);
-            return; // Exit after instant execution
+            executedInstantly = true;
+            if (newTrigger.cancelOthers) {
+                // Remove other triggers for the same symbol
+                setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
+            }
         }
     }
 
-    setTradeTriggers(prev => [newTrigger, ...prev]);
-    toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-  }, [toast, executeTrigger, watchlist]);
+    if (!executedInstantly) {
+        setTradeTriggers(prev => [newTrigger, ...prev]);
+        toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+    }
+  }, [watchlist, executeTrigger, toast]);
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
@@ -719,6 +778,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         futuresBuy,
         futuresSell,
         closePosition,
+        updatePositionSlTp,
         closeAllPositions,
         clearHistory,
         spotWsStatus,
@@ -737,7 +797,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
-
-    

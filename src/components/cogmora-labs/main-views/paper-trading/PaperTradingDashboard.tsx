@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Trash2 } from "lucide-react";
+import { Trash2, Settings2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +35,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import Watchlist from "./Watchlist";
 import TradeTriggersDashboard from "./TradeTriggersDashboard";
-
+import { PositionDetailsPopup } from "./PositionDetailsPopup";
+import type { OpenPosition } from "@/types";
 
 export default function PaperTradingDashboard() {
   const {
@@ -47,6 +48,8 @@ export default function PaperTradingDashboard() {
     clearHistory,
   } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
+  const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
 
   const totalPositionValue = useMemo(
     () =>
@@ -84,6 +87,11 @@ export default function PaperTradingDashboard() {
   const totalClosedTrades = winTrades + losingTrades;
   const winRate =
     totalClosedTrades > 0 ? (winTrades / totalClosedTrades) * 100 : 0;
+    
+  const handleOpenDetails = (position: OpenPosition) => {
+    setSelectedPosition(position);
+    setIsDetailsPopupOpen(true);
+  };
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -121,6 +129,7 @@ export default function PaperTradingDashboard() {
   };
 
   return (
+    <>
     <div className="container mx-auto p-4 space-y-6">
       {/* Account Metrics */}
       <Card>
@@ -228,6 +237,7 @@ export default function PaperTradingDashboard() {
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
                             Current Price
                         </TableHead>
+                        <TableHead className="text-center">Conditions</TableHead>
                         <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
                         <TableHead className="text-center min-w-[100px] px-2 py-2">
                             Actions
@@ -241,6 +251,10 @@ export default function PaperTradingDashboard() {
                             pos.positionType === "futures"
                                 ? pos.size * pos.averageEntryPrice
                                 : pos.size * pos.currentPrice;
+                            
+                            const hasSl = pos.details?.stopLoss !== undefined;
+                            const hasTp = pos.details?.takeProfit !== undefined;
+
                             return (
                             <TableRow key={`${pos.id}-${pos.symbolName}`}>
                                 <TableCell className="font-medium px-2 py-2">
@@ -272,6 +286,11 @@ export default function PaperTradingDashboard() {
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
                                 {formatPrice(pos.currentPrice)}
                                 </TableCell>
+                                <TableCell className="text-center">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
+                                      <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
+                                  </Button>
+                                </TableCell>
                                 <PNLCell pnl={pos.unrealizedPnl} />
                                 <TableCell className="text-center min-w-[100px] px-2 py-2">
                                 <Button
@@ -288,7 +307,7 @@ export default function PaperTradingDashboard() {
                         })
                         ) : (
                         <TableRow>
-                            <TableCell colSpan={8} className="text-center">
+                            <TableCell colSpan={9} className="text-center">
                             No open positions.
                             </TableCell>
                         </TableRow>
@@ -433,5 +452,13 @@ export default function PaperTradingDashboard() {
         </TabsContent>
       </Tabs>
     </div>
+    {selectedPosition && (
+        <PositionDetailsPopup 
+            isOpen={isDetailsPopupOpen}
+            onOpenChange={setIsDetailsPopupOpen}
+            position={selectedPosition}
+        />
+    )}
+    </>
   );
 }
