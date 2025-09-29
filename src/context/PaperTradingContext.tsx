@@ -33,6 +33,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Consume the spot tickers hook directly in the context
   const { tickers: spotTickers } = useKucoinTickers();
+  const openPositionsRef = useRef(openPositions);
+  
+  useEffect(() => {
+    openPositionsRef.current = openPositions;
+  }, [openPositions]);
 
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -57,21 +62,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Effect to update spot positions from the global spot tickers data
   useEffect(() => {
-    if (spotTickers.length > 0 && openPositions.length > 0) {
-        const openSpotPositions = openPositions.filter(p => p.positionType === 'spot');
+    if (spotTickers.length > 0) {
+        const openSpotPositions = openPositionsRef.current.filter(p => p.positionType === 'spot');
         if (openSpotPositions.length > 0) {
+            const openSpotSymbols = new Set(openSpotPositions.map(p => p.symbol));
             spotTickers.forEach(ticker => {
-                if (ticker.last) {
-                    // Check if there is an open position for this ticker
-                    const positionExists = openSpotPositions.some(p => p.symbol === ticker.symbol);
-                    if (positionExists) {
-                        updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
-                    }
+                if (openSpotSymbols.has(ticker.symbol) && ticker.last) {
+                    updatePositionPrice(ticker.symbol, parseFloat(ticker.last));
                 }
             });
         }
     }
-  }, [spotTickers, openPositions, updatePositionPrice]);
+  }, [spotTickers, updatePositionPrice]);
 
 
   const connectToFutures = useCallback(async (positionsToConnect: OpenPosition[]) => {
