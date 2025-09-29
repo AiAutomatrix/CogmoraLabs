@@ -21,6 +21,8 @@ import type {
   PriceAlert,
   TradeTrigger,
   KucoinTicker,
+  SpotSnapshotData,
+  KucoinSnapshotDataWrapper,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -496,13 +498,26 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   
-  const processUpdate = useCallback((symbol: string, data: Partial<KucoinTicker>) => {
-    const newPrice = parseFloat(data.last || data.price || '0');
-    if (isNaN(newPrice) || newPrice === 0) return;
+  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<KucoinTicker> | SpotSnapshotData) => {
+    let newPrice: number, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
+    let snapshotData: SpotSnapshotData | undefined = undefined;
 
-    const high = data.high ? parseFloat(data.high) : undefined;
-    const low = data.low ? parseFloat(data.low) : undefined;
-    const priceChgPct = data.changeRate ? parseFloat(data.changeRate) : undefined;
+    if (isSpot) {
+      const spotData = data as SpotSnapshotData;
+      newPrice = parseFloat(spotData.lastTradedPrice as unknown as string || '0');
+      high = spotData.high;
+      low = spotData.low;
+      priceChgPct = spotData.changeRate;
+      snapshotData = spotData;
+    } else { // Futures
+      const futuresData = data as Partial<KucoinTicker>;
+      newPrice = parseFloat(futuresData.last || futuresData.price || '0');
+      high = futuresData.high ? parseFloat(futuresData.high) : undefined;
+      low = futuresData.low ? parseFloat(futuresData.low) : undefined;
+      priceChgPct = futuresData.changeRate ? parseFloat(futuresData.changeRate) : undefined;
+    }
+
+    if (isNaN(newPrice) || newPrice === 0) return;
 
     checkPriceAlerts(symbol, newPrice);
     checkTradeTriggers(symbol, newPrice);
@@ -514,6 +529,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           high: high ?? item.high,
           low: low ?? item.low,
           priceChgPct: priceChgPct ?? item.priceChgPct,
+          snapshotData: isSpot ? snapshotData : item.snapshotData,
         } : item
     ));
 
@@ -565,14 +581,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onmessage = (event: MessageEvent) => {
           const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
           if (message.type === "message" && message.subject === "trade.snapshot") {
-            const tickerData = message.data.data;
+            const wrapper = message.data as KucoinSnapshotDataWrapper;
             const symbol = message.topic.split(":")[1];
-             processUpdate(symbol, {
-                 last: tickerData.lastTradedPrice,
-                 high: tickerData.high,
-                 low: tickerData.low,
-                 changeRate: tickerData.changeRate
-             });
+            processUpdate(symbol, true, wrapper.data);
           }
         };
 
@@ -626,7 +637,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           if (message.type === "message" && message.subject === 'snapshot.24h') {
             const { symbol, lastPrice, highPrice, lowPrice, priceChgPct } = message.data;
             if (lastPrice !== undefined) {
-              processUpdate(symbol, { last: String(lastPrice), high: String(highPrice), low: String(lowPrice), changeRate: String(priceChgPct) });
+              processUpdate(symbol, false, { last: String(lastPrice), high: String(highPrice), low: String(lowPrice), changeRate: String(priceChgPct) });
             }
           }
         };

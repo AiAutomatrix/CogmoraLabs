@@ -41,6 +41,56 @@ export const OpenPositionSchema = z.object({
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
+export const MarketChangeSchema = z.object({
+    changePrice: z.number(),
+    changeRate: z.number(),
+    high: z.number(),
+    low: z.number(),
+    open: z.number(),
+    vol: z.number(),
+    volValue: z.number(),
+});
+export type MarketChange = z.infer<typeof MarketChangeSchema>;
+
+export const SpotSnapshotDataSchema = z.object({
+    askSize: z.number().optional(),
+    averagePrice: z.number().optional(),
+    baseCurrency: z.string().optional(),
+    bidSize: z.number().optional(),
+    board: z.number().optional(),
+    buy: z.number().optional(),
+    changePrice: z.number().optional(),
+    changeRate: z.number().optional(),
+    close: z.number().optional(),
+    datetime: z.number().optional(),
+    high: z.number().optional(),
+    lastTradedPrice: z.number().optional(),
+    low: z.number().optional(),
+    makerCoefficient: z.number().optional(),
+    makerFeeRate: z.number().optional(),
+    marginTrade: z.boolean().optional(),
+    mark: z.number().optional(),
+    market: z.string().optional(),
+    marketChange1h: MarketChangeSchema.optional(),
+    marketChange24h: MarketChangeSchema.optional(),
+    marketChange4h: MarketChangeSchema.optional(),
+    markets: z.array(z.string()).optional(),
+    open: z.number().optional(),
+    quoteCurrency: z.string().optional(),
+    sell: z.number().optional(),
+    siteTypes: z.array(z.string()).optional(),
+    sort: z.number().optional(),
+    symbol: z.string().optional(),
+    symbolCode: z.string().optional(),
+    takerCoefficient: z.number().optional(),
+    takerFeeRate: z.number().optional(),
+    trading: z.boolean().optional(),
+    vol: z.number().optional(),
+    volValue: z.number().optional(),
+});
+export type SpotSnapshotData = z.infer<typeof SpotSnapshotDataSchema>;
+
+
 export const WatchlistItemSchema = z.object({
     symbol: z.string(),
     symbolName: z.string(),
@@ -49,6 +99,7 @@ export const WatchlistItemSchema = z.object({
     high: z.number().optional(),
     low: z.number().optional(),
     priceChgPct: z.number().optional(),
+    snapshotData: SpotSnapshotDataSchema.optional(),
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 
@@ -289,8 +340,8 @@ export interface KucoinTicker {
   datetime?: number;
 }
 
-export type KucoinSnapshotData = {
-    data: KucoinTicker;
+export type KucoinSnapshotDataWrapper = {
+    data: SpotSnapshotData;
     sequence: number;
 }
 
@@ -298,7 +349,7 @@ export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker' | 'trade.snapshot';
-  data: KucoinTicker | KucoinSnapshotData;
+  data: KucoinTicker | KucoinSnapshotDataWrapper;
 };
 
 export type IncomingKucoinWebSocketMessage =

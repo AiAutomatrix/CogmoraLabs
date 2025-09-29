@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState } from 'react';
@@ -22,11 +23,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EyeOff, Bell, BellOff, ArrowUp, ArrowDown, BarChartHorizontal } from 'lucide-react';
+import { EyeOff, Bell, BellOff, ArrowUp, ArrowDown, BarChartHorizontal, FileText } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { WatchlistTradeTriggerPopup } from './WatchlistTradeTriggerPopup';
+import { SpotSnapshotPopup } from './SpotSnapshotPopup';
 
 
 export default function Watchlist() {
@@ -43,6 +45,9 @@ export default function Watchlist() {
   
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
   const [selectedWatchlistItem, setSelectedWatchlistItem] = useState<WatchlistItem | null>(null);
+
+  const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
+  const [selectedSnapshotItem, setSelectedSnapshotItem] = useState<WatchlistItem | null>(null);
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
@@ -72,6 +77,11 @@ export default function Watchlist() {
     setSelectedWatchlistItem(item);
     setIsTradePopupOpen(true);
   };
+
+  const handleSnapshotClick = (item: WatchlistItem) => {
+    setSelectedSnapshotItem(item);
+    setIsSnapshotPopupOpen(true);
+  }
 
   const formatChange = (changeRate: number | undefined) => {
     if (changeRate === undefined) return "N/A";
@@ -124,6 +134,11 @@ export default function Watchlist() {
                       
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                           {item.type === 'spot' && (
+                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSnapshotClick(item)}>
+                                <FileText className="h-4 w-4" />
+                            </Button>
+                           )}
                           {alert ? (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => removePriceAlert(item.symbol)}>
                                   <BellOff className="h-4 w-4" />
@@ -205,6 +220,13 @@ export default function Watchlist() {
           isOpen={isTradePopupOpen}
           onOpenChange={setIsTradePopupOpen}
           item={selectedWatchlistItem}
+        />
+      )}
+      {selectedSnapshotItem && (
+        <SpotSnapshotPopup
+          isOpen={isSnapshotPopupOpen}
+          onOpenChange={setIsSnapshotPopupOpen}
+          item={selectedSnapshotItem}
         />
       )}
     </>
