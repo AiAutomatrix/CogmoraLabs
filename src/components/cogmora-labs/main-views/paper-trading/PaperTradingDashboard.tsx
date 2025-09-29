@@ -124,7 +124,7 @@ export default function PaperTradingDashboard() {
                         ? (pos.size * pos.averageEntryPrice) / pos.leverage!
                         : pos.size * pos.averageEntryPrice;
                     return (
-                        <TableRow key={pos.id}>
+                        <TableRow key={`${pos.id}-${pos.symbolName}`}>
                             <TableCell className="font-medium">{pos.symbolName}</TableCell>
                             <TableCell>
                                {pos.positionType === 'futures' ? (
