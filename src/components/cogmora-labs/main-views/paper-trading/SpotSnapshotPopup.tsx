@@ -27,7 +27,17 @@ const formatValue = (value: number | undefined, options: Intl.NumberFormatOption
 
 const formatCurrency = (value?: number) => {
     if (value === undefined || value === null) return 'N/A';
-    return formatValue(value, { style: 'currency', currency: 'USD', maximumFractionDigits: 8 });
+    const options: Intl.NumberFormatOptions = {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+    };
+    if (value > 0.1) {
+        options.maximumFractionDigits = 2;
+    } else {
+        options.maximumFractionDigits = 8;
+    }
+    return formatValue(value, options);
 }
 
 const formatVolume = (value?: number) => {
