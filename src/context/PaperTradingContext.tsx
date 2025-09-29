@@ -2,9 +2,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import type { OpenPosition, PaperTrade, KucoinTokenResponse, IncomingKucoinFuturesWebSocketMessage } from '@/types';
+import type { OpenPosition, PaperTrade, KucoinTokenResponse, IncomingKucoinWebSocketMessage, IncomingKucoinFuturesWebSocketMessage } from '@/types';
 import { useToast } from "@/hooks/use-toast";
-import { useKucoinTickers } from '@/hooks/useKucoinAllTickersSocket'; // Import the spot ticker hook
 
 const INITIAL_BALANCE = 100000;
 
@@ -17,8 +16,8 @@ interface PaperTradingContextType {
   futuresSell: (symbol: string, collateral: number, entryPrice: number, leverage: number) => void;
   closePosition: (positionId: string) => void;
   clearHistory: () => void;
-  clearAllPositions: () => void; // New function
-  updatePositionPrice: (symbol: string, newPrice: number) => void;
+  clearAllPositions: () => void;
+  spotWsStatus: string;
   futuresWsStatus: string;
 }
 
@@ -31,23 +30,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   
+  const [spotWsStatus, setSpotWsStatus] = useState('idle');
   const [futuresWsStatus, setFuturesWsStatus] = useState('idle');
 
-  // Consume the spot tickers hook directly in the context
-  const { tickers: spotTickers } = useKucoinTickers();
-  const openPositionsRef = useRef(openPositions);
-  
-  useEffect(() => {
-    openPositionsRef.current = openPositions;
-  }, [openPositions]);
-
+  const spotWs = useRef<WebSocket | null>(null);
   const futuresWs = useRef<WebSocket | null>(null);
+  const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const updatePositionPrice = useCallback((symbol: string, newPrice: number) => {
     setOpenPositions(prevPositions =>
       prevPositions.map(p => {
-        if (p.symbol === symbol) { // Match by symbol
+        if (p.symbol === symbol) {
             let unrealizedPnl = p.unrealizedPnl;
             if (p.positionType === 'spot') {
                 unrealizedPnl = (newPrice - p.averageEntryPrice) * p.size;
@@ -62,25 +56,59 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     );
   }, []);
 
-  // Effect to update spot positions from the global spot tickers data
-  useEffect(() => {
-    const openSpotPositions = openPositionsRef.current.filter(p => p.positionType === 'spot');
-    if (openSpotPositions.length > 0 && spotTickers.length > 0) {
-      const openSpotSymbols = new Set(openSpotPositions.map(p => p.symbol));
-      spotTickers.forEach(ticker => {
-        if (openSpotSymbols.has(ticker.symbol)) {
-          const newPrice = parseFloat(ticker.last);
-          if (!isNaN(newPrice)) {
-            // Find the current position in state to check if price is different
-            const currentPosition = openPositionsRef.current.find(p => p.symbol === ticker.symbol);
-            if (currentPosition && currentPosition.currentPrice !== newPrice) {
-              updatePositionPrice(ticker.symbol, newPrice);
-            }
-          }
-        }
-      });
+  const connectToSpot = useCallback(async (positionsToConnect: OpenPosition[]) => {
+    const spotSymbols = positionsToConnect.filter(p => p.positionType === 'spot').map(p => p.symbol);
+    if (spotSymbols.length === 0) return;
+
+    if (spotWs.current && spotWs.current.readyState === WebSocket.OPEN) {
+        const topic = `/market/ticker:${spotSymbols.join(',')}`;
+        spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+        return;
     }
-  }, [spotTickers, updatePositionPrice]);
+
+    if (spotWs.current) spotWs.current.close();
+    setSpotWsStatus('fetching_token');
+
+    try {
+        const res = await fetch('/api/kucoin-ws-token');
+        const tokenData: KucoinTokenResponse = await res.json();
+        if (tokenData.code !== "200000") throw new Error('Failed to fetch KuCoin Spot WebSocket token');
+
+        const { token, instanceServers } = tokenData.data;
+        const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-spot-${Date.now()}`;
+        
+        setSpotWsStatus('connecting');
+        spotWs.current = new WebSocket(wsUrl);
+
+        spotWs.current.onopen = () => {
+            setSpotWsStatus('connected');
+            if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
+            spotPingIntervalRef.current = setInterval(() => {
+                spotWs.current?.send(JSON.stringify({ id: Date.now().toString(), type: 'ping' }));
+            }, instanceServers[0].pingInterval / 2);
+
+            const topic = `/market/ticker:${spotSymbols.join(',')}`;
+            spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+        };
+
+        spotWs.current.onmessage = (event) => {
+            const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
+            if (message.type === 'message' && message.topic.startsWith('/market/ticker:')) {
+                const symbol = message.topic.split(':')[1];
+                const price = parseFloat(message.data.price);
+                 if (!isNaN(price)) {
+                    updatePositionPrice(symbol, price);
+                }
+            }
+        };
+
+        spotWs.current.onclose = () => setSpotWsStatus('disconnected');
+        spotWs.current.onerror = () => setSpotWsStatus('error');
+    } catch (error) {
+        console.error('Spot WebSocket setup failed:', error);
+        setSpotWsStatus('error');
+    }
+  }, [updatePositionPrice]);
 
 
   const connectToFutures = useCallback(async (positionsToConnect: OpenPosition[]) => {
@@ -158,7 +186,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
 
-      // Only connect futures websocket for existing futures positions
+      connectToSpot(initialPositions.filter(p => p.positionType === 'spot'));
       connectToFutures(initialPositions.filter(p => p.positionType === 'futures'));
 
     } catch (error) {
@@ -168,7 +196,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
     
     return () => {
+        spotWs.current?.close();
         futuresWs.current?.close();
+        if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
         if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,7 +254,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     setTradeHistory(prev => [newTrade, ...prev]);
 
     toast({ title: "Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName} for $${amountUSD.toFixed(2)}.` });
-  
+
+    connectToSpot([newPosition]);
   };
 
   const createFuturesTrade = (symbol: string, collateral: number, entryPrice: number, leverage: number, side: 'long' | 'short') => {
@@ -290,8 +321,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     const finalPnl = position.unrealizedPnl || 0;
     
     const valueToReturn = position.positionType === 'spot' 
-        ? position.size * position.currentPrice // Spot: return the full current value
-        : (position.size * position.averageEntryPrice) / position.leverage! + finalPnl; // Futures: return collateral + PNL
+        ? position.size * position.currentPrice
+        : (position.size * position.averageEntryPrice) / position.leverage! + finalPnl;
 
     setBalance(prev => prev + valueToReturn);
     setOpenPositions(prev => prev.filter(p => p.id !== positionId));
@@ -303,9 +334,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
         variant: finalPnl >= 0 ? "default" : "destructive"
       });
 
+    const remainingSpotPositions = openPositions.filter(p => p.id !== positionId && p.positionType === 'spot');
+    const remainingFuturesPositions = openPositions.filter(p => p.id !== positionId && p.positionType === 'futures');
+    
+    if (position.positionType === 'spot') {
+      spotWs.current?.close();
+      if (remainingSpotPositions.length > 0) {
+        connectToSpot(remainingSpotPositions);
+      }
+    }
+
     if (position.positionType === 'futures' && futuresWs.current?.readyState === WebSocket.OPEN) {
         const topic = `/contractMarket/snapshot:${position.symbol}`;
         futuresWs.current.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic, response: true }));
+        if (remainingFuturesPositions.length === 0) {
+          futuresWs.current.close();
+        }
     }
   };
 
@@ -315,7 +359,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
   };
 
   const clearAllPositions = () => {
-    // Before clearing, we need to calculate the current value of all positions to return to balance
     let totalValueToReturn = 0;
     openPositions.forEach(position => {
        const finalPnl = position.unrealizedPnl || 0;
@@ -328,15 +371,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     setBalance(prev => prev + totalValueToReturn);
     setOpenPositions([]);
 
-    // Unsubscribe from all futures topics
-    if (futuresWs.current?.readyState === WebSocket.OPEN) {
-        openPositions.forEach(pos => {
-            if (pos.positionType === 'futures') {
-                 const topic = `/contractMarket/snapshot:${pos.symbol}`;
-                 futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic, response: true }));
-            }
-        });
-    }
+    spotWs.current?.close();
+    futuresWs.current?.close();
 
     toast({ title: "All Positions Cleared", description: "All open positions have been closed and their value returned to your balance." });
   };
@@ -345,7 +381,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({ childr
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
   };
 
-  const value = { balance, openPositions, tradeHistory, buy, futuresBuy, futuresSell, closePosition, clearHistory, clearAllPositions, updatePositionPrice, futuresWsStatus };
+  const value = { balance, openPositions, tradeHistory, buy, futuresBuy, futuresSell, closePosition, clearHistory, clearAllPositions, spotWsStatus, futuresWsStatus };
 
   return <PaperTradingContext.Provider value={value}>{children}</PaperTradingContext.Provider>;
 };
@@ -357,3 +393,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    

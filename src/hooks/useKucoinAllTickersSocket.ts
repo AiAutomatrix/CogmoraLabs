@@ -13,30 +13,26 @@ export function useKucoinTickers() {
 
   const ws = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const tickersRef = useRef<Map<string, KucoinTicker>>(new Map());
-
+  
   const connectToAllTickers = useCallback(async () => {
+    setLoading(true);
     if (ws.current) {
       ws.current.close();
+    }
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
     }
     setWsStatus('fetching_token');
 
     try {
-      // 1. Initial HTTP fetch for the full list
       const initialResponse = await fetch(KUCOIN_TICKERS_PROXY_URL);
       const initialData = await initialResponse.json();
       if (initialData && initialData.code === "200000" && initialData.data && initialData.data.ticker) {
         const usdtTickers = initialData.data.ticker.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
-        
-        // Populate the ref map and initial state
-        const initialMap = new Map<string, KucoinTicker>();
-        usdtTickers.forEach((t: KucoinTicker) => initialMap.set(t.symbol, t));
-        tickersRef.current = initialMap;
-        setTickers(Array.from(initialMap.values()));
+        setTickers(usdtTickers);
       }
       setLoading(false);
 
-      // 2. Fetch WebSocket token
       const res = await fetch('/api/kucoin-ws-token');
       const tokenData: KucoinTokenResponse = await res.json();
       if (tokenData.code !== "200000") throw new Error('Failed to fetch KuCoin Spot WebSocket token');
@@ -44,18 +40,15 @@ export function useKucoinTickers() {
       const { token, instanceServers } = tokenData.data;
       const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-spot-all-${Date.now()}`;
 
-      // 3. Establish WebSocket connection
       setWsStatus('connecting');
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
         setWsStatus('connected');
-        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = setInterval(() => {
           ws.current?.send(JSON.stringify({ id: Date.now().toString(), type: 'ping' }));
         }, instanceServers[0].pingInterval / 2);
 
-        // 4. Subscribe to the all-tickers topic
         const topic = `/market/ticker:all`;
         ws.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
       };
@@ -65,20 +58,18 @@ export function useKucoinTickers() {
         if (message.type === 'message' && message.subject === 'trade.ticker' && message.topic === '/market/ticker:all') {
             const updatedTickerData = message.data;
             
-            const currentMap = tickersRef.current;
-            const existingTicker = currentMap.get(updatedTickerData.symbol);
-
-            if (existingTicker) {
-                // Update the map with the new data
-                currentMap.set(updatedTickerData.symbol, {
-                    ...existingTicker,
-                    ...updatedTickerData,
-                    last: updatedTickerData.price || existingTicker.last,
-                });
-                
-                // Set state from the map's values to trigger re-render
-                setTickers(Array.from(currentMap.values()));
-            }
+            setTickers(prevTickers => {
+                const newTickers = [...prevTickers];
+                const index = newTickers.findIndex(t => t.symbol === updatedTickerData.symbol);
+                if (index !== -1) {
+                    newTickers[index] = {
+                        ...newTickers[index],
+                        ...updatedTickerData,
+                        last: updatedTickerData.price || newTickers[index].last,
+                    };
+                }
+                return newTickers;
+            });
         }
       };
 
@@ -100,5 +91,7 @@ export function useKucoinTickers() {
     }
   }, [connectToAllTickers]);
 
-  return { tickers, loading };
+  return { tickers, loading, wsStatus };
 }
+
+    
