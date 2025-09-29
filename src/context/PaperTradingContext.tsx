@@ -18,6 +18,7 @@ import type {
   IncomingKucoinFuturesWebSocketMessage,
   WatchlistItem,
   PriceAlert,
+  TradeTrigger,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -29,9 +30,12 @@ interface PaperTradingContextType {
   tradeHistory: PaperTrade[];
   watchlist: WatchlistItem[];
   priceAlerts: Record<string, PriceAlert>;
+  tradeTriggers: TradeTrigger[];
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures') => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
+  addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'status'>) => void;
+  removeTradeTrigger: (triggerId: string) => void;
   buy: (
     symbol: string,
     symbolName: string,
@@ -70,6 +74,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [priceAlerts, setPriceAlerts] = useState<Record<string, PriceAlert>>({});
+  const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
@@ -82,6 +87,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
 
+  const notifiedAlerts = useRef(new Set());
+
   // Load from local storage on mount
   useEffect(() => {
     try {
@@ -90,6 +97,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const savedHistory = localStorage.getItem("paperTrading_history");
       const savedWatchlist = localStorage.getItem("paperTrading_watchlist");
       const savedAlerts = localStorage.getItem("paperTrading_priceAlerts");
+      const savedTriggers = localStorage.getItem("paperTrading_tradeTriggers");
 
       if (savedBalance) setBalance(JSON.parse(savedBalance));
       if (savedPositions) {
@@ -105,6 +113,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
       if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
       if (savedAlerts) setPriceAlerts(JSON.parse(savedAlerts));
+      if (savedTriggers) setTradeTriggers(JSON.parse(savedTriggers));
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -113,6 +122,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setTradeHistory([]);
       setWatchlist([]);
       setPriceAlerts({});
+      setTradeTriggers([]);
     }
     setIsLoaded(true);
   }, []);
@@ -125,9 +135,25 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.setItem("paperTrading_history", JSON.stringify(tradeHistory));
       localStorage.setItem("paperTrading_watchlist", JSON.stringify(watchlist));
       localStorage.setItem("paperTrading_priceAlerts", JSON.stringify(priceAlerts));
+      localStorage.setItem("paperTrading_tradeTriggers", JSON.stringify(tradeTriggers));
     }
-  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts]);
+  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers]);
   
+    // Effect for showing price alert toasts
+    useEffect(() => {
+        Object.entries(priceAlerts).forEach(([symbol, alert]) => {
+          if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
+            const watchlistItem = watchlist.find(item => item.symbol === symbol);
+            toast({
+              title: "Price Alert Triggered!",
+              description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
+            });
+            notifiedAlerts.current.add(symbol); // Mark as notified
+          }
+        });
+    }, [priceAlerts, watchlist, toast]);
+
+
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
     setPriceAlerts(prev => {
       const alert = prev[symbol];
@@ -144,23 +170,143 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return prev;
     });
   }, []);
+  
+  const buy = useCallback(
+    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number) => {
+      if (balance < amountUSD) {
+        toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
+        return;
+      }
+      const size = amountUSD / currentPrice;
 
-  // Effect to show toast notifications for triggered alerts
-  useEffect(() => {
-    for (const symbol in priceAlerts) {
-      const alert = priceAlerts[symbol];
-      const watchlistItem = watchlist.find(item => item.symbol === symbol);
-      if (alert.triggered && watchlistItem) {
-        // Find a way to not re-trigger toast on every render
-        // A simple way is to add another flag to the alert object, e.g., `notified: true`
-        // For now, let's just toast. This will be fixed if it becomes an issue.
-        toast({
-            title: "Price Alert Triggered!",
-            description: `${watchlistItem.symbolName} has reached your alert price of ${alert.price}. Current price is ${watchlistItem.currentPrice}.`
-        });
+      setOpenPositions(prev => {
+          const existingPositionIndex = prev.findIndex(p => p.symbol === symbol && p.positionType === 'spot');
+          if (existingPositionIndex > -1) {
+              const updatedPositions = [...prev];
+              const existing = updatedPositions[existingPositionIndex];
+              const totalSize = existing.size + size;
+              const totalValue = (existing.size * existing.averageEntryPrice) + (size * currentPrice);
+              existing.averageEntryPrice = totalValue / totalSize;
+              existing.size = totalSize;
+              return updatedPositions;
+          } else {
+              const newPosition: OpenPosition = {
+                  id: crypto.randomUUID(),
+                  positionType: 'spot',
+                  symbol,
+                  symbolName,
+                  size,
+                  averageEntryPrice: currentPrice,
+                  currentPrice,
+                  side: 'buy',
+                  unrealizedPnl: 0,
+              };
+              return [...prev, newPosition];
+          }
+      });
+      
+      setBalance(prev => prev - amountUSD);
+      setTradeHistory(prev => [{
+        id: crypto.randomUUID(),
+        positionId: 'N/A',
+        positionType: 'spot',
+        symbol,
+        symbolName,
+        size,
+        price: currentPrice,
+        side: 'buy',
+        timestamp: Date.now(),
+        status: 'open',
+      }, ...prev]);
+
+      toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
+    },
+    [balance, toast]
+  );
+  
+  const createFuturesTrade = useCallback(
+    (symbol: string, collateral: number, entryPrice: number, leverage: number, side: "long" | "short") => {
+      if (balance < collateral) {
+        toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+        return;
+      }
+      const positionValue = collateral * leverage;
+      const size = positionValue / entryPrice;
+
+      const newPosition: OpenPosition = {
+        id: crypto.randomUUID(),
+        positionType: "futures",
+        symbol,
+        symbolName: symbol.replace(/M$/, ""),
+        size,
+        averageEntryPrice: entryPrice,
+        currentPrice: entryPrice,
+        side,
+        leverage,
+        unrealizedPnl: 0,
+      };
+
+      setBalance((prev) => prev - collateral);
+      setOpenPositions((prev) => [...prev, newPosition]);
+      setTradeHistory((prev) => [{
+        id: crypto.randomUUID(),
+        positionId: newPosition.id,
+        positionType: "futures",
+        symbol,
+        symbolName: newPosition.symbolName,
+        size,
+        price: entryPrice,
+        side,
+        leverage,
+        timestamp: Date.now(),
+        status: "open",
+      }, ...prev]);
+
+      toast({ title: "Futures Trade Executed", description: `${side.toUpperCase()} ${size.toFixed(4)} ${newPosition.symbolName} with ${leverage}x leverage.` });
+    },
+    [balance, toast]
+  );
+
+  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "long"), [createFuturesTrade]);
+  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "short"), [createFuturesTrade]);
+
+  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
+    toast({
+      title: 'Trade Trigger Executed!',
+      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
+    });
+
+    if (trigger.type === 'spot') {
+      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice);
+    } else if (trigger.type === 'futures') {
+      if (trigger.action === 'long') {
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage);
+      } else {
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage);
       }
     }
-  }, [priceAlerts, watchlist, toast]);
+    // Remove the executed trigger
+    setTradeTriggers(prev => prev.filter(t => t.id !== trigger.id));
+  }, [toast, buy, futuresBuy, futuresSell]);
+
+  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
+    setTradeTriggers(prevTriggers => {
+        const triggersForSymbol = prevTriggers.filter(t => t.symbol === symbol && t.status === 'active');
+        if (triggersForSymbol.length === 0) return prevTriggers;
+
+        triggersForSymbol.forEach(trigger => {
+            const conditionMet = 
+                (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
+                (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+
+            if (conditionMet) {
+                executeTrigger(trigger, newPrice);
+            }
+        });
+        
+        return prevTriggers;
+    });
+  }, [executeTrigger]);
 
   const updateWatchlistPrice = useCallback((symbol: string, newPrice: number) => {
       setWatchlist(prev => prev.map(item => 
@@ -170,6 +316,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const updatePositionPrice = useCallback((symbol: string, newPrice: number) => {
     checkPriceAlerts(symbol, newPrice);
+    checkTradeTriggers(symbol, newPrice);
     updateWatchlistPrice(symbol, newPrice);
 
     setOpenPositions((prevPositions) =>
@@ -187,7 +334,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [checkPriceAlerts, updateWatchlistPrice]);
+  }, [checkPriceAlerts, checkTradeTriggers, updateWatchlistPrice]);
   
   const connectToSpot = useCallback(
     async (topic: string) => {
@@ -305,9 +452,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const spotWatchlistSymbols = useMemo(() => watchlist.filter(item => item.type === 'spot').map(item => item.symbol), [watchlist]);
   const futuresWatchlistSymbols = useMemo(() => watchlist.filter(item => item.type === 'futures').map(item => item.symbol), [watchlist]);
+  
+  const spotTriggerSymbols = useMemo(() => tradeTriggers.filter(t => t.type === 'spot').map(t => t.symbol), [tradeTriggers]);
+  const futuresTriggerSymbols = useMemo(() => tradeTriggers.filter(t => t.type === 'futures').map(t => t.symbol), [tradeTriggers]);
 
-  const allSpotSymbols = useMemo(() => Array.from(new Set([...spotPositionSymbols, ...spotWatchlistSymbols])), [spotPositionSymbols, spotWatchlistSymbols]);
-  const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols]);
+  const allSpotSymbols = useMemo(() => Array.from(new Set([...spotPositionSymbols, ...spotWatchlistSymbols, ...spotTriggerSymbols])), [spotPositionSymbols, spotWatchlistSymbols, spotTriggerSymbols]);
+  const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
   
   // Effect to manage Spot WebSocket connection
   useEffect(() => {
@@ -323,7 +473,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     spotSubscriptionsRef.current = requiredSubs;
     
     if (spotWs.current && spotWs.current.readyState === WebSocket.OPEN) {
-      // Unsubscribe from all and resubscribe to new list
       if (currentSubs.size > 0) {
         spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/ticker:${Array.from(currentSubs).join(',')}`}));
       }
@@ -331,10 +480,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         spotWs.current.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/ticker:${Array.from(requiredSubs).join(',')}`, response: true }));
       }
     } else if (requiredSubs.size > 0) {
-      // Connect if not already connected
+      if (spotWs.current) spotWs.current.close();
       connectToSpot(`/market/ticker:${Array.from(requiredSubs).join(',')}`);
     } else if (spotWs.current) {
-      // Disconnect if no subscriptions are required
       spotWs.current.close();
     }
   }, [isLoaded, allSpotSymbols, connectToSpot]);
@@ -364,111 +512,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
 
     } else if (requiredSubs.size > 0) {
+      if (futuresWs.current) futuresWs.current.close();
       connectToFutures(Array.from(requiredSubs));
     } else if (futuresWs.current) {
       futuresWs.current.close();
     }
   }, [isLoaded, allFuturesSymbols, connectToFutures]);
-
-  const buy = useCallback(
-    (symbol: string, symbolName: string, amountUSD: number, currentPrice: number) => {
-      if (balance < amountUSD) {
-        toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
-        return;
-      }
-      const size = amountUSD / currentPrice;
-
-      setOpenPositions(prev => {
-          const existingPositionIndex = prev.findIndex(p => p.symbol === symbol && p.positionType === 'spot');
-          if (existingPositionIndex > -1) {
-              const updatedPositions = [...prev];
-              const existing = updatedPositions[existingPositionIndex];
-              const totalSize = existing.size + size;
-              const totalValue = (existing.size * existing.averageEntryPrice) + (size * currentPrice);
-              existing.averageEntryPrice = totalValue / totalSize;
-              existing.size = totalSize;
-              return updatedPositions;
-          } else {
-              const newPosition: OpenPosition = {
-                  id: crypto.randomUUID(),
-                  positionType: 'spot',
-                  symbol,
-                  symbolName,
-                  size,
-                  averageEntryPrice: currentPrice,
-                  currentPrice,
-                  side: 'buy',
-                  unrealizedPnl: 0,
-              };
-              return [...prev, newPosition];
-          }
-      });
-      
-      setBalance(prev => prev - amountUSD);
-      setTradeHistory(prev => [{
-        id: crypto.randomUUID(),
-        positionId: 'N/A',
-        positionType: 'spot',
-        symbol,
-        symbolName,
-        size,
-        price: currentPrice,
-        side: 'buy',
-        timestamp: Date.now(),
-        status: 'open',
-      }, ...prev]);
-
-      toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
-    },
-    [balance, toast]
-  );
   
-  const createFuturesTrade = useCallback(
-    (symbol: string, collateral: number, entryPrice: number, leverage: number, side: "long" | "short") => {
-      if (balance < collateral) {
-        toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
-        return;
-      }
-      const positionValue = collateral * leverage;
-      const size = positionValue / entryPrice;
-
-      const newPosition: OpenPosition = {
-        id: crypto.randomUUID(),
-        positionType: "futures",
-        symbol,
-        symbolName: symbol.replace(/M$/, ""),
-        size,
-        averageEntryPrice: entryPrice,
-        currentPrice: entryPrice,
-        side,
-        leverage,
-        unrealizedPnl: 0,
-      };
-
-      setBalance((prev) => prev - collateral);
-      setOpenPositions((prev) => [...prev, newPosition]);
-      setTradeHistory((prev) => [{
-        id: crypto.randomUUID(),
-        positionId: newPosition.id,
-        positionType: "futures",
-        symbol,
-        symbolName: newPosition.symbolName,
-        size,
-        price: entryPrice,
-        side,
-        leverage,
-        timestamp: Date.now(),
-        status: "open",
-      }, ...prev]);
-
-      toast({ title: "Futures Trade Executed", description: `${side.toUpperCase()} ${size.toFixed(4)} ${newPosition.symbolName} with ${leverage}x leverage.` });
-    },
-    [balance, toast]
-  );
-
-  const futuresBuy = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "long"), [createFuturesTrade]);
-  const futuresSell = useCallback((symbol: string, collateral: number, entryPrice: number, leverage: number) => createFuturesTrade(symbol, collateral, entryPrice, leverage, "short"), [createFuturesTrade]);
-
   const closePosition = useCallback((positionId: string) => {
     setOpenPositions(prev => {
         const positionToClose = prev.find(p => p.id === positionId);
@@ -516,12 +566,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   const closeAllPositions = useCallback(() => {
-    // This now safely gets the latest positions state for iteration
-    setOpenPositions(currentPositions => {
-        currentPositions.forEach(p => closePosition(p.id));
-        return []; // Clear all positions
-    });
-  }, [closePosition]);
+    openPositions.forEach(p => closePosition(p.id));
+  }, [openPositions, closePosition]);
 
   const clearHistory = useCallback(() => {
     setTradeHistory([]);
@@ -543,9 +589,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
-    const newAlert: PriceAlert = { price, condition, triggered: false };
+    const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
     setPriceAlerts(prev => ({ ...prev, [symbol]: newAlert }));
     toast({ title: 'Alert Set', description: `Alert set for ${symbol} when price is ${condition} ${price}.` });
+    notifiedAlerts.current.delete(symbol);
   }, [toast]);
 
   const removePriceAlert = useCallback((symbol: string) => {
@@ -553,8 +600,25 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const { [symbol]: _, ...rest } = prev;
       return rest;
     });
+    notifiedAlerts.current.delete(symbol);
     toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
   }, [toast]);
+  
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
+    const newTrigger: TradeTrigger = {
+      ...trigger,
+      id: crypto.randomUUID(),
+      status: 'active',
+    };
+    setTradeTriggers(prev => [newTrigger, ...prev]);
+    toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+  }, [toast]);
+
+  const removeTradeTrigger = useCallback((triggerId: string) => {
+    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
+    toast({ title: 'Trade Trigger Removed' });
+  }, [toast]);
+
 
   return (
     <PaperTradingContext.Provider
@@ -564,9 +628,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         tradeHistory,
         watchlist,
         priceAlerts,
+        tradeTriggers,
         toggleWatchlist,
         addPriceAlert,
         removePriceAlert,
+        addTradeTrigger,
+        removeTradeTrigger,
         buy,
         futuresBuy,
         futuresSell,
@@ -589,5 +656,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    

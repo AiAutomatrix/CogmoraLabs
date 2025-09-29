@@ -43,8 +43,23 @@ export const PriceAlertSchema = z.object({
     price: z.number(),
     condition: z.enum(['above', 'below']),
     triggered: z.boolean(),
+    notified: z.boolean().optional(),
 });
 export type PriceAlert = z.infer<typeof PriceAlertSchema>;
+
+export const TradeTriggerSchema = z.object({
+  id: z.string(),
+  symbol: z.string(),
+  symbolName: z.string(),
+  type: z.enum(['spot', 'futures']),
+  condition: z.enum(['above', 'below']),
+  targetPrice: z.number(),
+  action: z.enum(['buy', 'long', 'short']),
+  amount: z.number(), // For spot, this is USD amount. For futures, this is collateral.
+  leverage: z.number(), // Only for futures
+  status: z.enum(['active', 'executed', 'canceled']),
+});
+export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 
 // Original TradeSchema, keeping if used elsewhere, but papertrade is more specific
 export const TradeSchema = z.object({
@@ -137,7 +152,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof LiquiditySchema>;
+export type PairLiquidity = z.infer<typeof PairLiquidity>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -310,5 +325,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    

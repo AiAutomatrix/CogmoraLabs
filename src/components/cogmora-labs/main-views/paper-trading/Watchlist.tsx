@@ -3,6 +3,7 @@
 
 import React, { useState } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
+import type { WatchlistItem } from '@/types';
 import {
   Card,
   CardContent,
@@ -21,10 +22,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EyeOff, Bell, BellOff, ArrowUp, ArrowDown } from 'lucide-react';
+import { EyeOff, Bell, BellOff, ArrowUp, ArrowDown, BarChartHorizontal } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
+import { WatchlistTradeTriggerPopup } from './WatchlistTradeTriggerPopup';
 
 
 export default function Watchlist() {
@@ -38,6 +40,9 @@ export default function Watchlist() {
 
   const [alertPrice, setAlertPrice] = useState('');
   const [alertCondition, setAlertCondition] = useState<'above' | 'below'>('above');
+  
+  const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
+  const [selectedWatchlistItem, setSelectedWatchlistItem] = useState<WatchlistItem | null>(null);
 
   const formatPrice = (price: number) => {
     if (!price || isNaN(price)) return "$0.00";
@@ -62,12 +67,18 @@ export default function Watchlist() {
     }
   };
 
+  const handleTradeClick = (item: WatchlistItem) => {
+    setSelectedWatchlistItem(item);
+    setIsTradePopupOpen(true);
+  };
+
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle>My Watchlist</CardTitle>
         <CardDescription>
-          Track symbols and set price alerts. Symbols are added via the eye icon in the screeners.
+          Track symbols, set price alerts, and create trade triggers.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -93,7 +104,7 @@ export default function Watchlist() {
                     <TableCell className="text-center">
                       {alert ? (
                         <div className="flex items-center justify-center gap-2">
-                          <Badge variant={alert.triggered ? "default" : "outline"} className="border-primary">
+                          <Badge variant={alert.triggered ? "default" : "outline"} className={`border-primary ${alert.triggered ? 'animate-pulse' : ''}`}>
                             {alert.condition === 'above' ? <ArrowUp className="h-3 w-3 mr-1"/> : <ArrowDown className="h-3 w-3 mr-1"/>}
                             {formatPrice(alert.price)}
                           </Badge>
@@ -104,7 +115,7 @@ export default function Watchlist() {
                       ) : (
                         <Popover onOpenChange={(open) => {
                           if (open && item.currentPrice > 0) {
-                            setAlertPrice(item.currentPrice.toString());
+                            setAlertPrice(item.currentPrice.toFixed(4));
                           } else if (!open) {
                             setAlertPrice('');
                           }
@@ -149,6 +160,13 @@ export default function Watchlist() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
+                       <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleTradeClick(item)}
+                      >
+                        <BarChartHorizontal className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -171,5 +189,13 @@ export default function Watchlist() {
         </Table>
       </CardContent>
     </Card>
+     {selectedWatchlistItem && (
+        <WatchlistTradeTriggerPopup
+          isOpen={isTradePopupOpen}
+          onOpenChange={setIsTradePopupOpen}
+          item={selectedWatchlistItem}
+        />
+      )}
+    </>
   );
 }

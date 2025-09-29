@@ -34,6 +34,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import Watchlist from "./Watchlist";
+import TradeTriggersDashboard from "./TradeTriggersDashboard";
 
 
 export default function PaperTradingDashboard() {
@@ -169,8 +170,9 @@ export default function PaperTradingDashboard() {
       </Card>
 
       <Tabs defaultValue="positions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="positions">Open Positions</TabsTrigger>
+          <TabsTrigger value="triggers">Trade Triggers</TabsTrigger>
           <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
           <TabsTrigger value="history">Trade History</TabsTrigger>
         </TabsList>
@@ -296,6 +298,9 @@ export default function PaperTradingDashboard() {
                 </div>
                 </CardContent>
             </Card>
+        </TabsContent>
+        <TabsContent value="triggers">
+            <TradeTriggersDashboard />
         </TabsContent>
         <TabsContent value="watchlist">
             <Watchlist />
@@ -430,5 +435,3 @@ export default function PaperTradingDashboard() {
     </div>
   );
 }
-
-    
