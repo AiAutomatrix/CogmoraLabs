@@ -21,7 +21,6 @@ import type {
   PriceAlert,
   TradeTrigger,
   KucoinTicker,
-  FuturesSnapshotData,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -487,7 +486,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return pos;
       })
     );
-    // This needs to be outside the setter to avoid the render-in-render error
     if (symbolName) {
       toast({
         title: "Position Updated",
@@ -497,7 +495,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   
-  const processUpdate = useCallback((symbol: string, newPrice: number, high?: number, low?: number, priceChgPct?: number) => {
+  const processUpdate = useCallback((symbol: string, data: Partial<KucoinTicker>) => {
+    const newPrice = parseFloat(data.last || data.price || '0');
+    if (isNaN(newPrice) || newPrice === 0) return;
+
+    const high = data.high ? parseFloat(data.high) : undefined;
+    const low = data.low ? parseFloat(data.low) : undefined;
+    const priceChgPct = data.changeRate ? parseFloat(data.changeRate) : undefined;
+
     checkPriceAlerts(symbol, newPrice);
     checkTradeTriggers(symbol, newPrice);
 
@@ -558,11 +563,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
           if (message.type === "message" && message.subject === "trade.ticker") {
             const tickerData = message.data;
-            const price = parseFloat(tickerData.price || tickerData.last);
             const symbol = message.topic.split(":")[1];
-            if (!isNaN(price)) {
-              processUpdate(symbol, price, parseFloat(tickerData.high), parseFloat(tickerData.low), parseFloat(tickerData.changeRate));
-            }
+             processUpdate(symbol, tickerData);
           }
         };
 
@@ -616,7 +618,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           if (message.type === "message" && message.subject === 'snapshot.24h') {
             const { symbol, lastPrice, highPrice, lowPrice, priceChgPct } = message.data;
             if (lastPrice !== undefined) {
-              processUpdate(symbol, lastPrice, highPrice, lowPrice, priceChgPct);
+              processUpdate(symbol, { last: String(lastPrice), high: String(highPrice), low: String(lowPrice), changeRate: String(priceChgPct) });
             }
           }
         };
@@ -760,7 +762,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     
     let executedInstantly = false;
     
-    // Check for instant execution
     const watchlistItem = watchlist.find(item => item.symbol === newTrigger.symbol);
     const currentPrice = watchlistItem?.currentPrice;
     if (currentPrice) {
@@ -779,12 +780,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     if (!executedInstantly) {
         setTradeTriggers(prev => {
-           let newTriggers = [newTrigger, ...prev];
-           if(newTrigger.cancelOthers) {
-               toast({ title: 'OCO Trigger Set', description: `Trigger set for ${trigger.symbolName}. Other triggers for this symbol will be cancelled.` });
-           } else {
-               toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-           }
+           const newTriggers = [newTrigger, ...prev];
+           toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
            return newTriggers;
         });
     }
@@ -834,4 +831,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   return context;
 };
 
+    
     
