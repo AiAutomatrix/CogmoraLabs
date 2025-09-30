@@ -66,14 +66,16 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Position Info: {position.symbolName}</DialogTitle>
-          <DialogDescription>
-            {position.positionType === 'futures' ? (
-                <Badge variant={position.side === 'long' ? 'default' : 'destructive'} className="capitalize">
-                    {position.side} {position.leverage}x
-                </Badge>
-            ) : (
-                <Badge variant="secondary">Spot Position</Badge>
-            )}
+          <DialogDescription asChild>
+            <div>
+              {position.positionType === 'futures' ? (
+                  <Badge variant={position.side === 'long' ? 'default' : 'destructive'} className="capitalize">
+                      {position.side} {position.leverage}x
+                  </Badge>
+              ) : (
+                  <Badge variant="secondary">Spot Position</Badge>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
         
