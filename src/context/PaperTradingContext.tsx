@@ -507,14 +507,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const { stopLoss, takeProfit } = details;
   
       if (stopLoss !== undefined) {
-        if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
+        if ((side === 'buy' && currentPrice <= stopLoss) || (side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
           positionsToProcess.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
           return; // Stop checking this position if SL is hit
         }
       }
   
       if (takeProfit !== undefined) {
-        if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
+        if ((side === 'buy' && currentPrice >= takeProfit) || (side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
           positionsToProcess.push({ id, reason: 'Take Profit Hit', price: takeProfit });
         }
       }
