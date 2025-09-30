@@ -1,4 +1,5 @@
 
+
 "use client";
 import React, {
   createContext,
@@ -68,7 +69,7 @@ interface PaperTradingContextType {
     triggeredBy?: string,
     priceChgPct?: number,
   ) => void;
-  closePosition: (positionId: string, reason?: string) => void;
+  closePosition: (positionId: string, reason?: string, closePrice?: number) => void;
   updatePositionSlTp: (positionId: string, sl?: number, tp?: number) => void;
   closeAllPositions: () => void;
   clearHistory: () => void;
@@ -289,6 +290,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
+      const liquidationPrice = entryPrice * (1 - (1 / leverage));
+
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -300,6 +303,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           currentPrice: entryPrice,
           side: "long",
           leverage,
+          liquidationPrice,
           unrealizedPnl: 0,
           priceChgPct,
           details: { stopLoss, takeProfit, triggeredBy },
@@ -340,6 +344,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
+      const liquidationPrice = entryPrice * (1 + (1 / leverage));
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -351,6 +356,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           currentPrice: entryPrice,
           side: "short",
           leverage,
+          liquidationPrice,
           unrealizedPnl: 0,
           priceChgPct,
           details: { stopLoss, takeProfit, triggeredBy },
@@ -429,7 +435,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [executeTrigger]);
   
-  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close') => {
+  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePrice?: number) => {
     let positionToClose: OpenPosition | undefined;
     setOpenPositions(prev => {
         positionToClose = prev.find(p => p.id === positionId);
@@ -438,19 +444,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     if (positionToClose) {
-        const exitPrice = positionToClose.currentPrice;
+        const exitPrice = closePrice !== undefined ? closePrice : positionToClose.currentPrice;
         let pnl = 0;
         let returnedValue = 0;
 
-        if (positionToClose.positionType === 'spot') {
-          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
-          returnedValue = positionToClose.size * exitPrice;
+        if (reason === 'Position Liquidated') {
+            const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / (positionToClose.leverage || 1);
+            pnl = -collateral;
+            returnedValue = 0; // The entire collateral is lost.
+        } else if (positionToClose.positionType === 'spot') {
+            pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
+            returnedValue = positionToClose.size * exitPrice;
         } else if (positionToClose.positionType === 'futures') {
-          const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
-          pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
-          const leverage = positionToClose.leverage ?? 1;
-          const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
-          returnedValue = collateral + pnl;
+            const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
+            pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
+            const leverage = positionToClose.leverage ?? 1;
+            const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
+            returnedValue = collateral + pnl;
         }
 
         setBalance(bal => bal + returnedValue);
@@ -480,32 +490,40 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (!isLoaded) return;
   
-    const positionsToClose: { id: string; reason: string }[] = [];
+    const positionsToProcess: { id: string; reason: string; price: number }[] = [];
   
     openPositions.forEach(position => {
-      if (!position.details) return;
-      const { id, details, currentPrice, side } = position;
+      const { id, details, currentPrice, side, liquidationPrice } = position;
   
+      // Check for liquidation first
+      if (position.positionType === 'futures' && liquidationPrice !== undefined) {
+          if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
+              positionsToProcess.push({ id, reason: 'Position Liquidated', price: liquidationPrice });
+              return; // Stop processing this position if it's liquidated
+          }
+      }
+
+      if (!details) return;
       const { stopLoss, takeProfit } = details;
   
       if (stopLoss !== undefined) {
         if ((side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-          positionsToClose.push({ id, reason: 'Stop Loss Hit' });
+          positionsToProcess.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
           return; // Stop checking this position if SL is hit
         }
       }
   
       if (takeProfit !== undefined) {
         if ((side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-          positionsToClose.push({ id, reason: 'Take Profit Hit' });
+          positionsToProcess.push({ id, reason: 'Take Profit Hit', price: takeProfit });
         }
       }
     });
   
-    if (positionsToClose.length > 0) {
+    if (positionsToProcess.length > 0) {
       // Use a timeout to ensure this runs after the current render cycle
       setTimeout(() => {
-        positionsToClose.forEach(p => closePosition(p.id, p.reason));
+        positionsToProcess.forEach(p => closePosition(p.id, p.reason, p.price));
       }, 0);
     }
   }, [openPositions, isLoaded, closePosition]);

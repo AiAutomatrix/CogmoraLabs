@@ -38,6 +38,7 @@ export const OpenPositionSchema = z.object({
   leverage: z.number().optional(),
   unrealizedPnl: z.number().optional(),
   priceChgPct: z.number().optional(),
+  liquidationPrice: z.number().optional(),
   details: OpenPositionDetailsSchema.optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;

@@ -35,17 +35,10 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
   const initialPositionValue = position.size * position.averageEntryPrice;
   const currentPositionValue = position.size * position.currentPrice;
   
-  let roi, collateral, liquidationPrice;
+  let roi, collateral;
   if (position.positionType === 'futures' && position.leverage) {
     collateral = initialPositionValue / position.leverage;
     roi = position.unrealizedPnl && collateral > 0 ? (position.unrealizedPnl / collateral) * 100 : 0;
-    
-    // Simplified liquidation price calculation
-    if (position.side === 'long') {
-        liquidationPrice = position.averageEntryPrice * (1 - (1 / position.leverage));
-    } else { // short
-        liquidationPrice = position.averageEntryPrice * (1 + (1 / position.leverage));
-    }
   }
   
   const formatPrice = (price?: number) => {
@@ -53,13 +46,14 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
     const options: Intl.NumberFormatOptions = {
         style: 'currency',
         currency: 'USD',
-        minimumFractionDigits: 2,
     };
     // For values that need more precision (e.g., entry prices of cheap tokens)
     if (Math.abs(price) < 1 && Math.abs(price) > 0) {
+        options.minimumFractionDigits = 2;
         options.maximumFractionDigits = 8;
     } else {
-        options.maximumFractionDigits = 2; // For P&L, values, etc.
+        options.minimumFractionDigits = 2;
+        options.maximumFractionDigits = 2; 
     }
     return price.toLocaleString('en-US', options);
   };
@@ -82,8 +76,8 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Position Info: {position.symbolName}</DialogTitle>
-          <DialogDescription asChild>
-            <div>
+           <DialogDescription asChild>
+             <div>
               {position.positionType === 'futures' ? (
                   <Badge variant={position.side === 'long' ? 'default' : 'destructive'} className="capitalize">
                       {position.side} {position.leverage}x
@@ -119,7 +113,7 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
                 <div className="space-y-2">
                     <h4 className="font-semibold">Futures Details</h4>
                     {collateral !== undefined && <InfoRow label="Collateral" value={formatCurrencyValue(collateral)} />}
-                    {liquidationPrice !== undefined && <InfoRow label="Est. Liq. Price" value={formatPrice(liquidationPrice)} valueClass="text-yellow-500" />}
+                    {position.liquidationPrice !== undefined && <InfoRow label="Est. Liq. Price" value={formatPrice(position.liquidationPrice)} valueClass="text-yellow-500" />}
                 </div>
                 </>
             )}
