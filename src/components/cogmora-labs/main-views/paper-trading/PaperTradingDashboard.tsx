@@ -114,14 +114,12 @@ export default function PaperTradingDashboard() {
     return new Intl.NumberFormat("en-US", options).format(price);
   };
     
-  const formatSize = (size: number, price: number) => {
-    if (price >= 1.0) {
-      return size.toFixed(1);
-    } else if (price < 0.1) {
-      return size.toFixed(5);
-    } else {
-      return size.toFixed(3);
-    }
+  const formatSize = (size: number) => {
+    if (size >= 1000) return size.toFixed(1);
+    if (size >= 1) return size.toFixed(2);
+    // For sizes less than 1, show more precision
+    if (size < 0.00001) return size.toPrecision(3);
+    return size.toFixed(5);
   };
 
   const formatChange = (changeRate?: number) => {
@@ -296,7 +294,7 @@ export default function PaperTradingDashboard() {
                                 )}
                                 </TableCell>
                                 <TableCell className="text-right px-2 py-2">
-                                {formatSize(pos.size, pos.currentPrice)}
+                                {formatSize(pos.size)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
                                 {formatCurrency(value)}
@@ -484,6 +482,8 @@ export default function PaperTradingDashboard() {
     </>
   );
 }
+
+    
 
     
 
