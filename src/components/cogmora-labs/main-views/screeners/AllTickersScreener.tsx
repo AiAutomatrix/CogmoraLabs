@@ -129,8 +129,8 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-5 sm:grid-cols-6 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="text-left font-semibold text-muted-foreground col-span-1 sm:col-span-2">
+    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+      <div className="text-left font-semibold text-muted-foreground col-span-2">
         Pair
       </div>
       {["last", "changeRate", "volValue"].map((key) => (
@@ -204,9 +204,9 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-5 sm:grid-cols-6 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
-                  <TableCell className="text-left font-medium col-span-1 sm:col-span-2">
+                  <TableCell className="text-left font-medium col-span-2">
                     {token.symbolName}
                   </TableCell>
                   <TableCell className="text-right font-mono col-span-1">
