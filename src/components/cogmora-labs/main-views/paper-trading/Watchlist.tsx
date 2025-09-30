@@ -120,8 +120,6 @@ export default function Watchlist() {
                 <TableHead className="px-2 py-2">Type</TableHead>
                 <TableHead className="text-right px-2 py-2">Current Price</TableHead>
                 <TableHead className="text-right hidden sm:table-cell px-2 py-2">24h Change</TableHead>
-                <TableHead className="text-right hidden sm:table-cell px-2 py-2">24h High</TableHead>
-                <TableHead className="text-right hidden sm:table-cell px-2 py-2">24h Low</TableHead>
                 <TableHead className="text-right px-2 py-2">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -142,8 +140,6 @@ export default function Watchlist() {
                       >
                         {formatChange(item.priceChgPct)}
                       </TableCell>
-                      <TableCell className="text-right hidden sm:table-cell px-2 py-2 text-green-500">{formatPrice(item.high)}</TableCell>
-                      <TableCell className="text-right hidden sm:table-cell px-2 py-2 text-red-500">{formatPrice(item.low)}</TableCell>
                       
                       <TableCell className="text-right px-2 py-2">
                         <div className="flex items-center justify-end gap-0">
@@ -219,7 +215,7 @@ export default function Watchlist() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center h-24">
+                  <TableCell colSpan={5} className="text-center h-24">
                     Your watchlist is empty.
                   </TableCell>
                 </TableRow>
