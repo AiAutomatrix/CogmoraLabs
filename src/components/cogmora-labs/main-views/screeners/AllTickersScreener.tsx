@@ -22,8 +22,7 @@ import { Button } from "@/components/ui/button";
 import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 import { usePaperTrading } from "@/context/PaperTradingContext";
-import { SpotSnapshotPopup } from "../paper-trading/SpotSnapshotPopup";
-import { useSpotSnapshot } from "@/hooks/useSpotSnapshot";
+import { SpotTickerInfoPopup } from "../paper-trading/SpotTickerInfoPopup";
 
 
 export default function AllTickersScreener() {
@@ -42,10 +41,8 @@ export default function AllTickersScreener() {
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
   const [selectedTickerForTrade, setSelectedTickerForTrade] = useState<KucoinTicker | null>(null);
 
-  const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
-  const [selectedSymbolForSnapshot, setSelectedSymbolForSnapshot] = useState<string | null>(null);
-  
-  const { snapshotData, status: snapshotStatus, subscribe, unsubscribe } = useSpotSnapshot(selectedSymbolForSnapshot);
+  const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
+  const [selectedTickerForInfo, setSelectedTickerForInfo] = useState<KucoinTicker | null>(null);
 
   const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
 
@@ -93,18 +90,10 @@ export default function AllTickersScreener() {
     setIsTradePopupOpen(true);
   };
   
-  const handleSnapshotClick = useCallback((ticker: KucoinTicker) => {
-    setSelectedSymbolForSnapshot(ticker.symbol);
-    setIsSnapshotPopupOpen(true);
-    subscribe(ticker.symbol);
-  }, [subscribe]);
-
-  const handleCloseSnapshot = useCallback(() => {
-    unsubscribe();
-    setIsSnapshotPopupOpen(false);
-    setSelectedSymbolForSnapshot(null);
-  }, [unsubscribe]);
-
+  const handleInfoClick = useCallback((ticker: KucoinTicker) => {
+    setSelectedTickerForInfo(ticker);
+    setIsInfoPopupOpen(true);
+  }, []);
 
   const formatPrice = (priceStr: string) => {
     const price = parseFloat(priceStr);
@@ -140,7 +129,7 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+    <div className="grid grid-cols-5 sm:grid-cols-6 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
       <div className="text-left font-semibold text-muted-foreground col-span-1 sm:col-span-2">
         Pair
       </div>
@@ -172,20 +161,15 @@ export default function AllTickersScreener() {
     );
   }, [selectedTickerForTrade, isTradePopupOpen]);
 
-  const snapshotPopup = useMemo(() => {
-    if (!selectedSymbolForSnapshot) return null;
-    const [base, quote] = selectedSymbolForSnapshot.split('-');
+  const infoPopup = useMemo(() => {
     return (
-      <SpotSnapshotPopup
-        isOpen={isSnapshotPopupOpen}
-        onOpenChange={handleCloseSnapshot}
-        symbolName={selectedSymbolForSnapshot}
-        baseCurrency={base}
-        quoteCurrency={quote}
-        data={snapshotData}
+      <SpotTickerInfoPopup
+        isOpen={isInfoPopupOpen}
+        onOpenChange={setIsInfoPopupOpen}
+        ticker={selectedTickerForInfo}
       />
     )
-  }, [isSnapshotPopupOpen, selectedSymbolForSnapshot, snapshotData, handleCloseSnapshot]);
+  }, [isInfoPopupOpen, selectedTickerForInfo]);
 
   return (
     <>
@@ -220,7 +204,7 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-5 sm:grid-cols-6 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
                   <TableCell className="text-left font-medium col-span-1 sm:col-span-2">
                     {token.symbolName}
@@ -243,7 +227,7 @@ export default function AllTickersScreener() {
                       variant="outline"
                       size="icon"
                       className="h-8 w-8 mr-1"
-                      onClick={() => handleSnapshotClick(token)}
+                      onClick={() => handleInfoClick(token)}
                     >
                       <FileText className="h-4 w-4" />
                     </Button>
@@ -272,7 +256,7 @@ export default function AllTickersScreener() {
       </ScrollArea>
     </div>
     {tradePopup}
-    {snapshotPopup}
+    {infoPopup}
     </>
   );
 }
