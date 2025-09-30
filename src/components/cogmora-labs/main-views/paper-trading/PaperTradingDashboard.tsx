@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Settings2 } from "lucide-react";
+import { Trash2, Settings2, Info } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,6 +37,7 @@ import Watchlist from "./Watchlist";
 import TradeTriggersDashboard from "./TradeTriggersDashboard";
 import { PositionDetailsPopup } from "./PositionDetailsPopup";
 import type { OpenPosition } from "@/types";
+import { PositionInfoPopup } from "./PositionInfoPopup";
 
 export default function PaperTradingDashboard() {
   const {
@@ -49,6 +50,7 @@ export default function PaperTradingDashboard() {
   } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
+  const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
 
   const totalPositionValue = useMemo(
@@ -92,6 +94,11 @@ export default function PaperTradingDashboard() {
     setSelectedPosition(position);
     setIsDetailsPopupOpen(true);
   };
+  
+  const handleOpenInfo = (position: OpenPosition) => {
+    setSelectedPosition(position);
+    setIsInfoPopupOpen(true);
+  };
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -115,11 +122,9 @@ export default function PaperTradingDashboard() {
   };
     
   const formatSize = (size: number) => {
-    if (size >= 1000) return size.toFixed(1);
     if (size >= 1) return size.toFixed(2);
-    // For sizes less than 1, show more precision
-    if (size < 0.00001) return size.toPrecision(3);
-    return size.toFixed(5);
+    // For sizes less than 1, show more precision using toPrecision
+    return size.toPrecision(3);
   };
 
   const formatChange = (changeRate?: number) => {
@@ -258,7 +263,7 @@ export default function PaperTradingDashboard() {
                         </TableHead>
                         <TableHead className="text-right px-2 py-2">24h %</TableHead>
                         <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
-                        <TableHead className="text-center min-w-[100px] px-2 py-2">
+                        <TableHead className="text-center min-w-[120px] px-2 py-2">
                             Actions
                         </TableHead>
                         </TableRow>
@@ -309,7 +314,10 @@ export default function PaperTradingDashboard() {
                                     {formatChange(pos.priceChgPct)}
                                 </TableCell>
                                 <PNLCell pnl={pos.unrealizedPnl} />
-                                <TableCell className="text-center min-w-[100px] px-2 py-2">
+                                <TableCell className="text-center min-w-[120px] px-2 py-2">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenInfo(pos)}>
+                                    <Info className="h-4 w-4 text-blue-400" />
+                                </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
                                     <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
                                 </Button>
@@ -476,6 +484,13 @@ export default function PaperTradingDashboard() {
         <PositionDetailsPopup 
             isOpen={isDetailsPopupOpen}
             onOpenChange={setIsDetailsPopupOpen}
+            position={selectedPosition}
+        />
+    )}
+     {selectedPosition && (
+        <PositionInfoPopup
+            isOpen={isInfoPopupOpen}
+            onOpenChange={setIsInfoPopupOpen}
             position={selectedPosition}
         />
     )}
