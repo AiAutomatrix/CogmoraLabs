@@ -32,11 +32,11 @@ const InfoRow: React.FC<{ label: string, value: React.ReactNode, className?: str
   </div>
 );
 
-const formatPrice = (price?: number | null, quoteCurrency?: string) => {
+const formatPrice = (price?: number | null) => {
   if (price === undefined || price === null || isNaN(price)) return 'N/A';
   const options: Intl.NumberFormatOptions = {
     style: 'currency',
-    currency: quoteCurrency || 'USD',
+    currency: 'USD', // Always format as USD to avoid invalid currency codes like USDT
     minimumFractionDigits: 2,
   };
   if (Math.abs(price) < 1) {
@@ -46,6 +46,7 @@ const formatPrice = (price?: number | null, quoteCurrency?: string) => {
   }
   return price.toLocaleString('en-US', options);
 };
+
 
 const formatPercent = (rate?: number | null) => {
     if (rate === undefined || rate === null || isNaN(rate)) return 'N/A';
@@ -67,12 +68,12 @@ const MarketChangeBlock: React.FC<{ title: string, data?: MarketChange | null, q
     return (
         <div className="space-y-1">
             <h4 className="font-semibold text-primary">{title}</h4>
-            <InfoRow label="Change" value={<span>{formatPrice(data.changePrice, quoteCurrency)} ({formatPercent(data.changeRate)})</span>} />
-            <InfoRow label="High" value={formatPrice(data.high, quoteCurrency)} />
-            <InfoRow label="Low" value={formatPrice(data.low, quoteCurrency)} />
-            <InfoRow label="Open" value={formatPrice(data.open, quoteCurrency)} />
+            <InfoRow label="Change" value={<span>{formatPrice(data.changePrice)} ({formatPercent(data.changeRate)})</span>} />
+            <InfoRow label="High" value={formatPrice(data.high)} />
+            <InfoRow label="Low" value={formatPrice(data.low)} />
+            <InfoRow label="Open" value={formatPrice(data.open)} />
             <InfoRow label="Volume" value={formatVolume(data.vol)} />
-            <InfoRow label="Volume Value" value={formatPrice(data.volValue, quoteCurrency)} />
+            <InfoRow label="Volume Value" value={formatPrice(data.volValue)} />
         </div>
     );
 };
@@ -96,17 +97,17 @@ export const SpotSnapshotPopup: React.FC<SpotSnapshotPopupProps> = ({ isOpen, on
         <ScrollArea className="max-h-[60vh] pr-4">
         <div className="space-y-4 py-4">
             <div className="p-4 bg-muted/50 rounded-lg space-y-2">
-                <InfoRow label="Last Price" value={formatPrice(data.lastTradedPrice, quote)} className="text-lg" />
-                <InfoRow label="24h Change" value={<span className={changeColorClass}>{formatPrice(data.changePrice, quote)} ({formatPercent(data.changeRate)})</span>} />
+                <InfoRow label="Last Price" value={formatPrice(data.lastTradedPrice)} className="text-lg" />
+                <InfoRow label="24h Change" value={<span className={changeColorClass}>{formatPrice(data.changePrice)} ({formatPercent(data.changeRate)})</span>} />
             </div>
             
             <Separator />
             
             <div className="space-y-2">
                 <h4 className="font-semibold text-primary">Market Details</h4>
-                <InfoRow label="Open" value={formatPrice(data.open, quote)} />
-                <InfoRow label="Close" value={formatPrice(data.close, quote)} />
-                <InfoRow label="Average Price" value={formatPrice(data.averagePrice, quote)} />
+                <InfoRow label="Open" value={formatPrice(data.open)} />
+                <InfoRow label="Close" value={formatPrice(data.close)} />
+                <InfoRow label="Average Price" value={formatPrice(data.averagePrice)} />
                 <InfoRow label="Trading" value={data.trading ? 'Yes' : 'No'} />
                 <InfoRow label="Margin Trade" value={data.marginTrade ? 'Yes' : 'No'} />
                 <InfoRow label="Board" value={data.board === 1 ? 'KuCoin Plus' : 'Primary'} />
@@ -118,9 +119,9 @@ export const SpotSnapshotPopup: React.FC<SpotSnapshotPopupProps> = ({ isOpen, on
 
             <div className="space-y-2">
                 <h4 className="font-semibold text-primary">Order Book</h4>
-                <InfoRow label="Best Bid (Buy)" value={formatPrice(data.buy, quote)} />
+                <InfoRow label="Best Bid (Buy)" value={formatPrice(data.buy)} />
                 <InfoRow label="Bid Size" value={formatVolume(data.bidSize)} />
-                <InfoRow label="Best Ask (Sell)" value={formatPrice(data.sell, quote)} />
+                <InfoRow label="Best Ask (Sell)" value={formatPrice(data.sell)} />
                 <InfoRow label="Ask Size" value={formatVolume(data.askSize)} />
             </div>
 
