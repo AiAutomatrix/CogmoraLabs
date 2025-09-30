@@ -113,6 +113,27 @@ export default function PaperTradingDashboard() {
     }
     return new Intl.NumberFormat("en-US", options).format(price);
   };
+    
+  const formatSize = (size: number, price: number) => {
+    if (price >= 1.0) {
+      return size.toFixed(1);
+    } else if (price < 0.1) {
+      return size.toFixed(5);
+    } else {
+      return size.toFixed(3);
+    }
+  };
+
+  const formatChange = (changeRate?: number) => {
+    if (changeRate === undefined) return "N/A";
+    const className = changeRate >= 0 ? "text-green-500" : "text-red-500";
+    const sign = changeRate >= 0 ? "+" : "";
+    return (
+        <span className={className}>
+            {sign}{(changeRate * 100).toFixed(2)}%
+        </span>
+    );
+  };
 
   const PNLCell = ({ pnl }: { pnl: number | undefined }) => {
     if (pnl === undefined)
@@ -237,7 +258,7 @@ export default function PaperTradingDashboard() {
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
                             Current Price
                         </TableHead>
-                        <TableHead className="text-center px-2 py-2">TP/SL</TableHead>
+                        <TableHead className="text-right px-2 py-2">24h %</TableHead>
                         <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
                         <TableHead className="text-center min-w-[100px] px-2 py-2">
                             Actions
@@ -275,7 +296,7 @@ export default function PaperTradingDashboard() {
                                 )}
                                 </TableCell>
                                 <TableCell className="text-right px-2 py-2">
-                                {pos.size.toFixed(6)}
+                                {formatSize(pos.size, pos.currentPrice)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
                                 {formatCurrency(value)}
@@ -286,13 +307,14 @@ export default function PaperTradingDashboard() {
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
                                 {formatPrice(pos.currentPrice)}
                                 </TableCell>
-                                <TableCell className="text-center px-2 py-2">
-                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
-                                      <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
-                                  </Button>
+                                <TableCell className="text-right px-2 py-2">
+                                    {formatChange(pos.priceChgPct)}
                                 </TableCell>
                                 <PNLCell pnl={pos.unrealizedPnl} />
                                 <TableCell className="text-center min-w-[100px] px-2 py-2">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
+                                    <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
+                                </Button>
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -462,5 +484,7 @@ export default function PaperTradingDashboard() {
     </>
   );
 }
+
+    
 
     

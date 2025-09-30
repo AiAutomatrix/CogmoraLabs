@@ -37,6 +37,7 @@ export const OpenPositionSchema = z.object({
   side: z.enum(['buy', 'long', 'short']),
   leverage: z.number().optional(),
   unrealizedPnl: z.number().optional(),
+  priceChgPct: z.number().optional(),
   details: OpenPositionDetailsSchema.optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
@@ -57,7 +58,7 @@ export const SpotSnapshotDataSchema = z.object({
     averagePrice: z.number().optional().nullable(),
     baseCurrency: z.string().optional().nullable(),
     bidSize: z.number().optional().nullable(),
-    board: z.number().optional().nullable(),
+    board: z.number().optional().nullable(), //Trading pair partition： 0.primary partition 1.KuCoin Plus", example = "1"
     buy: z.number().optional().nullable(),
     changePrice: z.number().optional().nullable(),
     changeRate: z.number().optional().nullable(),
@@ -69,7 +70,7 @@ export const SpotSnapshotDataSchema = z.object({
     makerCoefficient: z.number().optional().nullable(),
     makerFeeRate: z.number().optional().nullable(),
     marginTrade: z.boolean().optional().nullable(),
-    mark: z.number().optional().nullable(),
+    mark: z.number().optional().nullable(), //Trading Pair Mark： 0.default 1.ST. 2.NEW", example = "1"
     market: z.string().optional().nullable(),
     marketChange1h: MarketChangeSchema.optional().nullable(),
     marketChange24h: MarketChangeSchema.optional().nullable(),
@@ -79,14 +80,14 @@ export const SpotSnapshotDataSchema = z.object({
     quoteCurrency: z.string().optional().nullable(),
     sell: z.number().optional().nullable(),
     siteTypes: z.array(z.string()).optional().nullable(),
-    sort: z.number().optional().nullable(),
+    sort: z.number().optional().nullable(), //sorting number(Pointless)
     symbol: z.string().optional().nullable(),
     symbolCode: z.string().optional().nullable(),
     takerCoefficient: z.number().optional().nullable(),
     takerFeeRate: z.number().optional().nullable(),
     trading: z.boolean().optional().nullable(),
     vol: z.number().optional().nullable(),
-    volValue: z.number().optional().nullable(),
+    volValue: z.number().optional().nullable(), //24-hour rolling transaction volume, refreshed every 2s
 });
 export type SpotSnapshotData = z.infer<typeof SpotSnapshotDataSchema>;
 
@@ -402,3 +403,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    

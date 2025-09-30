@@ -46,6 +46,7 @@ interface PaperTradingContextType {
     stopLoss?: number,
     takeProfit?: number,
     triggeredBy?: string,
+    priceChgPct?: number,
   ) => void;
   futuresBuy: (
     symbol: string,
@@ -55,6 +56,7 @@ interface PaperTradingContextType {
     stopLoss?: number,
     takeProfit?: number,
     triggeredBy?: string,
+    priceChgPct?: number,
   ) => void;
   futuresSell: (
     symbol: string,
@@ -64,6 +66,7 @@ interface PaperTradingContextType {
     stopLoss?: number,
     takeProfit?: number,
     triggeredBy?: string,
+    priceChgPct?: number,
   ) => void;
   closePosition: (positionId: string, reason?: string) => void;
   updatePositionSlTp: (positionId: string, sl?: number, tp?: number) => void;
@@ -213,6 +216,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       stopLoss?: number,
       takeProfit?: number,
       triggeredBy = 'manual',
+      priceChgPct?: number,
     ) => {
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
@@ -243,6 +247,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   currentPrice,
                   side: 'buy',
                   unrealizedPnl: 0,
+                  priceChgPct: priceChgPct,
                   details: { stopLoss, takeProfit, triggeredBy },
               };
               return [...prev, newPosition];
@@ -276,6 +281,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     stopLoss?: number,
     takeProfit?: number,
     triggeredBy = 'manual',
+    priceChgPct?: number,
   ) => {
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
@@ -295,6 +301,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           side: "long",
           leverage,
           unrealizedPnl: 0,
+          priceChgPct,
           details: { stopLoss, takeProfit, triggeredBy },
       };
 
@@ -325,6 +332,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     stopLoss?: number,
     takeProfit?: number,
     triggeredBy = 'manual',
+    priceChgPct?: number,
   ) => {
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
@@ -344,6 +352,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           side: "short",
           leverage,
           unrealizedPnl: 0,
+          priceChgPct,
           details: { stopLoss, takeProfit, triggeredBy },
       };
 
@@ -373,16 +382,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     const triggeredBy = `trigger:${trigger.condition}`;
+    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
+    const priceChgPct = watchlistItem?.priceChgPct;
+
     if (trigger.type === 'spot') {
-      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, triggeredBy);
+      buy(trigger.symbol, trigger.symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
     } else if (trigger.type === 'futures') {
       if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy);
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
       } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy);
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
       }
     }
-  }, [toast, buy, futuresBuy, futuresSell]);
+  }, [toast, buy, futuresBuy, futuresSell, watchlist]);
 
   const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
@@ -569,7 +581,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const pnlMultiplier = p.side === "long" ? 1 : -1;
             unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
           }
-          return { ...p, currentPrice: newPrice!, unrealizedPnl };
+          return { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
         }
         return p;
       })
@@ -866,3 +878,6 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+
+    
