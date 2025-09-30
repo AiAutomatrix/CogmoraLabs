@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Settings2, Info } from "lucide-react";
+import { Trash2, Settings2, Info, XCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -125,17 +125,6 @@ export default function PaperTradingDashboard() {
     if (size >= 1) return size.toFixed(2);
     // For sizes less than 1, show more precision using toPrecision
     return size.toPrecision(3);
-  };
-
-  const formatChange = (changeRate?: number) => {
-    if (changeRate === undefined) return "N/A";
-    const className = changeRate >= 0 ? "text-green-500" : "text-red-500";
-    const sign = changeRate >= 0 ? "+" : "";
-    return (
-        <span className={className}>
-            {sign}{(changeRate * 100).toFixed(2)}%
-        </span>
-    );
   };
 
   const PNLCell = ({ pnl }: { pnl: number | undefined }) => {
@@ -250,8 +239,8 @@ export default function PaperTradingDashboard() {
                     <TableHeader>
                         <TableRow>
                         <TableHead className="px-2 py-2">Symbol</TableHead>
-                        <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
-                        <TableHead className="text-right px-2 py-2">Size</TableHead>
+                        <TableHead className="px-1 py-2 text-center">Type</TableHead>
+                        <TableHead className="text-right px-1 py-2">Size</TableHead>
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
                             Value (USD)
                         </TableHead>
@@ -261,7 +250,6 @@ export default function PaperTradingDashboard() {
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
                             Current Price
                         </TableHead>
-                        <TableHead className="text-right px-2 py-2">24h %</TableHead>
                         <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
                         <TableHead className="text-center min-w-[120px] px-2 py-2">
                             Actions
@@ -284,7 +272,7 @@ export default function PaperTradingDashboard() {
                                 <TableCell className="font-medium px-2 py-2">
                                 {pos.symbolName}
                                 </TableCell>
-                                <TableCell className="hidden sm:table-cell px-2 py-2">
+                                <TableCell className="px-1 py-2 text-center">
                                 {pos.positionType === "futures" ? (
                                     <Badge
                                     variant={
@@ -298,7 +286,7 @@ export default function PaperTradingDashboard() {
                                     <Badge variant="secondary">Spot</Badge>
                                 )}
                                 </TableCell>
-                                <TableCell className="text-right px-2 py-2">
+                                <TableCell className="text-right px-1 py-2">
                                 {formatSize(pos.size)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
@@ -310,32 +298,31 @@ export default function PaperTradingDashboard() {
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
                                 {formatPrice(pos.currentPrice)}
                                 </TableCell>
-                                <TableCell className="text-right px-2 py-2">
-                                    {formatChange(pos.priceChgPct)}
-                                </TableCell>
                                 <PNLCell pnl={pos.unrealizedPnl} />
                                 <TableCell className="text-center min-w-[120px] px-2 py-2">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenInfo(pos)}>
-                                    <Info className="h-4 w-4 text-blue-400" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
-                                    <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => closePosition(pos.id)}
-                                    className="border-red-500 text-red-500 hover:bg-red-500 hover:text-white"
-                                >
-                                    Close
-                                </Button>
+                                  <div className="flex items-center justify-center gap-0">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenInfo(pos)}>
+                                        <Info className="h-4 w-4 text-blue-400" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
+                                        <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive"
+                                      onClick={() => closePosition(pos.id)}
+                                    >
+                                        <XCircle className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 </TableCell>
                             </TableRow>
                             );
                         })
                         ) : (
                         <TableRow>
-                            <TableCell colSpan={9} className="text-center">
+                            <TableCell colSpan={8} className="text-center">
                             No open positions.
                             </TableCell>
                         </TableRow>
@@ -497,9 +484,3 @@ export default function PaperTradingDashboard() {
     </>
   );
 }
-
-    
-
-    
-
-    
