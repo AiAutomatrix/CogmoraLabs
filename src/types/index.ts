@@ -344,10 +344,12 @@ export interface KucoinTicker {
   datetime?: number;
 }
 
-export type KucoinSnapshotDataWrapper = {
-    data: SpotSnapshotData;
-    sequence: string;
-}
+export const KucoinSnapshotDataWrapperSchema = z.object({
+    data: SpotSnapshotDataSchema,
+    sequence: z.string(),
+});
+export type KucoinSnapshotDataWrapper = z.infer<typeof KucoinSnapshotDataWrapperSchema>;
+
 
 export type KucoinTickerMessage = {
   type: 'message';
