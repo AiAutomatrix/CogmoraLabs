@@ -55,9 +55,14 @@ export const PositionDetailsPopup: React.FC<PositionDetailsPopupProps> = ({ isOp
   const calculatePriceFromPercentage = (percentage: number, isStopLoss: boolean) => {
     const price = position.currentPrice;
     let change;
-    if (position.side === 'long') {
+    // For spot ('buy') and futures 'long' positions:
+    // - Stop loss DECREASES price.
+    // - Take profit INCREASES price.
+    if (position.side === 'buy' || position.side === 'long') {
         change = isStopLoss ? -(price * (percentage / 100)) : (price * (percentage / 100));
-    } else { // short
+    } else { // For futures 'short' positions:
+        // - Stop loss INCREASES price.
+        // - Take profit DECREASES price.
         change = isStopLoss ? (price * (percentage / 100)) : -(price * (percentage / 100));
     }
     return (price + change);
@@ -147,5 +152,7 @@ const formatPrice = (price?: number) => {
     if (price === undefined) return 'N/A';
     return price.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
+
+    
 
     
