@@ -27,7 +27,7 @@ import { useSpotSnapshot } from "@/hooks/useSpotSnapshot";
 
 
 export default function AllTickersScreener() {
-  type SortKey = "last" | "changeRate" | "high" | "low" | "volValue";
+  type SortKey = "last" | "changeRate" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
   const { watchlist, toggleWatchlist } = usePaperTrading();
@@ -140,11 +140,11 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-8 sm:grid-cols-9 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
       <div className="text-left font-semibold text-muted-foreground col-span-1 sm:col-span-2">
         Pair
       </div>
-      {["last", "changeRate", "high", "low", "volValue"].map((key) => (
+      {["last", "changeRate", "volValue"].map((key) => (
         <div
           key={key}
           className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end col-span-1"
@@ -153,8 +153,6 @@ export default function AllTickersScreener() {
           {{
             last: "Price (USD)",
             changeRate: "Change (24h)",
-            high: "High (24h)",
-            low: "Low (24h)",
             volValue: "Volume (24h)",
           }[key]}
           {getSortIcon(key as SortKey)}
@@ -222,7 +220,7 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-8 sm:grid-cols-9 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
                   <TableCell className="text-left font-medium col-span-1 sm:col-span-2">
                     {token.symbolName}
@@ -236,12 +234,6 @@ export default function AllTickersScreener() {
                     }`}
                   >
                     {formatChange(token.changeRate)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono col-span-1">
-                    ${formatPrice(token.high)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono col-span-1">
-                    ${formatPrice(token.low)}
                   </TableCell>
                   <TableCell className="text-right font-mono col-span-1">
                     {formatVolume(token.volValue)}
