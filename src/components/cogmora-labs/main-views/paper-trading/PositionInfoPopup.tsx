@@ -38,7 +38,7 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
   let roi, collateral, liquidationPrice;
   if (position.positionType === 'futures' && position.leverage) {
     collateral = initialPositionValue / position.leverage;
-    roi = position.unrealizedPnl ? (position.unrealizedPnl / collateral) * 100 : 0;
+    roi = position.unrealizedPnl && collateral > 0 ? (position.unrealizedPnl / collateral) * 100 : 0;
     
     // Simplified liquidation price calculation
     if (position.side === 'long') {
@@ -50,9 +50,25 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
   
   const formatPrice = (price?: number) => {
     if (price === undefined) return 'N/A';
-    return price.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 8 });
+    const options: Intl.NumberFormatOptions = {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+    };
+    // For values that need more precision (e.g., entry prices of cheap tokens)
+    if (Math.abs(price) < 1 && Math.abs(price) > 0) {
+        options.maximumFractionDigits = 8;
+    } else {
+        options.maximumFractionDigits = 2; // For P&L, values, etc.
+    }
+    return price.toLocaleString('en-US', options);
   };
   
+  const formatCurrencyValue = (value?: number) => {
+      if (value === undefined) return 'N/A';
+      return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
   const formatPercent = (value?: number) => {
     if (value === undefined) return 'N/A';
     const className = value >= 0 ? 'text-green-500' : 'text-red-500';
@@ -82,10 +98,10 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
         <div className="space-y-4 py-4">
             <div className="space-y-2">
                 <h4 className="font-semibold">Financials</h4>
-                <InfoRow label="Unrealized P&L" value={formatPrice(position.unrealizedPnl)} valueClass={pnlClass} />
+                <InfoRow label="Unrealized P&L" value={formatCurrencyValue(position.unrealizedPnl)} valueClass={pnlClass} />
                 {roi !== undefined && <InfoRow label="ROI" value={formatPercent(roi)} />}
-                <InfoRow label="Position Value" value={formatPrice(currentPositionValue)} />
-                <InfoRow label="Initial Value" value={formatPrice(initialPositionValue)} />
+                <InfoRow label="Position Value" value={formatCurrencyValue(currentPositionValue)} />
+                <InfoRow label="Initial Value" value={formatCurrencyValue(initialPositionValue)} />
             </div>
 
             <Separator />
@@ -102,7 +118,7 @@ export const PositionInfoPopup: React.FC<PositionInfoPopupProps> = ({ isOpen, on
                 <Separator />
                 <div className="space-y-2">
                     <h4 className="font-semibold">Futures Details</h4>
-                    {collateral !== undefined && <InfoRow label="Collateral" value={formatPrice(collateral)} />}
+                    {collateral !== undefined && <InfoRow label="Collateral" value={formatCurrencyValue(collateral)} />}
                     {liquidationPrice !== undefined && <InfoRow label="Est. Liq. Price" value={formatPrice(liquidationPrice)} valueClass="text-yellow-500" />}
                 </div>
                 </>
