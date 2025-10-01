@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
@@ -171,30 +170,28 @@ export default function AllFuturesScreener() {
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                   {/* Mobile View Structure */}
-                  <div className="flex lg:hidden w-full items-center justify-start gap-4">
-                    <div className="flex flex-col flex-grow">
-                        <div className="flex justify-between items-center w-full">
-                            <span className="font-medium text-foreground">{contract.symbol.replace(/M$/, "")}</span>
-                            <div className="text-right font-mono">
-                                <div className="text-foreground">${formatPrice(contract.markPrice)}</div>
-                                <div className={`${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-start gap-4 mt-2 w-full">
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-muted-foreground">Vol</span>
-                                <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-muted-foreground">OI</span>
-                                <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <span className="text-xs text-muted-foreground">Lev</span>
-                                <span className="font-mono text-foreground">{contract.maxLeverage}x</span>
-                            </div>
-                        </div>
-                    </div>
+                  <div className="flex flex-col flex-grow lg:hidden">
+                      <div className="flex justify-between items-start w-full">
+                          <span className="font-medium text-foreground">{contract.symbol.replace(/M$/, "")}</span>
+                          <div className="text-right font-mono">
+                              <div className="text-foreground">${formatPrice(contract.markPrice)}</div>
+                              <div className={`${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                          </div>
+                      </div>
+                      <div className="flex items-center justify-start gap-4 mt-2 w-full text-foreground">
+                          <div className="flex flex-col items-start">
+                              <span className="text-xs text-muted-foreground">Vol</span>
+                              <span className="font-mono">{formatVolume(contract.volumeOf24h)}</span>
+                          </div>
+                          <div className="flex flex-col items-start">
+                              <span className="text-xs text-muted-foreground">OI</span>
+                              <span className="font-mono">{formatVolume(contract.openInterest)}</span>
+                          </div>
+                          <div className="flex flex-col items-start">
+                              <span className="text-xs text-muted-foreground">Lev</span>
+                              <span className="font-mono">{contract.maxLeverage}x</span>
+                          </div>
+                      </div>
                   </div>
                       
                   {/* === DESKTOP VIEW === */}
@@ -230,4 +227,3 @@ export default function AllFuturesScreener() {
     </>
   );
 }
-
