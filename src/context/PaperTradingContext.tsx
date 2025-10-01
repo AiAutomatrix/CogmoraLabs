@@ -801,12 +801,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   
   const closeAllPositions = useCallback(() => {
-    const positionsToClose = [...openPositions];
-    
+    const positionsToClose = [...openPositions]; // Create a snapshot
     positionsToClose.forEach(p => {
-        closePosition(p.id, 'Manual Close All');
+        // Pass the most up-to-date price for accurate PNL
+        const currentPositionState = openPositions.find(op => op.id === p.id);
+        const closePrice = currentPositionState ? currentPositionState.currentPrice : p.currentPrice;
+        closePosition(p.id, 'Manual Close All', closePrice);
     });
-
   }, [openPositions, closePosition]);
 
   const clearHistory = useCallback(() => {
@@ -822,9 +823,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         } else {
             const newItem: WatchlistItem = { symbol, symbolName, type, currentPrice: 0, high, low, priceChgPct };
             
-            // If it's a spot item, check for a corresponding futures contract
             if (type === 'spot' && futuresContracts.length > 0) {
-                const baseCurrency = symbolName.split('-')[0];
+                // Correctly extract the base currency (e.g., "LIGHT" from "LIGHT-USDT")
+                const baseCurrency = symbolName.split('-')[0]; 
                 const futuresEquivalent = futuresContracts.find(c => c.baseCurrency === baseCurrency);
                 if (futuresEquivalent) {
                     newItem.futuresSymbol = futuresEquivalent.symbol;
@@ -934,6 +935,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
 
 
     
+
 
 
 

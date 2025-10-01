@@ -32,7 +32,7 @@ interface WatchlistTradeTriggerPopupProps {
 export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProps> = ({ isOpen, onOpenChange, item }) => {
   const { balance, buy, futuresBuy, futuresSell, addTradeTrigger } = usePaperTrading();
   
-  const [tradeType, setTradeType] = useState<'instant' | 'trigger'>('instant');
+  const [tradeType, setTradeType] = useState<'instant' | 'trigger'>('trigger');
   const [marketType, setMarketType] = useState<'spot' | 'futures'>('spot');
   
   // States for instant trade
@@ -49,7 +49,8 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   
   useEffect(() => {
     if (item) {
-        // Reset market type to spot whenever a new item is selected
+        // Reset to trigger type and spot market whenever a new item is selected
+        setTradeType('trigger');
         setMarketType('spot');
         // Set trigger action based on the default market type
         setTriggerAction('buy');
@@ -113,6 +114,9 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   
   const showFuturesOption = item.type === 'futures' || (item.type === 'spot' && item.hasFutures);
   const isFuturesMode = (item.type === 'futures' && tradeType === 'instant') || (tradeType === 'trigger' && marketType === 'futures');
+  
+  // Disable instant trading for spot items with a futures market to encourage using triggers
+  const isInstantDisabled = item.type === 'spot' && showFuturesOption;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -126,65 +130,75 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
         
         <Tabs value={tradeType} onValueChange={(val) => setTradeType(val as 'instant' | 'trigger')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="instant" disabled={item.type === 'spot' && item.hasFutures}>Instant Order</TabsTrigger>
+                <TabsTrigger value="instant" disabled={isInstantDisabled}>Instant Order</TabsTrigger>
                 <TabsTrigger value="trigger">Trade Trigger</TabsTrigger>
             </TabsList>
             <TabsContent value="instant" className="space-y-4 pt-4">
-                <div className="space-y-2">
-                    <Label htmlFor="allocation-instant">
-                        {item.type === 'spot' ? 'Allocation (USD)' : 'Collateral (USD)'}
-                    </Label>
-                    <Input
-                        id="allocation-instant"
-                        type="number"
-                        placeholder="e.g., 100"
-                        value={allocation}
-                        onChange={(e) => setAllocation(e.target.value)}
-                    />
-                </div>
-                
-                {item.type === 'futures' && (
-                    <div className="space-y-3">
-                        <Label htmlFor="leverage-instant">Leverage: {leverage[0]}x</Label>
-                        <Slider
-                            id="leverage-instant"
-                            min={1} max={maxLeverage} step={1}
-                            value={leverage} onValueChange={setLeverage}
-                        />
-                    </div>
-                )}
-
-                 <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
-                    <h3 className="font-semibold text-base">Trade Summary</h3>
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Position Value:</span>
-                        <span>${(amountUSD * (item.type === 'futures' ? leverage[0] : 1)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Quantity (Approx):</span>
-                        <span>{tokenAmount} {item.symbolName.split('-')[0]}</span>
-                    </div>
-                </div>
-
-                <DialogFooter className="grid grid-cols-2 gap-2 pt-4">
-                    <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <div className="grid grid-cols-2 gap-2">
-                        {item.type === 'spot' ? (
-                            <Button type="button" onClick={() => handleInstantTrade()} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="col-span-2">
-                                Buy
-                            </Button>
-                        ) : (
-                            <>
-                            <Button type="button" onClick={() => handleInstantTrade('long')} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-green-600 hover:bg-green-700">
-                                Buy / Long
-                            </Button>
-                            <Button type="button" onClick={() => handleInstantTrade('short')} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-red-600 hover:bg-red-700">
-                                Sell / Short
-                            </Button>
-                            </>
+                {isInstantDisabled ? (
+                    <Alert>
+                        <AlertDescription>
+                            Instant spot trading is disabled for items with a futures market. Please use a Trade Trigger.
+                        </AlertDescription>
+                    </Alert>
+                ) : (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="allocation-instant">
+                                {item.type === 'spot' ? 'Allocation (USD)' : 'Collateral (USD)'}
+                            </Label>
+                            <Input
+                                id="allocation-instant"
+                                type="number"
+                                placeholder="e.g., 100"
+                                value={allocation}
+                                onChange={(e) => setAllocation(e.target.value)}
+                            />
+                        </div>
+                        
+                        {item.type === 'futures' && (
+                            <div className="space-y-3">
+                                <Label htmlFor="leverage-instant">Leverage: {leverage[0]}x</Label>
+                                <Slider
+                                    id="leverage-instant"
+                                    min={1} max={maxLeverage} step={1}
+                                    value={leverage} onValueChange={setLeverage}
+                                />
+                            </div>
                         )}
-                    </div>
-                </DialogFooter>
+
+                         <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
+                            <h3 className="font-semibold text-base">Trade Summary</h3>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Total Position Value:</span>
+                                <span>${(amountUSD * (item.type === 'futures' ? leverage[0] : 1)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Quantity (Approx):</span>
+                                <span>{tokenAmount} {item.symbolName.split('-')[0]}</span>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="grid grid-cols-2 gap-2 pt-4">
+                            <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
+                            <div className="grid grid-cols-2 gap-2">
+                                {item.type === 'spot' ? (
+                                    <Button type="button" onClick={() => handleInstantTrade()} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="col-span-2">
+                                        Buy
+                                    </Button>
+                                ) : (
+                                    <>
+                                    <Button type="button" onClick={() => handleInstantTrade('long')} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-green-600 hover:bg-green-700">
+                                        Buy / Long
+                                    </Button>
+                                    <Button type="button" onClick={() => handleInstantTrade('short')} disabled={!allocation || amountUSD <= 0 || amountUSD > balance} className="bg-red-600 hover:bg-red-700">
+                                        Sell / Short
+                                    </Button>
+                                    </>
+                                )}
+                            </div>
+                        </DialogFooter>
+                    </>
+                )}
             </TabsContent>
             <TabsContent value="trigger" className="space-y-4 pt-4">
                 <Alert>
