@@ -7,12 +7,6 @@ import {
   CardDescription,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
 import { ArrowUp, ArrowDown, ShoppingCart, Search, Eye, FileText } from "lucide-react";
@@ -193,28 +187,29 @@ export default function AllTickersScreener() {
         {loading && !tickers.length ? (
           skeletonRows
         ) : (
-          <Table>
-            <TableBody>
+          <div role="table" className="w-full caption-bottom text-sm">
+            <div role="rowgroup">
               {sortedMemo.map((token) => (
-                <TableRow
+                <div
                   key={token.symbol}
-                  className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm"
+                  role="row"
+                  className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
                 >
-                  <div style={{ display: 'contents' }}>
-                    <TableCell className="text-left font-medium p-0 w-20 sm:w-24 truncate">
+                  <div className="flex items-center gap-x-2 sm:gap-x-4">
+                    <div role="cell" className="text-left font-medium p-0 w-20 sm:w-24 truncate">
                       {token.symbolName}
-                    </TableCell>
-                    <TableCell className="text-right font-mono p-0 w-20 sm:w-24">
+                    </div>
+                    <div role="cell" className="text-right font-mono p-0 w-20 sm:w-24">
                       ${formatPrice(token.last)}
-                    </TableCell>
-                    <TableCell className={`text-right font-mono p-0 w-14 sm:w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    </div>
+                    <div role="cell" className={`text-right font-mono p-0 w-14 sm:w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
                       {formatChange(token.changeRate)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono p-0 w-14 sm:w-16">
+                    </div>
+                    <div role="cell" className="text-right font-mono p-0 w-14 sm:w-16">
                       {formatVolume(token.volValue)}
-                    </TableCell>
+                    </div>
                   </div>
-                  <TableCell className="w-24 sm:w-28 flex items-center justify-center gap-0 p-0">
+                  <div role="cell" className="w-24 sm:w-28 flex items-center justify-center gap-0 p-0">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -239,11 +234,11 @@ export default function AllTickersScreener() {
                     >
                         <Eye className="h-4 w-4" />
                     </Button>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </div>
         )}
       </ScrollArea>
     </div>
@@ -252,4 +247,3 @@ export default function AllTickersScreener() {
     </>
   );
 }
-
