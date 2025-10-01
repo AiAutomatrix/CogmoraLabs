@@ -1,19 +1,12 @@
 
-
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   CardHeader,
   CardDescription,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   useKucoinFuturesContracts,
@@ -131,28 +124,6 @@ export default function FuturesScreener() {
     </div>
   );
 
-  const tableHeaders = (
-    <div className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="text-left font-semibold text-muted-foreground col-span-2">Pair</div>
-      {["markPrice", "priceChgPct", "openInterest", "volumeOf24h"].map((key) => (
-        <div
-          key={key}
-          className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
-          onClick={() => requestSort(key as SortKey)}
-        >
-          {{
-            markPrice: "Price",
-            priceChgPct: "24h %",
-            openInterest: "OI",
-            volumeOf24h: "Volume",
-          }[key]}
-          {getSortIcon(key as SortKey)}
-        </div>
-      ))}
-      <div className="text-center font-semibold text-muted-foreground col-span-2">Actions</div>
-    </div>
-  );
-
   return (
     <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
@@ -175,61 +146,75 @@ export default function FuturesScreener() {
         </div>
       </CardHeader>
 
-      {tableHeaders}
+      {/* Mobile Header */}
+      <div className="flex lg:hidden justify-between items-center px-4 py-2 bg-card border-b border-border text-xs">
+        <div className="flex items-center gap-x-2">
+          <div className="text-left font-semibold text-muted-foreground w-20 cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
+          <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
+          <div className="text-right font-semibold text-muted-foreground w-14 cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h%{getSortIcon("priceChgPct")}</div>
+          <div className="text-right font-semibold text-muted-foreground w-14 cursor-pointer" onClick={() => requestSort("openInterest")}>OI{getSortIcon("openInterest")}</div>
+        </div>
+        <div className="text-center font-semibold text-muted-foreground w-24">Actions</div>
+      </div>
+      
+      {/* Desktop Header */}
+      <div className="hidden lg:grid grid-cols-6 gap-x-4 px-4 py-2 bg-card border-b border-border text-sm">
+        <div className="text-left font-semibold text-muted-foreground cursor-pointer flex items-center col-span-2" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
+        <div className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
+        <div className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end" onClick={() => requestSort("priceChgPct")}>24h Change{getSortIcon("priceChgPct")}</div>
+        <div className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
+        <div className="text-center font-semibold text-muted-foreground">Actions</div>
+      </div>
 
       <ScrollArea className="max-h-[350px] lg:max-h-[800px] overflow-auto rounded-md">
         {(httpLoading && !contracts.length) ? (
           skeletonRows
         ) : (
-          <Table>
-            <TableBody>
+          <div role="table" className="w-full caption-bottom">
+            <div role="rowgroup">
               {sortedMemo.map((contract) => (
-                <TableRow
+                <div
                   key={contract.symbol}
-                  className="grid grid-cols-7 sm:grid-cols-8 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  role="row"
+                  className="flex lg:grid lg:grid-cols-6 lg:gap-x-4 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50"
                 >
-                  <TableCell className="text-left font-medium col-span-2">
-                    {contract.symbol.replace(/M$/, "")}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    ${formatPrice(contract.markPrice)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right font-mono ${
-                      contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"
-                    }`}
-                  >
-                    {contract.priceChgPct >= 0 ? "+" : ""}
-                    {(contract.priceChgPct * 100).toFixed(2)}%
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatVolume(contract.openInterest)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {formatVolume(contract.volumeOf24h)}
-                  </TableCell>
-                  <TableCell className="text-center col-span-2">
+                  {/* Mobile Layout Group (Flex) */}
+                  <div className="flex lg:hidden items-center gap-x-2">
+                      <div role="cell" className="text-left font-medium p-0 w-20 truncate">{contract.symbol.replace(/M$/, "")}</div>
+                      <div role="cell" className="text-right font-mono p-0 w-16">${formatPrice(contract.markPrice)}</div>
+                      <div role="cell" className={`text-right font-mono p-0 w-14 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                      <div role="cell" className="text-right font-mono p-0 w-14">{formatVolume(contract.openInterest)}</div>
+                  </div>
+
+                  {/* Desktop Layout Cells (Grid) */}
+                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate col-span-2">{contract.symbol.replace(/M$/, "")}</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
+                  <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
+                  
+                  {/* Actions Column (Common) */}
+                  <div role="cell" className="flex items-center justify-center gap-0 p-0 w-24 lg:w-auto">
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
-                      className="h-8 w-8 mr-1"
+                      className="h-8 w-8"
                       onClick={() => handleTradeClick(contract)}
                     >
                       <BarChartHorizontal className="h-4 w-4" />
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
                       className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`}
                       onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice, contract.priceChgPct)}
                     >
                         <Eye className="h-4 w-4" />
                     </Button>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          </div>
         )}
       </ScrollArea>
     </div>
@@ -243,5 +228,3 @@ export default function FuturesScreener() {
     </>
   );
 }
-
-    
