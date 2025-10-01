@@ -155,8 +155,8 @@ export default function AllFuturesScreener() {
         <div className="cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
-        <div className="text-right cursor-pointer" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
+        <div className="text-right cursor-pointer" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
         <div className="text-center">Actions</div>
       </div>
@@ -170,38 +170,38 @@ export default function AllFuturesScreener() {
               sortedMemo.map((contract) => (
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
-                  {/* Mobile View Structure */}
-                  <div className="flex flex-grow items-center justify-start lg:hidden">
-                      <div className="flex w-24 flex-col text-left mr-2">
-                          <span className="font-medium text-foreground truncate">{contract.symbol.replace(/M$/, "")}</span>
-                          <span className="text-foreground font-mono">${formatPrice(contract.markPrice)}</span>
-                      </div>
-                      <div className="flex flex-grow justify-around">
-                          <div className={`flex flex-col items-center ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
-                              <span className="text-muted-foreground text-xs">24%</span>
-                              <span className="font-mono">{(contract.priceChgPct * 100).toFixed(2)}%</span>
-                          </div>
-                          <div className="flex flex-col items-center">
-                              <span className="text-muted-foreground text-xs">Vol</span>
-                              <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
-                          </div>
-                          <div className="flex flex-col items-center">
-                              <span className="text-muted-foreground text-xs">OI</span>
-                              <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
-                          </div>
-                          <div className="flex flex-col items-center">
-                              <span className="text-muted-foreground text-xs">Lev</span>
-                              <span className="font-mono text-foreground">{contract.maxLeverage}x</span>
-                          </div>
-                      </div>
-                  </div>
+                    {/* === MOBILE VIEW === */}
+                    <div className="flex flex-grow items-center lg:hidden">
+                        <div className="flex w-24 flex-col text-left mr-2">
+                            <span className="font-medium text-foreground truncate">{contract.symbol.replace(/M$/, "")}</span>
+                            <span className="text-foreground font-mono">${formatPrice(contract.markPrice)}</span>
+                        </div>
+                        <div className="flex flex-grow justify-around">
+                            <div className={`flex flex-col items-center ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                <span className="text-muted-foreground text-xs">24%</span>
+                                <span className="font-mono">{(contract.priceChgPct * 100).toFixed(2)}%</span>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-muted-foreground text-xs">OI</span>
+                                <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-muted-foreground text-xs">Vol</span>
+                                <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-muted-foreground text-xs">Lev</span>
+                                <span className="font-mono text-foreground">{contract.maxLeverage}x</span>
+                            </div>
+                        </div>
+                    </div>
                       
                   {/* === DESKTOP VIEW === */}
                   <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{contract.maxLeverage}x</div>
 
                   <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0">
