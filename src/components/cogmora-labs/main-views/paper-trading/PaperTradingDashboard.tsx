@@ -143,7 +143,7 @@ export default function PaperTradingDashboard() {
 
   return (
     <>
-    <div className="p-4 space-y-6">
+    <div className="py-4 space-y-6">
       {/* Account Metrics */}
       <Card>
         <CardHeader>
@@ -484,5 +484,3 @@ export default function PaperTradingDashboard() {
     </>
   );
 }
-
-    
