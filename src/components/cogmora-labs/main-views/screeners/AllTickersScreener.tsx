@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
@@ -129,34 +128,18 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="text-left font-semibold text-muted-foreground col-span-2">
-        Pair
+    <div className="grid grid-cols-12 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+      <div className="text-left font-semibold text-muted-foreground col-span-3">Pair</div>
+      <div className="text-right font-semibold text-muted-foreground col-span-3 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
+        Price (USD) {getSortIcon("last")}
       </div>
-      <div
-        className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
-        onClick={() => requestSort("last")}
-      >
-        <span className="hidden sm:inline">Price (USD)</span>
-        <span className="sm:hidden">Price</span>
-        {getSortIcon("last")}
+      <div className="text-right font-semibold text-muted-foreground col-span-2 cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>
+        24h % {getSortIcon("changeRate")}
       </div>
-      <div
-        className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
-        onClick={() => requestSort("changeRate")}
-      >
-        <span className="hidden sm:inline">Change (24h)</span>
-        <span className="sm:hidden">24h %</span>
-        {getSortIcon("changeRate")}
+      <div className="text-right font-semibold text-muted-foreground col-span-2 cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
+        Volume {getSortIcon("volValue")}
       </div>
-      <div
-        className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
-        onClick={() => requestSort("volValue")}
-      >
-        Volume
-        {getSortIcon("volValue")}
-      </div>
-      <div className="text-center font-semibold text-muted-foreground col-span-2">Actions</div>
+      <div className="text-right font-semibold text-muted-foreground col-span-2">Actions</div>
     </div>
   );
 
@@ -213,49 +196,51 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-6 sm:grid-cols-7 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="grid grid-cols-12 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
                 >
-                  <TableCell className="text-left font-medium col-span-2">
+                  <TableCell className="text-left font-medium col-span-3">
                     {token.symbolName}
                   </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className="text-right font-mono col-span-3">
                     ${formatPrice(token.last)}
                   </TableCell>
                   <TableCell
-                    className={`text-right font-mono ${
+                    className={`text-right font-mono col-span-2 ${
                       parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"
                     }`}
                   >
                     {formatChange(token.changeRate)}
                   </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className="text-right font-mono col-span-2">
                     {formatVolume(token.volValue)}
                   </TableCell>
-                   <TableCell className="text-center col-span-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 mr-1"
-                      onClick={() => handleInfoClick(token)}
-                    >
-                      <FileText className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8 mr-1"
-                      onClick={() => handleBuyClick(token)}
-                    >
-                      <ShoppingCart className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className={`h-8 w-8 ${watchedSymbols.has(token.symbol) ? 'text-primary' : ''}`}
-                      onClick={() => toggleWatchlist(token.symbol, token.symbolName, 'spot', parseFloat(token.high), parseFloat(token.low), parseFloat(token.changeRate))}
-                    >
-                        <Eye className="h-4 w-4" />
-                    </Button>
+                   <TableCell className="text-right col-span-2">
+                    <div className="flex items-center justify-end gap-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleInfoClick(token)}
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleBuyClick(token)}
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 ${watchedSymbols.has(token.symbol) ? 'text-primary' : ''}`}
+                        onClick={() => toggleWatchlist(token.symbol, token.symbolName, 'spot')}
+                      >
+                          <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
