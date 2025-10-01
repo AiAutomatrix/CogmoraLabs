@@ -128,18 +128,20 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="grid grid-cols-12 gap-x-2 sm:gap-x-4 px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="text-left font-semibold text-muted-foreground col-span-3">Pair</div>
-      <div className="text-right font-semibold text-muted-foreground col-span-3 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
-        Price (USD) {getSortIcon("last")}
+    <div className="flex justify-between px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+      <div className="text-left font-semibold text-muted-foreground">Pair</div>
+      <div className="flex items-center justify-end gap-x-4 sm:gap-x-6">
+        <div className="text-right font-semibold text-muted-foreground w-24 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
+          Price (USD) {getSortIcon("last")}
+        </div>
+        <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>
+          24h % {getSortIcon("changeRate")}
+        </div>
+        <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
+          Volume {getSortIcon("volValue")}
+        </div>
+        <div className="text-right font-semibold text-muted-foreground w-28 text-center">Actions</div>
       </div>
-      <div className="text-right font-semibold text-muted-foreground col-span-2 cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>
-        24h % {getSortIcon("changeRate")}
-      </div>
-      <div className="text-right font-semibold text-muted-foreground col-span-2 cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
-        Volume {getSortIcon("volValue")}
-      </div>
-      <div className="text-right font-semibold text-muted-foreground col-span-2">Actions</div>
     </div>
   );
 
@@ -196,26 +198,22 @@ export default function AllTickersScreener() {
               {sortedMemo.map((token) => (
                 <TableRow
                   key={token.symbol}
-                  className="grid grid-cols-12 gap-x-2 sm:gap-x-4 px-4 py-2 text-xs sm:text-sm"
+                  className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm"
                 >
-                  <TableCell className="text-left font-medium col-span-3">
+                  <TableCell className="text-left font-medium p-0">
                     {token.symbolName}
                   </TableCell>
-                  <TableCell className="text-right font-mono col-span-3">
-                    ${formatPrice(token.last)}
-                  </TableCell>
-                  <TableCell
-                    className={`text-right font-mono col-span-2 ${
-                      parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"
-                    }`}
-                  >
-                    {formatChange(token.changeRate)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono col-span-2">
-                    {formatVolume(token.volValue)}
-                  </TableCell>
-                   <TableCell className="text-right col-span-2">
-                    <div className="flex items-center justify-end gap-0">
+                  <TableCell className="flex items-center justify-end gap-x-4 sm:gap-x-6 p-0">
+                     <div className="text-right font-mono w-24">
+                        ${formatPrice(token.last)}
+                     </div>
+                     <div className={`text-right font-mono w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                        {formatChange(token.changeRate)}
+                     </div>
+                     <div className="text-right font-mono w-16">
+                        {formatVolume(token.volValue)}
+                     </div>
+                     <div className="w-28 flex items-center justify-center gap-0">
                       <Button
                         variant="ghost"
                         size="icon"
