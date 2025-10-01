@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   CardHeader,
   CardDescription,
@@ -161,38 +161,40 @@ export default function AllFuturesScreener() {
         <div className="text-center">Actions</div>
       </div>
 
-
       <ScrollArea className="flex-grow rounded-md">
-        {(httpLoading && !contracts.length) ? (
-          skeletonRows
-        ) : (
-          <div role="table" className="w-full caption-bottom">
-            <div role="rowgroup">
-              {sortedMemo.map((contract) => (
+        <div role="table" className="w-full caption-bottom">
+          <div role="rowgroup">
+            { (httpLoading && !contracts.length) ? (
+              skeletonRows
+            ) : (
+              sortedMemo.map((contract) => (
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
-                  <div className="lg:hidden flex flex-col flex-grow">
-                      <div className="flex justify-between items-center w-full">
-                          <span className="font-medium">{contract.symbol.replace(/M$/, "")}</span>
-                          <div className="text-right font-mono">
-                              <div className="text-foreground">${formatPrice(contract.markPrice)}</div>
-                              <div className={`${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                          </div>
-                      </div>
-                      <div className="flex justify-start items-center gap-4 font-mono text-center mt-2 w-full">
-                          <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground">Vol</span>
-                              <span className="text-foreground">{formatVolume(contract.volumeOf24h)}</span>
-                          </div>
-                          <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground">OI</span>
-                              <span className="text-foreground">{formatVolume(contract.openInterest)}</span>
-                          </div>
-                          <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground">Lev</span>
-                              <span className="text-foreground">{contract.maxLeverage}x</span>
-                          </div>
-                      </div>
+                  {/* Mobile View Structure */}
+                  <div className="flex lg:hidden w-full items-center justify-start gap-4">
+                    <div className="flex flex-col flex-grow">
+                        <div className="flex justify-between items-center w-full">
+                            <span className="font-medium text-foreground">{contract.symbol.replace(/M$/, "")}</span>
+                            <div className="text-right font-mono">
+                                <div className="text-foreground">${formatPrice(contract.markPrice)}</div>
+                                <div className={`${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-start gap-4 mt-2 w-full">
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs text-muted-foreground">Vol</span>
+                                <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs text-muted-foreground">OI</span>
+                                <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
+                            </div>
+                            <div className="flex flex-col items-center">
+                                <span className="text-xs text-muted-foreground">Lev</span>
+                                <span className="font-mono text-foreground">{contract.maxLeverage}x</span>
+                            </div>
+                        </div>
+                    </div>
                   </div>
                       
                   {/* === DESKTOP VIEW === */}
@@ -212,10 +214,10 @@ export default function AllFuturesScreener() {
                       </Button>
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
-        )}
+        </div>
       </ScrollArea>
     </div>
      {selectedContract && (
@@ -228,3 +230,4 @@ export default function AllFuturesScreener() {
     </>
   );
 }
+
