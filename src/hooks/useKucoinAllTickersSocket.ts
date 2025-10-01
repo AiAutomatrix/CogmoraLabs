@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -33,7 +34,7 @@ export function useKucoinTickers() {
       }
       setLoading(false);
 
-      const res = await fetch('/api/kucoin-ws-token');
+      const res = await fetch('/api/kucoin-ws-token', { method: 'POST' });
       const tokenData: KucoinTokenResponse = await res.json();
       if (tokenData.code !== "200000") throw new Error('Failed to fetch KuCoin Spot WebSocket token');
 

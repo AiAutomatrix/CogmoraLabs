@@ -23,10 +23,18 @@ import type {
   SpotSnapshotData,
   KucoinSnapshotDataWrapper,
   KucoinFuturesContract,
+  AutomationConfig,
+  KucoinTicker,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
 const INITIAL_BALANCE = 100000;
+const INITIAL_AUTOMATION_CONFIG: AutomationConfig = {
+  rules: [{ id: 'default', source: 'spot', criteria: 'top_volume', count: 10 }],
+  updateMode: 'one-time',
+  refreshInterval: 900000, // 15 minutes
+  clearExisting: true,
+};
 
 interface PaperTradingContextType {
   balance: number;
@@ -36,6 +44,7 @@ interface PaperTradingContextType {
   priceAlerts: Record<string, PriceAlert>;
   tradeTriggers: TradeTrigger[];
   futuresContracts: KucoinFuturesContract[];
+  allSpotTickers: KucoinTicker[];
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
@@ -77,6 +86,9 @@ interface PaperTradingContextType {
   clearHistory: () => void;
   spotWsStatus: string;
   futuresWsStatus: string;
+  automationConfig: AutomationConfig;
+  setAutomationConfig: (config: AutomationConfig) => void;
+  applyWatchlistAutomation: (config: AutomationConfig) => void;
 }
 
 const PaperTradingContext = createContext<PaperTradingContextType | undefined>(
@@ -95,6 +107,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
+  const [allSpotTickers, setAllSpotTickers] = useState<KucoinTicker[]>([]);
+  const [automationConfig, setAutomationConfig] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
+
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
@@ -108,6 +123,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const notifiedAlerts = useRef(new Set());
   const prevWatchlistRef = useRef<WatchlistItem[]>([]);
+  const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 
   // Load from local storage on mount
@@ -119,6 +135,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const savedWatchlist = localStorage.getItem("paperTrading_watchlist");
       const savedAlerts = localStorage.getItem("paperTrading_priceAlerts");
       const savedTriggers = localStorage.getItem("paperTrading_tradeTriggers");
+      const savedAutomation = localStorage.getItem("paperTrading_automationConfig");
 
       if (savedBalance) setBalance(JSON.parse(savedBalance));
       if (savedPositions) setOpenPositions(JSON.parse(savedPositions));
@@ -130,6 +147,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       if (savedAlerts) setPriceAlerts(JSON.parse(savedAlerts));
       if (savedTriggers) setTradeTriggers(JSON.parse(savedTriggers));
+      if (savedAutomation) setAutomationConfig(JSON.parse(savedAutomation));
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -139,23 +157,37 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setWatchlist([]);
       setPriceAlerts({});
       setTradeTriggers([]);
+      setAutomationConfig(INITIAL_AUTOMATION_CONFIG);
     }
 
-    // Fetch futures contracts list once
-    const fetchFuturesContracts = async () => {
+    // Fetch futures contracts list and all spot tickers once
+    const fetchInitialData = async () => {
         try {
-            const response = await fetch("/api/kucoin-futures-tickers");
-            if (!response.ok) throw new Error("Failed to fetch futures contracts");
-            const data = await response.json();
-            if (data && data.code === "200000" && data.data) {
-                setFuturesContracts(data.data);
+            const [futuresResponse, spotResponse] = await Promise.all([
+                fetch("/api/kucoin-futures-tickers"),
+                fetch("/api/kucoin-tickers")
+            ]);
+            
+            if (futuresResponse.ok) {
+                const futuresData = await futuresResponse.json();
+                if (futuresData && futuresData.code === "200000" && futuresData.data) {
+                    setFuturesContracts(futuresData.data);
+                }
+            }
+
+            if (spotResponse.ok) {
+                const spotData = await spotResponse.json();
+                 if (spotData && spotData.code === "200000" && spotData.data && spotData.data.ticker) {
+                    const usdtTickers = spotData.data.ticker.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+                    setAllSpotTickers(usdtTickers);
+                }
             }
         } catch (error) {
-            console.error("Error fetching futures contracts list:", error);
+            console.error("Error fetching initial screener data:", error);
         }
     };
 
-    fetchFuturesContracts();
+    fetchInitialData();
     setIsLoaded(true);
   }, []);
 
@@ -168,8 +200,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.setItem("paperTrading_watchlist", JSON.stringify(watchlist));
       localStorage.setItem("paperTrading_priceAlerts", JSON.stringify(priceAlerts));
       localStorage.setItem("paperTrading_tradeTriggers", JSON.stringify(tradeTriggers));
+      localStorage.setItem("paperTrading_automationConfig", JSON.stringify(automationConfig));
     }
-  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers]);
+  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig]);
   
     // Effect for showing price alert toasts
   useEffect(() => {
@@ -208,6 +241,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       prevWatchlistRef.current = watchlist;
   }, [watchlist, isLoaded, toast]);
+  
+  // Effect for Auto-Refresh Automation
+  useEffect(() => {
+    if (automationIntervalRef.current) {
+        clearInterval(automationIntervalRef.current);
+    }
+    if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
+        automationIntervalRef.current = setInterval(() => {
+            applyWatchlistAutomation(automationConfig);
+        }, automationConfig.refreshInterval);
+    }
+    return () => {
+        if (automationIntervalRef.current) {
+            clearInterval(automationIntervalRef.current);
+        }
+    };
+  }, [automationConfig]);
 
 
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
@@ -574,7 +624,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   
-  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData>) => {
+  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
     let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
 
     if (isSpot) {
@@ -584,7 +634,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       low = spotData.low ?? undefined;
       priceChgPct = spotData.changeRate ?? undefined;
     } else { // Futures
-      const futuresData = data as any; // Using any as the futures data structure is different
+      const futuresData = data as any; 
       newPrice = parseFloat(futuresData.lastPrice || '0');
       high = futuresData.highPrice ? parseFloat(futuresData.highPrice) : undefined;
       low = futuresData.lowPrice ? parseFloat(futuresData.lowPrice) : undefined;
@@ -824,7 +874,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const newItem: WatchlistItem = { symbol, symbolName, type, currentPrice: 0, high, low, priceChgPct };
             
             if (type === 'spot' && futuresContracts.length > 0) {
-                // Correctly extract the base currency (e.g., "LIGHT" from "LIGHT-USDT")
                 const baseCurrency = symbolName.split('-')[0]; 
                 const futuresEquivalent = futuresContracts.find(c => c.baseCurrency === baseCurrency);
                 if (futuresEquivalent) {
@@ -892,6 +941,55 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
     toast({ title: 'Trade Trigger Removed' });
   }, [toast]);
+  
+  const applyWatchlistAutomation = useCallback((config: AutomationConfig) => {
+    let finalItems: WatchlistItem[] = [];
+    const addedSymbols = new Set<string>();
+
+    config.rules.forEach(rule => {
+        let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
+        let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
+
+        if (rule.source === 'spot') {
+            sourceData = allSpotTickers;
+            sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+        } else {
+            sourceData = futuresContracts;
+            sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+        }
+
+        const sorted = [...sourceData].sort((a, b) => {
+            const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
+            const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+            return valB - valA;
+        });
+
+        let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
+        if (rule.criteria.startsWith('top')) {
+            selected = sorted.slice(0, rule.count);
+        } else { // bottom
+            selected = sorted.slice(-rule.count);
+        }
+
+        selected.forEach(item => {
+            if (!addedSymbols.has(item.symbol)) {
+                addedSymbols.add(item.symbol);
+                const isSpot = rule.source === 'spot';
+                finalItems.push({
+                    symbol: item.symbol,
+                    symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
+                    type: rule.source,
+                    currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
+                    priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                });
+            }
+        });
+    });
+
+    setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
+    setAutomationConfig(config);
+    toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+  }, [allSpotTickers, futuresContracts, toast]);
 
 
   return (
@@ -904,6 +1002,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         priceAlerts,
         tradeTriggers,
         futuresContracts,
+        allSpotTickers,
         toggleWatchlist,
         addPriceAlert,
         removePriceAlert,
@@ -918,6 +1017,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         clearHistory,
         spotWsStatus,
         futuresWsStatus,
+        automationConfig,
+        setAutomationConfig,
+        applyWatchlistAutomation,
       }}
     >
       {children}
@@ -932,10 +1034,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-
-    
-
-
-
-

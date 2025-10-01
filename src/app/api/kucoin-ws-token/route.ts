@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 // This is a POST request as per KuCoin documentation
 const KUCOIN_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 
-export async function GET() {
+export async function POST() {
   try {
     const response = await fetch(KUCOIN_TOKEN_ENDPOINT, {
       method: 'POST',
@@ -29,5 +29,3 @@ export async function GET() {
     return new NextResponse(JSON.stringify({ error: 'An unknown error occurred' }), { status: 500 });
   }
 }
-
-    

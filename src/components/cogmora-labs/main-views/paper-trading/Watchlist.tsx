@@ -23,13 +23,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText } from 'lucide-react';
+import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText, Wand2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { WatchlistTradeTriggerPopup } from './WatchlistTradeTriggerPopup';
 import { SpotSnapshotPopup } from './SpotSnapshotPopup';
 import type { SpotSnapshotData } from '@/types';
+import { AutomateWatchlistPopup } from './AutomateWatchlistPopup';
 
 
 export default function Watchlist() {
@@ -51,6 +52,7 @@ export default function Watchlist() {
   const [selectedSnapshotData, setSelectedSnapshotData] = useState<{item: WatchlistItem, data: SpotSnapshotData} | null>(null);
 
   const [openAlertPopover, setOpenAlertPopover] = useState<string | null>(null);
+  const [isAutomatePopupOpen, setIsAutomatePopupOpen] = useState(false);
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
@@ -107,11 +109,17 @@ export default function Watchlist() {
   return (
     <>
     <Card>
-      <CardHeader>
-        <CardTitle>My Watchlist</CardTitle>
-        <CardDescription>
-          Track symbols, set price alerts, and create trade triggers.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>My Watchlist</CardTitle>
+            <CardDescription>
+              Track symbols, set price alerts, and create trade triggers.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
+            <Wand2 className="mr-2 h-4 w-4" />
+            Automate
+          </Button>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -225,6 +233,7 @@ export default function Watchlist() {
         </div>
       </CardContent>
     </Card>
+    <AutomateWatchlistPopup isOpen={isAutomatePopupOpen} onOpenChange={setIsAutomatePopupOpen} />
      {selectedWatchlistItem && (
         <WatchlistTradeTriggerPopup
           isOpen={isTradePopupOpen}

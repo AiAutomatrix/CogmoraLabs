@@ -1,5 +1,6 @@
 
 
+
 import { z } from 'zod';
 
 export const PaperTradeSchema = z.object({
@@ -134,6 +135,24 @@ export const TradeTriggerSchema = z.object({
 });
 export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 
+// Automation Feature Types
+export const AutomationRuleSchema = z.object({
+    id: z.string(),
+    source: z.enum(['spot', 'futures']),
+    criteria: z.enum(['top_volume', 'bottom_volume', 'top_change', 'bottom_change']),
+    count: z.number().min(1),
+});
+export type AutomationRule = z.infer<typeof AutomationRuleSchema>;
+
+export const AutomationConfigSchema = z.object({
+    rules: z.array(AutomationRuleSchema),
+    updateMode: z.enum(['one-time', 'auto-refresh']),
+    refreshInterval: z.number(), // in milliseconds
+    clearExisting: z.boolean(),
+});
+export type AutomationConfig = z.infer<typeof AutomationConfigSchema>;
+
+
 // Original TradeSchema, keeping if used elsewhere, but papertrade is more specific
 export const TradeSchema = z.object({
   id: z.string(),
@@ -225,7 +244,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
+export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -440,6 +459,7 @@ export type FuturesSnapshotData = {
     ts: number;
     turnover: number;
     volume: number;
+    openInterest?: string;
 };
 
 export type KucoinFuturesSnapshotMessage = {
