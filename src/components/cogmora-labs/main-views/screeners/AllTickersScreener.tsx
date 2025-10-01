@@ -129,8 +129,8 @@ export default function AllTickersScreener() {
 
   const tableHeaders = (
     <div className="flex justify-between items-center px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="flex items-center gap-x-2 sm:gap-x-6">
-        <div className="text-left font-semibold text-muted-foreground w-20 sm:w-28 cursor-pointer" onClick={() => requestSort("volValue")}>Pair</div>
+      <div className="flex items-center gap-x-2 sm:gap-x-4">
+        <div className="text-left font-semibold text-muted-foreground w-20 sm:w-24 cursor-pointer" onClick={() => requestSort("volValue")}>Pair</div>
         <div className="text-right font-semibold text-muted-foreground w-20 sm:w-24 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
           Price (USD) {getSortIcon("last")}
         </div>
@@ -200,8 +200,8 @@ export default function AllTickersScreener() {
                   key={token.symbol}
                   className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm"
                 >
-                  <div className="flex items-center gap-x-2 sm:gap-x-6">
-                    <TableCell className="text-left font-medium p-0 w-20 sm:w-28 truncate">
+                  <div style={{ display: 'contents' }}>
+                    <TableCell className="text-left font-medium p-0 w-20 sm:w-24 truncate">
                       {token.symbolName}
                     </TableCell>
                     <TableCell className="text-right font-mono p-0 w-20 sm:w-24">
@@ -252,3 +252,4 @@ export default function AllTickersScreener() {
     </>
   );
 }
+
