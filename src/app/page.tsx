@@ -5,7 +5,7 @@ import MainViews from '@/components/cogmora-labs/main-views/MainViews';
 import MiniWidgets from '@/components/cogmora-labs/mini-widgets/MiniWidgets';
 import { PaperTradingProvider } from '@/context/PaperTradingContext';
 import React, { useState } from 'react';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -70,9 +70,11 @@ export default function HomePage() {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-64 p-0">
-                    <div className="p-4 border-b">
+                    <SheetHeader className="p-4 border-b">
+                        <SheetTitle className="sr-only">Cogmora Labs</SheetTitle>
+                        <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
                         <h2 className="text-lg font-semibold">Cogmora Labs</h2>
-                    </div>
+                    </SheetHeader>
                     <div className="overflow-y-auto p-4">
                         <Accordion type="single" collapsible defaultValue="main">
                             <AccordionItem value="main">
