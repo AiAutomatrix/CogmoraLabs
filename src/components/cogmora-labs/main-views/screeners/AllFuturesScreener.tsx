@@ -22,7 +22,7 @@ import { usePaperTrading } from "@/context/PaperTradingContext";
 
 
 export default function AllFuturesScreener() {
-  type SortKey = "markPrice" | "priceChgPct" | "openInterest" | "volumeOf24h";
+  type SortKey = "markPrice" | "priceChgPct" | "openInterest" | "volumeOf24h" | "maxLeverage";
 
   const { contracts, loading: httpLoading } = useKucoinFuturesContracts();
   const { liveData, loading: wsLoading } = useKucoinFuturesSocket(contracts.map(c => c.symbol));
@@ -149,25 +149,32 @@ export default function AllFuturesScreener() {
         </div>
       </CardHeader>
       
-       {/* Mobile Header */}
+      {/* Mobile Header */}
       <div role="heading" className="flex lg:hidden justify-between items-center px-4 py-2 bg-card border-b border-border text-xs font-semibold text-muted-foreground">
-        <div className="flex items-center gap-x-2 cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
-        <div className="flex items-center justify-end gap-x-3 text-right">
-          <div className="cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
-          <div className="cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h%{getSortIcon("priceChgPct")}</div>
-          <div className="cursor-pointer" onClick={() => requestSort("openInterest")}>OI{getSortIcon("openInterest")}</div>
+        <div className="flex items-center gap-x-2 cursor-pointer w-[35%] " onClick={() => requestSort("volumeOf24h")}>
+          <span>Pair</span>
+          {getSortIcon("volumeOf24h")}
+        </div>
+        <div className="flex items-center justify-end gap-x-3 text-right w-[65%]">
+          <div className="cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h%</div>
+          <div className="cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Vol</div>
+          <div className="cursor-pointer" onClick={() => requestSort("openInterest")}>OI</div>
+          <div className="cursor-pointer" onClick={() => requestSort("maxLeverage")}>Lev</div>
           <div className="text-center w-16">Actions</div>
         </div>
       </div>
-      
+
       {/* Desktop Header */}
-      <div role="heading" className="hidden lg:grid grid-cols-6 items-center px-4 py-2 bg-card border-b border-border text-sm font-semibold text-muted-foreground">
+      <div role="heading" className="hidden lg:grid grid-cols-7 items-center px-4 py-2 bg-card border-b border-border text-sm font-semibold text-muted-foreground">
           <div className="col-span-2 cursor-pointer flex items-center" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
           <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
           <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
+          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
           <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
-          <div className="text-center">Actions</div>
+          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
+          <div className="text-center col-start-8">Actions</div>
       </div>
+
 
       <ScrollArea className="flex-grow rounded-md">
         {(httpLoading && !contracts.length) ? (
@@ -176,16 +183,15 @@ export default function AllFuturesScreener() {
           <div role="table" className="w-full caption-bottom">
             <div role="rowgroup">
               {sortedMemo.map((contract) => (
-                <div
-                  key={contract.symbol}
-                  role="row"
-                  className="flex lg:grid lg:grid-cols-6 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50"
-                >
-                  {/* Mobile Layout */}
-                  <div className="lg:hidden flex flex-col w-full">
+                <div key={contract.symbol} role="row" className="flex lg:grid lg:grid-cols-8 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50">
+                  {/* === MOBILE VIEW === */}
+                  <div className="flex lg:hidden flex-col w-full">
                       <div className="flex justify-between items-center">
-                          <div role="cell" className="text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
-                           <div role="cell" className="flex items-center justify-center gap-0 p-0 w-16">
+                          <div role="cell" className="text-left font-medium p-0 w-[35%] truncate">
+                            {contract.symbol.replace(/M$/, "")}
+                            <div className="text-muted-foreground font-mono text-xs">${formatPrice(contract.markPrice)}</div>
+                          </div>
+                          <div role="cell" className="flex items-center justify-center gap-0 p-0 w-16">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                               <BarChartHorizontal className="h-4 w-4" />
                             </Button>
@@ -194,21 +200,21 @@ export default function AllFuturesScreener() {
                             </Button>
                           </div>
                       </div>
-                      <div className="flex justify-between items-center text-muted-foreground font-mono">
-                          <div className="flex gap-x-3">
-                              <div role="cell" className="text-right p-0">${formatPrice(contract.markPrice)}</div>
-                              <div role="cell" className={`text-right p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                              <div role="cell" className="text-right p-0">{formatVolume(contract.openInterest)}</div>
-                          </div>
-                          <div></div>
+                      <div className="flex justify-start items-center text-muted-foreground font-mono mt-1 gap-x-4">
+                          <div role="cell" className={`text-right p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                          <div role="cell" className="text-right p-0">{formatVolume(contract.volumeOf24h)}</div>
+                          <div role="cell" className="text-right p-0">{formatVolume(contract.openInterest)}</div>
+                          <div role="cell" className="text-right p-0">{contract.maxLeverage}x</div>
                       </div>
                   </div>
 
-                  {/* Desktop Layout */}
+                  {/* === DESKTOP VIEW === */}
                   <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate col-span-2">{contract.symbol.replace(/M$/, "")}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{contract.maxLeverage}x</div>
                   
                   <div role="cell" className="hidden lg:flex items-center justify-center gap-0 p-0">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
@@ -235,5 +241,3 @@ export default function AllFuturesScreener() {
     </>
   );
 }
-
-    
