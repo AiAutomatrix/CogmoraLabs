@@ -1,7 +1,8 @@
 
+
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   const { balance, buy, futuresBuy, futuresSell, addTradeTrigger } = usePaperTrading();
   
   const [tradeType, setTradeType] = useState<'instant' | 'trigger'>('instant');
+  const [marketType, setMarketType] = useState<'spot' | 'futures'>('spot');
   
   // States for instant trade
   const [allocation, setAllocation] = useState('100'); // For both spot and futures collateral
@@ -44,10 +46,20 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
   const [cancelOthers, setCancelOthers] = useState(false);
+  
+  useEffect(() => {
+    if (item) {
+        // Reset market type to spot whenever a new item is selected
+        setMarketType('spot');
+        // Set trigger action based on the default market type
+        setTriggerAction('buy');
+    }
+  }, [item]);
+
 
   if (!item) return null;
 
-  const maxLeverage = item.type === 'futures' ? 100 : 1; // Assuming max 100 for futures, can be dynamic later
+  const maxLeverage = 100; // Assuming max 100 for futures, can be dynamic later
 
   const handleInstantTrade = (side?: 'long' | 'short') => {
     const amountUSD = parseFloat(allocation);
@@ -58,7 +70,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
 
     if (item.type === 'spot') {
       buy(item.symbol, item.symbolName, amountUSD, item.currentPrice, sl, tp);
-    } else {
+    } else { // This is for items that are already futures type from the screener
       if (side === 'long') {
         futuresBuy(item.symbol, amountUSD, item.currentPrice, leverage[0], sl, tp);
       } else if (side === 'short') {
@@ -75,11 +87,14 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
     if (isNaN(price) || price <= 0 || isNaN(amount) || amount <= 0 || amount > balance) {
         return;
     }
+    
+    const finalSymbol = marketType === 'futures' && item.futuresSymbol ? item.futuresSymbol : item.symbol;
+    const finalSymbolName = marketType === 'futures' && item.futuresSymbol ? item.futuresSymbol.replace(/M$/, '') : item.symbolName;
 
     addTradeTrigger({
-        symbol: item.symbol,
-        symbolName: item.symbolName,
-        type: item.type,
+        symbol: finalSymbol,
+        symbolName: finalSymbolName,
+        type: marketType,
         condition: triggerCondition,
         targetPrice: price,
         action: triggerAction,
@@ -93,9 +108,11 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
   };
 
   const amountUSD = parseFloat(allocation);
-  const positionValue = amountUSD * leverage[0];
+  const positionValue = amountUSD * (marketType === 'futures' ? leverage[0] : 1);
   const tokenAmount = !isNaN(positionValue) && item.currentPrice > 0 ? (positionValue / item.currentPrice).toFixed(4) : '0.00';
-
+  
+  const showFuturesOption = item.type === 'futures' || (item.type === 'spot' && item.hasFutures);
+  const isFuturesMode = (item.type === 'futures' && tradeType === 'instant') || (tradeType === 'trigger' && marketType === 'futures');
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -109,7 +126,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
         
         <Tabs value={tradeType} onValueChange={(val) => setTradeType(val as 'instant' | 'trigger')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="instant">Instant Order</TabsTrigger>
+                <TabsTrigger value="instant" disabled={item.type === 'spot' && item.hasFutures}>Instant Order</TabsTrigger>
                 <TabsTrigger value="trigger">Trade Trigger</TabsTrigger>
             </TabsList>
             <TabsContent value="instant" className="space-y-4 pt-4">
@@ -141,7 +158,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
                     <h3 className="font-semibold text-base">Trade Summary</h3>
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Total Position Value:</span>
-                        <span>${positionValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                        <span>${(amountUSD * (item.type === 'futures' ? leverage[0] : 1)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     </div>
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Quantity (Approx):</span>
@@ -175,10 +192,24 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
                         Create an order that will be executed automatically when your target price is met.
                     </AlertDescription>
                 </Alert>
+
+                {showFuturesOption && (
+                    <div className="space-y-2">
+                        <Label>Market Type</Label>
+                        <RadioGroup value={marketType} onValueChange={(val: any) => {
+                            setMarketType(val);
+                            setTriggerAction(val === 'spot' ? 'buy' : 'long');
+                        }}>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="spot" id="market-spot" /><Label htmlFor="market-spot">Spot</Label></div>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="futures" id="market-futures" /><Label htmlFor="market-futures">Futures</Label></div>
+                        </RadioGroup>
+                    </div>
+                )}
+                
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label>Condition</Label>
-                         <RadioGroup defaultValue="below" onValueChange={(val: 'above' | 'below') => setTriggerCondition(val)}>
+                         <RadioGroup defaultValue="below" value={triggerCondition} onValueChange={(val: 'above' | 'below') => setTriggerCondition(val)}>
                             <div className="flex items-center space-x-2"><RadioGroupItem value="above" id="above-trigger" /><Label htmlFor="above-trigger">Price is Above</Label></div>
                             <div className="flex items-center space-x-2"><RadioGroupItem value="below" id="below-trigger" /><Label htmlFor="below-trigger">Price is Below</Label></div>
                         </RadioGroup>
@@ -197,7 +228,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
                  <div className="space-y-2">
                     <Label>Action to Trigger</Label>
                      <RadioGroup value={triggerAction} onValueChange={(val) => setTriggerAction(val as any)}>
-                        {item.type === 'spot' ? (
+                        {marketType === 'spot' ? (
                             <div className="flex items-center space-x-2"><RadioGroupItem value="buy" id="action-buy" /><Label htmlFor="action-buy">Buy (Spot)</Label></div>
                         ) : (
                             <>
@@ -210,7 +241,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
 
                 <div className="space-y-2">
                     <Label htmlFor="allocation-trigger">
-                         {item.type === 'spot' ? 'Allocation (USD)' : 'Collateral (USD)'}
+                         {marketType === 'spot' ? 'Allocation (USD)' : 'Collateral (USD)'}
                     </Label>
                     <Input
                         id="allocation-trigger"
@@ -221,7 +252,7 @@ export const WatchlistTradeTriggerPopup: React.FC<WatchlistTradeTriggerPopupProp
                     />
                 </div>
                 
-                 {item.type === 'futures' && (
+                 {isFuturesMode && (
                     <div className="space-y-3">
                         <Label htmlFor="leverage-trigger">Leverage: {leverage[0]}x</Label>
                         <Slider

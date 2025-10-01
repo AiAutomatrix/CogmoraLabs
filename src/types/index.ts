@@ -104,6 +104,8 @@ export const WatchlistItemSchema = z.object({
     snapshotData: SpotSnapshotDataSchema.optional(),
     baseCurrency: z.string().optional(),
     quoteCurrency: z.string().optional(),
+    hasFutures: z.boolean().optional(),
+    futuresSymbol: z.string().optional(),
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 
@@ -275,6 +277,66 @@ export const PairDataSchema = z.object({
   pairs: z.array(PairDetailSchema).optional().nullable(), // Made optional and nullable based on potential API responses
 });
 export type PairData = z.infer<typeof PairDataSchema>;
+
+export const KucoinFuturesContractSchema = z.object({
+    symbol: z.string(),
+    rootSymbol: z.string(),
+    type: z.string(),
+    firstOpenDate: z.number(),
+    expireDate: z.number().nullable(),
+    settleDate: z.number().nullable(),
+    baseCurrency: z.string(),
+    quoteCurrency: z.string(),
+    settleCurrency: z.string(),
+    maxOrderQty: z.number(),
+    maxPrice: z.number(),
+    lotSize: z.number(),
+    tickSize: z.number(),
+    indexPriceTickSize: z.number(),
+    multiplier: z.number(),
+    initialMargin: z.number(),
+    maintainMargin: z.number(),
+    maxRiskLimit: z.number(),
+    minRiskLimit: z.number(),
+    riskStep: z.number(),
+    makerFeeRate: z.number(),
+    takerFeeRate: z.number(),
+    takerFixFee: z.number(),
+    makerFixFee: z.number(),
+    settlementFee: z.number().nullable(),
+    isDeleverage: z.boolean(),
+    isQuanto: z.boolean(),
+    isInverse: z.boolean(),
+    markMethod: z.string(),
+    fairMethod: z.string(),
+    fundingBaseSymbol: z.string(),
+    fundingQuoteSymbol: z.string(),
+    fundingRateSymbol: z.string(),
+    indexSymbol: z.string(),
+    settlementSymbol: z.string(),
+    status: z.string(),
+    fundingFeeRate: z.number(),
+    predictedFundingFeeRate: z.number(),
+    openInterest: z.string(),
+    turnoverOf24h: z.number(),
+    volumeOf24h: z.number(),
+    markPrice: z.number(),
+    indexPrice: z.number(),
+    lastTradePrice: z.number(),
+    nextFundingRateTime: z.number(),
+    maxLeverage: z.number(),
+    sourceExchanges: z.array(z.string()),
+    premiumsSymbol1M: z.string(),
+    premiumsSymbol8H: z.string(),
+    fundingBaseSymbol1M: z.string(),
+    fundingQuoteSymbol1M: z.string(),
+    lowPrice: z.number(),
+    highPrice: z.number(),
+    priceChgPct: z.number(),
+    priceChg: z.number(),
+});
+export type KucoinFuturesContract = z.infer<typeof KucoinFuturesContractSchema>;
+
 
 // WebSocket types from websocket.ts are now here
 // KuCoin WebSocket Token Response Types
