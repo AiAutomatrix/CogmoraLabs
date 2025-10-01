@@ -45,18 +45,20 @@ export function useKucoinTickers() {
 
       ws.current.onopen = () => {
         setWsStatus('connected');
-        pingIntervalRef.current = setInterval(() => {
-          ws.current?.send(JSON.stringify({ id: Date.now().toString(), type: 'ping' }));
-        }, instanceServers[0].pingInterval / 2);
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            pingIntervalRef.current = setInterval(() => {
+                ws.current?.send(JSON.stringify({ id: Date.now().toString(), type: 'ping' }));
+            }, instanceServers[0].pingInterval / 2);
 
-        const topic = `/market/ticker:all`;
-        ws.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+            const topic = `/market/ticker:all`;
+            ws.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+        }
       };
 
       ws.current.onmessage = (event) => {
         const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
         if (message.type === 'message' && message.subject === 'trade.ticker' && message.topic === '/market/ticker:all') {
-            const updatedTickerData = message.data;
+            const updatedTickerData = message.data as KucoinTicker;
             
             setTickers(prevTickers => {
                 const newTickers = [...prevTickers];
