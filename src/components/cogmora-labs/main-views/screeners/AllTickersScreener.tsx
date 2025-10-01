@@ -129,19 +129,19 @@ export default function AllTickersScreener() {
 
   const tableHeaders = (
     <div className="flex justify-between items-center px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="flex items-center gap-x-4 sm:gap-x-6">
-        <div className="text-left font-semibold text-muted-foreground w-28">Pair</div>
-        <div className="text-right font-semibold text-muted-foreground w-24 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
+      <div className="flex items-center gap-x-2 sm:gap-x-6">
+        <div className="text-left font-semibold text-muted-foreground w-20 sm:w-28 cursor-pointer" onClick={() => requestSort("volValue")}>Pair</div>
+        <div className="text-right font-semibold text-muted-foreground w-20 sm:w-24 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
           Price (USD) {getSortIcon("last")}
         </div>
-        <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>
+        <div className="text-right font-semibold text-muted-foreground w-14 sm:w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>
           24h % {getSortIcon("changeRate")}
         </div>
-        <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
+        <div className="text-right font-semibold text-muted-foreground w-14 sm:w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
           Volume {getSortIcon("volValue")}
         </div>
       </div>
-      <div className="text-right font-semibold text-muted-foreground w-28 text-center">Actions</div>
+      <div className="text-right font-semibold text-muted-foreground w-24 sm:w-28 text-center">Actions</div>
     </div>
   );
 
@@ -200,21 +200,21 @@ export default function AllTickersScreener() {
                   key={token.symbol}
                   className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm"
                 >
-                  <div className="flex items-center gap-x-4 sm:gap-x-6">
-                    <TableCell className="text-left font-medium p-0 w-28 truncate">
+                  <div className="flex items-center gap-x-2 sm:gap-x-6">
+                    <TableCell className="text-left font-medium p-0 w-20 sm:w-28 truncate">
                       {token.symbolName}
                     </TableCell>
-                    <TableCell className="text-right font-mono p-0 w-24">
+                    <TableCell className="text-right font-mono p-0 w-20 sm:w-24">
                       ${formatPrice(token.last)}
                     </TableCell>
-                    <TableCell className={`text-right font-mono p-0 w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    <TableCell className={`text-right font-mono p-0 w-14 sm:w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
                       {formatChange(token.changeRate)}
                     </TableCell>
-                    <TableCell className="text-right font-mono p-0 w-16">
+                    <TableCell className="text-right font-mono p-0 w-14 sm:w-16">
                       {formatVolume(token.volValue)}
                     </TableCell>
                   </div>
-                  <TableCell className="w-28 flex items-center justify-center gap-0 p-0">
+                  <TableCell className="w-24 sm:w-28 flex items-center justify-center gap-0 p-0">
                     <Button
                       variant="ghost"
                       size="icon"
