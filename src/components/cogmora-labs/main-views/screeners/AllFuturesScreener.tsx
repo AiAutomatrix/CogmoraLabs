@@ -128,6 +128,12 @@ export default function AllFuturesScreener() {
     </div>
   );
 
+  const SortableMobileHeader: React.FC<{ sortKey: SortKey; label: string }> = ({ sortKey, label }) => (
+    <button onClick={() => requestSort(sortKey)} className="flex flex-col items-center focus:outline-none">
+      <span className="text-muted-foreground text-xs flex items-center">{label}{getSortIcon(sortKey)}</span>
+    </button>
+  );
+
   return (
     <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8 h-full flex flex-col">
@@ -171,26 +177,28 @@ export default function AllFuturesScreener() {
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="flex flex-grow items-center lg:hidden">
-                        <div className="flex w-24 flex-col text-left mr-2">
+                    <div className="flex flex-grow items-center justify-start lg:hidden">
+                        <div className="flex flex-col w-24 text-left mr-2">
                             <span className="font-medium text-foreground truncate">{contract.symbol.replace(/M$/, "")}</span>
-                            <span className="text-foreground font-mono">${formatPrice(contract.markPrice)}</span>
+                            <span className="font-mono text-foreground">${formatPrice(contract.markPrice)}</span>
                         </div>
                         <div className="flex flex-grow justify-around">
-                            <div className={`flex flex-col items-center ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                <span className="text-muted-foreground text-xs">24%</span>
-                                <span className="font-mono">{(contract.priceChgPct * 100).toFixed(2)}%</span>
+                            <div className="flex flex-col items-center">
+                                <SortableMobileHeader sortKey="priceChgPct" label="24%" />
+                                <span className={`font-mono text-foreground ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                    {(contract.priceChgPct * 100).toFixed(2)}%
+                                </span>
                             </div>
                             <div className="flex flex-col items-center">
-                                <span className="text-muted-foreground text-xs">OI</span>
+                                <SortableMobileHeader sortKey="openInterest" label="OI" />
                                 <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
                             </div>
                             <div className="flex flex-col items-center">
-                                <span className="text-muted-foreground text-xs">Vol</span>
+                                <SortableMobileHeader sortKey="volumeOf24h" label="Vol" />
                                 <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
                             </div>
                             <div className="flex flex-col items-center">
-                                <span className="text-muted-foreground text-xs">Lev</span>
+                                <SortableMobileHeader sortKey="maxLeverage" label="Lev" />
                                 <span className="font-mono text-foreground">{contract.maxLeverage}x</span>
                             </div>
                         </div>
@@ -229,3 +237,4 @@ export default function AllFuturesScreener() {
     </>
   );
 }
+
