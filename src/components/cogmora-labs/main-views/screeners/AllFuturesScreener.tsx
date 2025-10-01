@@ -171,36 +171,35 @@ export default function AllFuturesScreener() {
               {sortedMemo.map((contract) => (
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
-                  {/* === LEFT GROUP (PAIR + DATA) === */}
-                   <div className="flex-1 lg:contents">
-                      {/* Mobile View Structure */}
+                  <div className="lg:contents">
+                      {/* === MOBILE VIEW === */}
                       <div className="flex flex-col lg:hidden w-full">
                           <div className="flex justify-between items-center w-full">
                             <div role="cell" className="text-left font-medium p-0 truncate">
                               {contract.symbol.replace(/M$/, "")}
                             </div>
                             <div className="flex flex-col text-right font-mono">
-                                <span>${formatPrice(contract.markPrice)}</span>
+                                <span className="text-foreground">${formatPrice(contract.markPrice)}</span>
                                 <span className={`${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</span>
                             </div>
                           </div>
-                          <div className="flex justify-start items-center gap-4 text-foreground font-mono mt-2">
-                              <div className="flex flex-col text-left">
+                          <div className="flex justify-between items-center font-mono mt-2 text-center w-full max-w-xs">
+                              <div className="flex flex-col">
                                   <span className="text-xs text-muted-foreground">Vol</span>
                                   <span className="text-foreground">{formatVolume(contract.volumeOf24h)}</span>
                               </div>
-                              <div className="flex flex-col text-left">
+                              <div className="flex flex-col">
                                   <span className="text-xs text-muted-foreground">OI</span>
                                   <span className="text-foreground">{formatVolume(contract.openInterest)}</span>
                               </div>
-                              <div className="flex flex-col text-left">
+                              <div className="flex flex-col">
                                   <span className="text-xs text-muted-foreground">Lev</span>
                                   <span className="text-foreground">{contract.maxLeverage}x</span>
                               </div>
                           </div>
                       </div>
                       
-                      {/* Desktop View Structure */}
+                      {/* === DESKTOP VIEW === */}
                       <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
                       <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
                       <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
@@ -209,7 +208,6 @@ export default function AllFuturesScreener() {
                       <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{contract.maxLeverage}x</div>
                   </div>
 
-                  {/* === RIGHT GROUP (ACTIONS) === */}
                   <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0 lg:w-full">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                         <BarChartHorizontal className="h-4 w-4" />
@@ -235,4 +233,3 @@ export default function AllFuturesScreener() {
     </>
   );
 }
-
