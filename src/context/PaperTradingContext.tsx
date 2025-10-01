@@ -677,7 +677,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const connectToSpot = useCallback(
     (symbolsToSubscribe: string[]) => {
       setSpotWsStatus("fetching_token");
-      fetch("/api/kucoin-ws-token").then(res => res.json()).then((tokenData: KucoinTokenResponse) => {
+      fetch("/api/kucoin-ws-token", { method: 'POST' }).then(res => res.json()).then((tokenData: KucoinTokenResponse) => {
         if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
 
         const { token, instanceServers } = tokenData.data;
