@@ -121,24 +121,6 @@ export default function AllTickersScreener() {
     </div>
   );
 
-  const tableHeaders = (
-    <div className="flex justify-between items-center px-4 py-2 bg-card border-b border-border text-xs sm:text-sm sm:grid sm:grid-cols-5 sm:gap-x-4">
-      <div className="flex items-center gap-x-2 sm:col-span-3 sm:grid sm:grid-cols-3 sm:gap-x-4">
-        <div className="text-left font-semibold text-muted-foreground w-20 sm:w-auto cursor-pointer" onClick={() => requestSort("volValue")}>Pair</div>
-        <div className="text-right font-semibold text-muted-foreground w-16 sm:w-auto cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
-          Price
-        </div>
-        <div className="text-right font-semibold text-muted-foreground w-14 sm:w-auto cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>
-          24h %
-        </div>
-        <div className="text-right font-semibold text-muted-foreground w-14 sm:w-auto cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
-          Volume
-        </div>
-      </div>
-      <div className="text-right font-semibold text-muted-foreground w-24 sm:w-auto sm:col-span-2 text-center">Actions</div>
-    </div>
-  );
-
   const tradePopup = useMemo(() => {
     return selectedTickerForTrade && (
       <TradePopup
@@ -166,7 +148,7 @@ export default function AllTickersScreener() {
         <div>
           <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
           <CardDescription>
-            Real-time data feed from KuCoin for all available trading pairs. Click headers to sort.
+            Real-time data feed from KuCoin. Click headers to sort.
           </CardDescription>
         </div>
         <div className="relative">
@@ -181,35 +163,55 @@ export default function AllTickersScreener() {
         </div>
       </CardHeader>
 
-      {tableHeaders}
+      {/* Mobile Header */}
+      <div className="flex lg:hidden justify-between items-center px-4 py-2 bg-card border-b border-border text-xs">
+        <div className="flex items-center gap-x-2">
+            <div className="text-left font-semibold text-muted-foreground w-20 cursor-pointer" onClick={() => requestSort("volValue")}>Pair{getSortIcon("volValue")}</div>
+            <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer" onClick={() => requestSort("last")}>Price{getSortIcon("last")}</div>
+            <div className="text-right font-semibold text-muted-foreground w-14 cursor-pointer" onClick={() => requestSort("changeRate")}>24h%{getSortIcon("changeRate")}</div>
+            <div className="text-right font-semibold text-muted-foreground w-14 cursor-pointer" onClick={() => requestSort("volValue")}>Volume{getSortIcon("volValue")}</div>
+        </div>
+        <div className="text-center font-semibold text-muted-foreground w-24">Actions</div>
+      </div>
+      
+      {/* Desktop Header */}
+      <div className="hidden lg:grid grid-cols-5 gap-x-4 px-4 py-2 bg-card border-b border-border text-sm">
+        <div className="text-left font-semibold text-muted-foreground cursor-pointer flex items-center" onClick={() => requestSort("volValue")}>Pair{getSortIcon("volValue")}</div>
+        <div className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>Price{getSortIcon("last")}</div>
+        <div className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end" onClick={() => requestSort("changeRate")}>24h Change{getSortIcon("changeRate")}</div>
+        <div className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>Volume (24h){getSortIcon("volValue")}</div>
+        <div className="text-center font-semibold text-muted-foreground">Actions</div>
+      </div>
+
 
       <ScrollArea className="max-h-[350px] lg:max-h-[800px] overflow-auto rounded-md">
         {loading && !tickers.length ? (
           skeletonRows
         ) : (
-          <div role="table" className="w-full caption-bottom text-sm">
+          <div role="table" className="w-full caption-bottom">
             <div role="rowgroup">
               {sortedMemo.map((token) => (
                 <div
                   key={token.symbol}
                   role="row"
-                  className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted sm:grid sm:grid-cols-5 sm:gap-x-4"
+                  className="flex lg:grid lg:grid-cols-5 lg:gap-x-4 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex items-center gap-x-2 sm:col-span-3 sm:grid sm:grid-cols-3 sm:gap-x-4">
-                    <div role="cell" className="text-left font-medium p-0 w-20 sm:w-auto truncate">
-                      {token.symbolName}
-                    </div>
-                    <div role="cell" className="text-right font-mono p-0 w-16 sm:w-auto">
-                      ${formatPrice(token.last)}
-                    </div>
-                    <div role="cell" className={`text-right font-mono p-0 w-14 sm:w-auto ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
-                      {formatChange(token.changeRate)}
-                    </div>
-                    <div role="cell" className="text-right font-mono p-0 w-14 sm:w-auto">
-                      {formatVolume(token.volValue)}
-                    </div>
+                  {/* Mobile Layout Group (Flex) */}
+                  <div className="flex lg:hidden items-center gap-x-2">
+                      <div role="cell" className="text-left font-medium p-0 w-20 truncate">{token.symbolName}</div>
+                      <div role="cell" className="text-right font-mono p-0 w-16">${formatPrice(token.last)}</div>
+                      <div role="cell" className={`text-right font-mono p-0 w-14 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatChange(token.changeRate)}</div>
+                      <div role="cell" className="text-right font-mono p-0 w-14">{formatVolume(token.volValue)}</div>
                   </div>
-                  <div role="cell" className="w-24 sm:w-auto sm:col-span-2 flex items-center justify-center gap-0 p-0">
+
+                  {/* Desktop Layout Cells (Grid) */}
+                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">{token.symbolName}</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(token.last)}</div>
+                  <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatChange(token.changeRate)}</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(token.volValue)}</div>
+                  
+                  {/* Actions Column (Common) */}
+                  <div role="cell" className="flex items-center justify-center gap-0 p-0 w-24 lg:w-auto">
                     <Button
                       variant="ghost"
                       size="icon"
