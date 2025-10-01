@@ -71,6 +71,7 @@ export default function AllFuturesScreener() {
         const aValue = parseFloat(a[sortConfig.key] as string);
         const bValue = parseFloat(b[sortConfig.key] as string);
 
+        if (isNaN(aValue) || isNaN(bValue)) return 0;
         if (aValue < bValue) return sortConfig.direction === "ascending" ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === "ascending" ? 1 : -1;
         return 0;
@@ -149,29 +150,22 @@ export default function AllFuturesScreener() {
         </div>
       </CardHeader>
       
-      {/* Mobile Header */}
-      <div role="heading" className="flex lg:hidden justify-between items-center px-4 py-2 bg-card border-b border-border text-xs font-semibold text-muted-foreground">
-        <div className="cursor-pointer w-1/2" onClick={() => requestSort("volumeOf24h")}>
+      {/* Header */}
+       <div role="heading" className="flex lg:grid lg:grid-cols-12 items-center px-4 py-2 bg-card border-b border-border text-xs font-semibold text-muted-foreground">
+        {/* Mobile Header */}
+        <div className="flex-1 lg:hidden cursor-pointer" onClick={() => requestSort("volumeOf24h")}>
           <span>Pair</span>
           {getSortIcon("volumeOf24h")}
         </div>
-        <div className="flex items-center justify-end gap-x-3 text-right w-1/2">
-          {/* Action Header placeholder */}
-          <span className="w-16 text-center">Actions</span>
-        </div>
-      </div>
-
-      {/* Desktop Header */}
-      <div role="heading" className="hidden lg:flex justify-between items-center px-4 py-2 bg-card border-b border-border text-sm font-semibold text-muted-foreground">
-          <div className="flex items-center space-x-6">
-            <div className="w-32 cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
-            <div className="w-24 text-right cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
-            <div className="w-20 text-right cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
-            <div className="w-24 text-right cursor-pointer" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
-            <div className="w-24 text-right cursor-pointer" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
-            <div className="w-20 text-right cursor-pointer" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
-          </div>
-          <div className="w-24 text-center">Actions</div>
+        {/* Desktop Header */}
+        <div className="hidden lg:block lg:col-span-3 cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
+        <div className="hidden lg:block lg:col-span-2 text-right cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
+        <div className="hidden lg:block lg:col-span-1 text-right cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
+        <div className="hidden lg:block lg:col-span-2 text-right cursor-pointer" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
+        <div className="hidden lg:block lg:col-span-2 text-right cursor-pointer" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
+        <div className="hidden lg:block lg:col-span-1 text-right cursor-pointer" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
+        
+        <div className="w-24 lg:col-span-1 text-center">Actions</div>
       </div>
 
 
@@ -185,13 +179,13 @@ export default function AllFuturesScreener() {
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50">
                   
                   {/* === LEFT GROUP (PAIR + DATA) === */}
-                  <div className="flex items-center">
+                  <div className="flex-1 lg:grid lg:grid-cols-11 lg:items-center">
                     {/* Mobile View Structure */}
                     <div className="flex flex-col lg:hidden">
                         <div role="cell" className="text-left font-medium p-0 truncate">
                           {contract.symbol.replace(/M$/, "")}
                         </div>
-                        <div className="flex justify-start items-center text-muted-foreground font-mono mt-1 gap-x-2">
+                        <div className="flex justify-start items-center text-foreground font-mono mt-1 gap-x-2 flex-wrap">
                            <div className="text-xs text-foreground/80">${formatPrice(contract.markPrice)}</div>
                            <div role="cell" className={`p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
                            <div role="cell" className="p-0">Vol: {formatVolume(contract.volumeOf24h)}</div>
@@ -201,18 +195,16 @@ export default function AllFuturesScreener() {
                     </div>
                     
                     {/* Desktop View Structure */}
-                    <div className="hidden lg:flex items-center space-x-6">
-                        <div role="cell" className="w-32 text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
-                        <div role="cell" className="w-24 text-right font-mono p-0">${formatPrice(contract.markPrice)}</div>
-                        <div role="cell" className={`w-20 text-right font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                        <div role="cell" className="w-24 text-right font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
-                        <div role="cell" className="w-24 text-right font-mono p-0">{formatVolume(contract.openInterest)}</div>
-                        <div role="cell" className="w-20 text-right font-mono p-0">{contract.maxLeverage}x</div>
-                    </div>
+                    <div role="cell" className="hidden lg:block lg:col-span-3 text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
+                    <div role="cell" className="hidden lg:block lg:col-span-2 text-right font-mono p-0">${formatPrice(contract.markPrice)}</div>
+                    <div role="cell" className={`hidden lg:block lg:col-span-1 text-right font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                    <div role="cell" className="hidden lg:block lg:col-span-2 text-right font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
+                    <div role="cell" className="hidden lg:block lg:col-span-2 text-right font-mono p-0">{formatVolume(contract.openInterest)}</div>
+                    <div role="cell" className="hidden lg:block lg:col-span-1 text-right font-mono p-0">{contract.maxLeverage}x</div>
                   </div>
 
                   {/* === RIGHT GROUP (ACTIONS) === */}
-                  <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0">
+                  <div role="cell" className="w-24 lg:col-span-1 flex items-center justify-center gap-0 p-0 flex-shrink-0">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                         <BarChartHorizontal className="h-4 w-4" />
                       </Button>
