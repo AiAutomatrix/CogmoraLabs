@@ -99,7 +99,9 @@ export default function Watchlist() {
 
   const formatChange = (changeRate: number | undefined) => {
     if (changeRate === undefined) return "N/A";
-    return `${changeRate >= 0 ? "+" : ""}${(changeRate * 100).toFixed(2)}%`;
+    const isPositive = changeRate >= 0;
+    const colorClass = isPositive ? "text-green-500" : "text-red-500";
+    return <span className={colorClass}>{`${isPositive ? "+" : ""}${(changeRate * 100).toFixed(2)}%`}</span>;
   };
 
   return (
@@ -117,9 +119,9 @@ export default function Watchlist() {
             <TableHeader>
               <TableRow>
                 <TableHead className="px-2 py-2">Symbol</TableHead>
-                <TableHead className="px-2 py-2">Type</TableHead>
+                <TableHead className="px-2 py-2 hidden sm:table-cell">Type</TableHead>
                 <TableHead className="text-right px-2 py-2">Current Price</TableHead>
-                <TableHead className="text-right hidden sm:table-cell px-2 py-2">24h Change</TableHead>
+                <TableHead className="text-right px-2 py-2">24h Change</TableHead>
                 <TableHead className="text-right px-2 py-2">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -131,12 +133,10 @@ export default function Watchlist() {
                   return (
                     <TableRow key={item.symbol}>
                       <TableCell className="font-medium px-2 py-2">{item.symbolName}</TableCell>
-                      <TableCell className="px-2 py-2"><Badge variant="secondary">{item.type}</Badge></TableCell>
+                      <TableCell className="px-2 py-2 hidden sm:table-cell"><Badge variant="secondary">{item.type}</Badge></TableCell>
                       <TableCell className="text-right px-2 py-2">{formatPrice(item.currentPrice)}</TableCell>
                       <TableCell
-                        className={`text-right font-mono hidden sm:table-cell px-2 py-2 ${
-                          item.priceChgPct === undefined ? '' : (item.priceChgPct >= 0 ? "text-green-500" : "text-red-500")
-                        }`}
+                        className={`text-right font-mono px-2 py-2`}
                       >
                         {formatChange(item.priceChgPct)}
                       </TableCell>
