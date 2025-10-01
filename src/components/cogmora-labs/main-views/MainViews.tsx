@@ -1,10 +1,10 @@
 
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import DexScreenerContent from './screeners/DexScreenerContent';
 import ThreeChartAnalysisPanel from './analysis/ThreeChartAnalysisPanel';
@@ -18,16 +18,30 @@ import AllFuturesScreener from './screeners/AllFuturesScreener';
 import PaperTradingDashboard from './paper-trading/PaperTradingDashboard';
 
 interface MainViewsProps {
+  activeView: string;
+  setActiveView: (view: string) => void;
   currentSymbol: string;
   selectedCryptoScreener: string;
   setSelectedCryptoScreener: (screener: string) => void;
+  selectedChartLayout: number;
+  setSelectedChartLayout: (layout: number) => void;
+  selectedHeatmapView: string;
+  setSelectedHeatmapView: (view: string) => void;
 }
 
-const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, setSelectedCryptoScreener }) => {
-  const BASE_CLASS = "w-full overflow-hidden"; // Keep overflow-hidden for horizontal scroll if needed
+const MainViews: FC<MainViewsProps> = ({ 
+  activeView,
+  setActiveView,
+  currentSymbol, 
+  selectedCryptoScreener, 
+  setSelectedCryptoScreener,
+  selectedChartLayout,
+  setSelectedChartLayout,
+  selectedHeatmapView,
+  setSelectedHeatmapView
+}) => {
+  const BASE_CLASS = "w-full overflow-hidden";
 
-  const [activeTab, setActiveTab] = useState("paper_trading");
-  const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const heatmapViewOptions = [
     { value: 'crypto_coins', label: 'Crypto Coins Heatmap' },
     { value: 'stock_market', label: 'Stock Market Heatmap' },
@@ -36,7 +50,6 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     { value: 'forex_heatmap', label: 'Forex Heatmap' },
   ];
 
-  const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const chartLayoutOptions = [
     { value: 1, label: '1 Chart' },
     { value: 2, label: '2 Charts' },
@@ -52,10 +65,10 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
   ], [currentSymbol]);
 
   const cryptoScreenerOptions = [
- { value: 'all_kucoin', label: 'Kucoin Spot' },
- { value: 'kucoin_futures', label: 'Kucoin Futures' },
+    { value: 'all_kucoin', label: 'Kucoin Spot' },
+    { value: 'kucoin_futures', label: 'Kucoin Futures' },
     { value: 'tradingview_crypto', label: 'TradingView' },
- ];
+  ];
 
   const tvWidgetBaseStyle = useMemo(() => `
     html, body { width:100%; height:100%; margin:0; padding:0; background-color:#222; box-sizing:border-box; overflow:hidden; }
@@ -65,9 +78,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     ::-webkit-scrollbar-track { background:#2d3748; border-radius:12px; }
     ::-webkit-scrollbar-thumb { background:#4a5568; border-radius:12px; border:3px solid #2d3748; }
     ::-webkit-scrollbar-thumb:hover { background:#718096; }
-    .tradingview-widget-copyright { position:absolute; bottom:0; width:100%; text-align:center; padding:2px 0; font-size:11px; color:#9db2bd; background-color:rgba(34,34,34,0.8); z-index:10; }
-    .tradingview-widget-copyright a { color:#9db2bd; text-decoration:none; }
-    .tradingview-widget-copyright a:hover { text-decoration:underline; }
+    .tradingview-widget-copyright { display:none !important; }
   `, []);
 
   const createChartSrcDoc = (symbol: string, containerId: string) => {
@@ -81,9 +92,9 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     };
     return `
       <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${tvWidgetBaseStyle}</style></head><body>
-      <div class="tradingview-widget-container"><div id="${containerId}" style="width:100%;height:100%;"></div>
-      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/" target="_blank">Track all markets on TradingView</a></div>
-      </div><script src="https://s3.tradingview.com/tv.js"></script><script>new TradingView.widget(${JSON.stringify(chartConfig)});</script>
+      <div class="tradingview-widget-container"><div id="${containerId}" style="width:100%;height:100%;"></div></div>
+      <script src="https://s3.tradingview.com/tv.js"></script>
+      <script>new TradingView.widget(${JSON.stringify(chartConfig)});</script>
       </body></html>
     `;
   };
@@ -107,41 +118,7 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
   const mobileContentClassName = "min-h-[500px] lg:min-h-0";
   
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full h-full flex flex-col p-0 m-0">
-      {/* 📱 Mobile Menus */}
-      <div className="w-full flex flex-col space-y-2 p-2 lg:hidden">
-        <DropdownMenu>
-          <DropdownMenuTrigger className="w-full bg-zinc-800 text-white p-2 rounded text-left">
-            Views
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-            <DropdownMenuItem onSelect={() => setActiveTab('paper_trading')}>Paper Trading</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Chart & Heatmap</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => setActiveTab('chart')}>Chart View</DropdownMenuItem>
-            {chartLayoutOptions.map(o => (
-              <DropdownMenuItem key={o.value} onSelect={() => {
-                setSelectedChartLayout(o.value);
-                setActiveTab('chart');
-              }}>{o.label} (Chart)</DropdownMenuItem>
-            ))}
-            <DropdownMenuItem onSelect={() => setActiveTab('heatmap')}>Heatmap View</DropdownMenuItem>
-            {heatmapViewOptions.map(o => (
-              <DropdownMenuItem key={o.value} onSelect={() => {
-                setSelectedHeatmapView(o.value);
-                setActiveTab('heatmap');
-              }}>{o.label} (Heatmap)</DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Screeners</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => setActiveTab('options_screener')}>Options Screener</DropdownMenuItem>
-            {cryptoScreenerOptions.map(o => <DropdownMenuItem key={o.value} onSelect={() => {setSelectedCryptoScreener(o.value); setActiveTab('crypto_screener');}}>{o.label} (Crypto Screener)</DropdownMenuItem>)}
-
-            <DropdownMenuItem onSelect={() => setActiveTab('dex_screener')}>DEX Screener</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
+    <Tabs value={activeView} onValueChange={setActiveView} className="w-full h-full flex flex-col p-0 m-0">
       {/* 🖥️ Desktop Tabs */}
       <TabsList className="hidden lg:grid w-full grid-cols-2 sm:grid-cols-4 md:grid-cols-6 mb-0 p-0 flex-shrink-0">
         <TabsTrigger value="paper_trading"><NotebookPen className="mr-2"/>Paper Trading</TabsTrigger>
@@ -242,10 +219,10 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
 
       <TabsContent value="crypto_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
- {selectedCryptoScreener === 'all_kucoin' ? (
- <AllTickersScreener />
- ) : selectedCryptoScreener === 'kucoin_futures' ? (
- <AllFuturesScreener />
+          {selectedCryptoScreener === 'all_kucoin' ? (
+            <AllTickersScreener />
+          ) : selectedCryptoScreener === 'kucoin_futures' ? (
+            <AllFuturesScreener />
           ) : (
             <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
           )}
@@ -258,6 +235,5 @@ const MainViews: FC<MainViewsProps> = ({ currentSymbol, selectedCryptoScreener, 
     </Tabs>
   );
 };
-
 
 export default MainViews;
