@@ -133,20 +133,29 @@ export default function AllTickersScreener() {
       <div className="text-left font-semibold text-muted-foreground col-span-2">
         Pair
       </div>
-      {["last", "changeRate", "volValue"].map((key) => (
-        <div
-          key={key}
-          className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end col-span-1"
-          onClick={() => requestSort(key as SortKey)}
-        >
-          {{
-            last: "Price (USD)",
-            changeRate: "Change (24h)",
-            volValue: "Volume (24h)",
-          }[key]}
-          {getSortIcon(key as SortKey)}
-        </div>
-      ))}
+      <div
+        className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
+        onClick={() => requestSort("last")}
+      >
+        <span className="hidden sm:inline">Price (USD)</span>
+        <span className="sm:hidden">Price</span>
+        {getSortIcon("last")}
+      </div>
+      <div
+        className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
+        onClick={() => requestSort("changeRate")}
+      >
+        <span className="hidden sm:inline">Change (24h)</span>
+        <span className="sm:hidden">24h %</span>
+        {getSortIcon("changeRate")}
+      </div>
+      <div
+        className="text-right font-semibold text-muted-foreground cursor-pointer flex items-center justify-end"
+        onClick={() => requestSort("volValue")}
+      >
+        Volume
+        {getSortIcon("volValue")}
+      </div>
       <div className="text-center font-semibold text-muted-foreground col-span-2">Actions</div>
     </div>
   );
@@ -209,17 +218,17 @@ export default function AllTickersScreener() {
                   <TableCell className="text-left font-medium col-span-2">
                     {token.symbolName}
                   </TableCell>
-                  <TableCell className="text-right font-mono col-span-1">
+                  <TableCell className="text-right font-mono">
                     ${formatPrice(token.last)}
                   </TableCell>
                   <TableCell
-                    className={`text-right font-mono col-span-1 ${
+                    className={`text-right font-mono ${
                       parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"
                     }`}
                   >
                     {formatChange(token.changeRate)}
                   </TableCell>
-                  <TableCell className="text-right font-mono col-span-1">
+                  <TableCell className="text-right font-mono">
                     {formatVolume(token.volValue)}
                   </TableCell>
                    <TableCell className="text-center col-span-2">
