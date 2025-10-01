@@ -22,7 +22,7 @@ import { usePaperTrading } from "@/context/PaperTradingContext";
 
 
 export default function AllFuturesScreener() {
-  type SortKey = "markPrice" | "priceChgPct" | "openInterest" | "volumeOf24h" | "maxLeverage";
+  type SortKey = "markPrice" | "priceChgPct" | "volumeOf24h" | "openInterest" | "maxLeverage";
 
   const { contracts, loading: httpLoading } = useKucoinFuturesContracts();
   const { liveData, loading: wsLoading } = useKucoinFuturesSocket(contracts.map(c => c.symbol));
@@ -151,26 +151,27 @@ export default function AllFuturesScreener() {
       
       {/* Mobile Header */}
       <div role="heading" className="flex lg:hidden justify-between items-center px-4 py-2 bg-card border-b border-border text-xs font-semibold text-muted-foreground">
-        <div className="flex items-center gap-x-2 cursor-pointer w-1/2" onClick={() => requestSort("volumeOf24h")}>
-          <span>Pair / Price</span>
+        <div className="cursor-pointer w-1/2" onClick={() => requestSort("volumeOf24h")}>
+          <span>Pair</span>
           {getSortIcon("volumeOf24h")}
         </div>
         <div className="flex items-center justify-end gap-x-3 text-right w-1/2">
-          <div className="cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h%</div>
-          <div className="cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Vol</div>
-          <div className="cursor-pointer" onClick={() => requestSort("openInterest")}>OI</div>
-          <div className="cursor-pointer" onClick={() => requestSort("maxLeverage")}>Lev</div>
+          {/* Action Header placeholder */}
+          <span className="w-16 text-center">Actions</span>
         </div>
       </div>
 
       {/* Desktop Header */}
-      <div role="heading" className="hidden lg:grid grid-cols-7 items-center px-4 py-2 bg-card border-b border-border text-sm font-semibold text-muted-foreground">
-          <div className="col-span-2 cursor-pointer flex items-center" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
-          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
-          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
-          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
-          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
-          <div className="cursor-pointer flex items-center justify-end" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
+      <div role="heading" className="hidden lg:flex justify-between items-center px-4 py-2 bg-card border-b border-border text-sm font-semibold text-muted-foreground">
+          <div className="flex items-center space-x-6">
+            <div className="w-32 cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
+            <div className="w-24 text-right cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
+            <div className="w-20 text-right cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
+            <div className="w-24 text-right cursor-pointer" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
+            <div className="w-24 text-right cursor-pointer" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
+            <div className="w-20 text-right cursor-pointer" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
+          </div>
+          <div className="w-24 text-center">Actions</div>
       </div>
 
 
@@ -181,47 +182,43 @@ export default function AllFuturesScreener() {
           <div role="table" className="w-full caption-bottom">
             <div role="rowgroup">
               {sortedMemo.map((contract) => (
-                <div key={contract.symbol} role="row" className="flex lg:grid lg:grid-cols-7 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50">
+                <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50">
                   
-                  {/* === MOBILE VIEW === */}
-                  <div className="lg:hidden flex w-full justify-between items-start">
-                    <div className="flex flex-col">
+                  {/* === LEFT GROUP (PAIR + DATA) === */}
+                  <div className="flex items-center">
+                    {/* Mobile View Structure */}
+                    <div className="flex flex-col lg:hidden">
                         <div role="cell" className="text-left font-medium p-0 truncate">
                           {contract.symbol.replace(/M$/, "")}
                         </div>
-                        <div className="text-muted-foreground font-mono text-xs">${formatPrice(contract.markPrice)}</div>
                         <div className="flex justify-start items-center text-muted-foreground font-mono mt-1 gap-x-2">
-                          <div role="cell" className={`p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                          <div role="cell" className="p-0">{formatVolume(contract.volumeOf24h)}</div>
-                          <div role="cell" className="p-0">{formatVolume(contract.openInterest)}</div>
-                          <div role="cell" className="p-0">{contract.maxLeverage}x</div>
+                           <div className="text-xs text-foreground/80">${formatPrice(contract.markPrice)}</div>
+                           <div role="cell" className={`p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                           <div role="cell" className="p-0">Vol: {formatVolume(contract.volumeOf24h)}</div>
+                           <div role="cell" className="p-0">OI: {formatVolume(contract.openInterest)}</div>
+                           <div role="cell" className="p-0">Lev: {contract.maxLeverage}x</div>
                         </div>
                     </div>
-                    <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
-                          <BarChartHorizontal className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice, contract.priceChgPct)}>
-                            <Eye className="h-4 w-4" />
-                        </Button>
+                    
+                    {/* Desktop View Structure */}
+                    <div className="hidden lg:flex items-center space-x-6">
+                        <div role="cell" className="w-32 text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
+                        <div role="cell" className="w-24 text-right font-mono p-0">${formatPrice(contract.markPrice)}</div>
+                        <div role="cell" className={`w-20 text-right font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                        <div role="cell" className="w-24 text-right font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
+                        <div role="cell" className="w-24 text-right font-mono p-0">{formatVolume(contract.openInterest)}</div>
+                        <div role="cell" className="w-20 text-right font-mono p-0">{contract.maxLeverage}x</div>
                     </div>
                   </div>
 
-                  {/* === DESKTOP VIEW === */}
-                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate col-span-2">{contract.symbol.replace(/M$/, "")}</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
-                  <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{contract.maxLeverage}x</div>
-                  
-                  <div role="cell" className="hidden lg:flex items-center justify-end gap-0 p-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
-                      <BarChartHorizontal className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice, contract.priceChgPct)}>
-                        <Eye className="h-4 w-4" />
-                    </Button>
+                  {/* === RIGHT GROUP (ACTIONS) === */}
+                  <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
+                        <BarChartHorizontal className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract.highPrice, contract.lowPrice, contract.priceChgPct)}>
+                          <Eye className="h-4 w-4" />
+                      </Button>
                   </div>
                 </div>
               ))}
