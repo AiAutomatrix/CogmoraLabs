@@ -128,9 +128,9 @@ export default function AllTickersScreener() {
   );
 
   const tableHeaders = (
-    <div className="flex justify-between px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
-      <div className="text-left font-semibold text-muted-foreground">Pair</div>
-      <div className="flex items-center justify-end gap-x-4 sm:gap-x-6">
+    <div className="flex justify-between items-center px-4 py-2 bg-card border-b border-border text-xs sm:text-sm">
+      <div className="flex items-center gap-x-4 sm:gap-x-6">
+        <div className="text-left font-semibold text-muted-foreground w-28">Pair</div>
         <div className="text-right font-semibold text-muted-foreground w-24 cursor-pointer flex items-center justify-end" onClick={() => requestSort("last")}>
           Price (USD) {getSortIcon("last")}
         </div>
@@ -140,8 +140,8 @@ export default function AllTickersScreener() {
         <div className="text-right font-semibold text-muted-foreground w-16 cursor-pointer flex items-center justify-end" onClick={() => requestSort("volValue")}>
           Volume {getSortIcon("volValue")}
         </div>
-        <div className="text-right font-semibold text-muted-foreground w-28 text-center">Actions</div>
       </div>
+      <div className="text-right font-semibold text-muted-foreground w-28 text-center">Actions</div>
     </div>
   );
 
@@ -200,45 +200,45 @@ export default function AllTickersScreener() {
                   key={token.symbol}
                   className="flex justify-between items-center px-4 py-2 text-xs sm:text-sm"
                 >
-                  <TableCell className="text-left font-medium p-0">
-                    {token.symbolName}
-                  </TableCell>
-                  <TableCell className="flex items-center justify-end gap-x-4 sm:gap-x-6 p-0">
-                     <div className="text-right font-mono w-24">
-                        ${formatPrice(token.last)}
-                     </div>
-                     <div className={`text-right font-mono w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
-                        {formatChange(token.changeRate)}
-                     </div>
-                     <div className="text-right font-mono w-16">
-                        {formatVolume(token.volValue)}
-                     </div>
-                     <div className="w-28 flex items-center justify-center gap-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleInfoClick(token)}
-                      >
-                        <FileText className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleBuyClick(token)}
-                      >
-                        <ShoppingCart className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={`h-8 w-8 ${watchedSymbols.has(token.symbol) ? 'text-primary' : ''}`}
-                        onClick={() => toggleWatchlist(token.symbol, token.symbolName, 'spot')}
-                      >
-                          <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  <div className="flex items-center gap-x-4 sm:gap-x-6">
+                    <TableCell className="text-left font-medium p-0 w-28 truncate">
+                      {token.symbolName}
+                    </TableCell>
+                    <TableCell className="text-right font-mono p-0 w-24">
+                      ${formatPrice(token.last)}
+                    </TableCell>
+                    <TableCell className={`text-right font-mono p-0 w-16 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                      {formatChange(token.changeRate)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono p-0 w-16">
+                      {formatVolume(token.volValue)}
+                    </TableCell>
+                  </div>
+                  <TableCell className="w-28 flex items-center justify-center gap-0 p-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleInfoClick(token)}
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleBuyClick(token)}
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-8 w-8 ${watchedSymbols.has(token.symbol) ? 'text-primary' : ''}`}
+                      onClick={() => toggleWatchlist(token.symbol, token.symbolName, 'spot')}
+                    >
+                        <Eye className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
