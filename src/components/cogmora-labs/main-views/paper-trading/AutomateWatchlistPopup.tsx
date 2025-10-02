@@ -144,8 +144,8 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" variant="outline" onClick={handleSave}>Save & Close</Button>
-          <Button type="button" onClick={handleApply}>Apply Rules</Button>
+          <Button type="button" variant="outline" onClick={handleSave}>Save</Button>
+          <Button type="button" onClick={handleApply}>Scrape</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

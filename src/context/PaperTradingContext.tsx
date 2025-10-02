@@ -89,6 +89,7 @@ interface PaperTradingContextType {
   automationConfig: AutomationConfig;
   setAutomationConfig: (config: AutomationConfig) => void;
   applyWatchlistAutomation: (config: AutomationConfig) => void;
+  nextScrapeTime: number;
 }
 
 const PaperTradingContext = createContext<PaperTradingContextType | undefined>(
@@ -109,6 +110,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
   const [allSpotTickers, setAllSpotTickers] = useState<KucoinTicker[]>([]);
   const [automationConfig, setAutomationConfig] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
+  const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
 
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
@@ -147,7 +149,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       if (savedAlerts) setPriceAlerts(JSON.parse(savedAlerts));
       if (savedTriggers) setTradeTriggers(JSON.parse(savedTriggers));
-      if (savedAutomation) setAutomationConfig(JSON.parse(savedAutomation));
+      if (savedAutomation) {
+          const config = JSON.parse(savedAutomation);
+          setAutomationConfig(config);
+          // If it was auto-refreshing, re-initiate the timer logic
+          if(config.updateMode === 'auto-refresh') {
+            const lastScrape = localStorage.getItem('paperTrading_lastScrapeTime');
+            const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
+            const timeSinceLast = Date.now() - lastScrapeTime;
+            const remainingTime = config.refreshInterval - timeSinceLast;
+            setNextScrapeTime(Date.now() + remainingTime);
+          }
+      }
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -242,6 +255,61 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       prevWatchlistRef.current = watchlist;
   }, [watchlist, isLoaded, toast]);
   
+  const applyWatchlistAutomation = useCallback((config: AutomationConfig) => {
+    let finalItems: WatchlistItem[] = [];
+    const addedSymbols = new Set<string>();
+
+    config.rules.forEach(rule => {
+        let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
+        let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
+
+        if (rule.source === 'spot') {
+            sourceData = allSpotTickers;
+            sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+        } else {
+            sourceData = futuresContracts;
+            sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+        }
+
+        const sorted = [...sourceData].sort((a, b) => {
+            const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
+            const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+            return valB - valA;
+        });
+
+        let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
+        if (rule.criteria.startsWith('top')) {
+            selected = sorted.slice(0, rule.count);
+        } else { // bottom
+            selected = sorted.slice(-rule.count);
+        }
+
+        selected.forEach(item => {
+            if (!addedSymbols.has(item.symbol)) {
+                addedSymbols.add(item.symbol);
+                const isSpot = rule.source === 'spot';
+                finalItems.push({
+                    symbol: item.symbol,
+                    symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
+                    type: rule.source,
+                    currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
+                    priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                });
+            }
+        });
+    });
+
+    setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
+    setAutomationConfig(config);
+    if (config.updateMode === 'auto-refresh') {
+        localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
+        setNextScrapeTime(Date.now() + config.refreshInterval);
+    } else {
+        setNextScrapeTime(0); // Not in auto-refresh mode
+    }
+    toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+  }, [allSpotTickers, futuresContracts, toast]);
+
   // Effect for Auto-Refresh Automation
   useEffect(() => {
     if (automationIntervalRef.current) {
@@ -257,7 +325,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             clearInterval(automationIntervalRef.current);
         }
     };
-  }, [automationConfig]);
+  }, [automationConfig, applyWatchlistAutomation]);
 
 
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
@@ -942,55 +1010,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: 'Trade Trigger Removed' });
   }, [toast]);
   
-  const applyWatchlistAutomation = useCallback((config: AutomationConfig) => {
-    let finalItems: WatchlistItem[] = [];
-    const addedSymbols = new Set<string>();
-
-    config.rules.forEach(rule => {
-        let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
-        let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
-
-        if (rule.source === 'spot') {
-            sourceData = allSpotTickers;
-            sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
-        } else {
-            sourceData = futuresContracts;
-            sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
-        }
-
-        const sorted = [...sourceData].sort((a, b) => {
-            const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
-            const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
-            return valB - valA;
-        });
-
-        let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
-        if (rule.criteria.startsWith('top')) {
-            selected = sorted.slice(0, rule.count);
-        } else { // bottom
-            selected = sorted.slice(-rule.count);
-        }
-
-        selected.forEach(item => {
-            if (!addedSymbols.has(item.symbol)) {
-                addedSymbols.add(item.symbol);
-                const isSpot = rule.source === 'spot';
-                finalItems.push({
-                    symbol: item.symbol,
-                    symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
-                    type: rule.source,
-                    currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
-                    priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
-                });
-            }
-        });
-    });
-
-    setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
-    setAutomationConfig(config);
-    toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
-  }, [allSpotTickers, futuresContracts, toast]);
-
 
   return (
     <PaperTradingContext.Provider
@@ -1020,6 +1039,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         automationConfig,
         setAutomationConfig,
         applyWatchlistAutomation,
+        nextScrapeTime,
       }}
     >
       {children}

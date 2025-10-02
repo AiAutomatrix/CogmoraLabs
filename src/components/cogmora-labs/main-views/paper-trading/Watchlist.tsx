@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import type { WatchlistItem } from '@/types';
 import {
@@ -32,6 +32,41 @@ import { SpotSnapshotPopup } from './SpotSnapshotPopup';
 import type { SpotSnapshotData } from '@/types';
 import { AutomateWatchlistPopup } from './AutomateWatchlistPopup';
 
+const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
+    const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
+
+    useEffect(() => {
+        if (nextScrapeTime <= 0) return;
+
+        setTimeLeft(nextScrapeTime - Date.now());
+
+        const interval = setInterval(() => {
+            const newTimeLeft = nextScrapeTime - Date.now();
+            if (newTimeLeft <= 0) {
+                clearInterval(interval);
+                setTimeLeft(0);
+            } else {
+                setTimeLeft(newTimeLeft);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [nextScrapeTime]);
+
+    if (timeLeft <= 0) {
+        return null;
+    }
+
+    const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+    const seconds = Math.floor((timeLeft / 1000) % 60);
+
+    return (
+        <span className="text-xs font-mono text-muted-foreground ml-2">
+            ({minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')})
+        </span>
+    );
+};
+
 
 export default function Watchlist() {
   const {
@@ -40,6 +75,8 @@ export default function Watchlist() {
     toggleWatchlist,
     addPriceAlert,
     removePriceAlert,
+    automationConfig,
+    nextScrapeTime,
   } = usePaperTrading();
 
   const [alertPrice, setAlertPrice] = useState('');
@@ -53,6 +90,8 @@ export default function Watchlist() {
 
   const [openAlertPopover, setOpenAlertPopover] = useState<string | null>(null);
   const [isAutomatePopupOpen, setIsAutomatePopupOpen] = useState(false);
+  
+  const isAutoRefreshEnabled = automationConfig.updateMode === 'auto-refresh';
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
@@ -116,10 +155,13 @@ export default function Watchlist() {
               Track symbols, set price alerts, and create trade triggers.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            Automate
-          </Button>
+          <div className="flex items-center">
+            <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
+                <Wand2 className="mr-2 h-4 w-4" />
+                Automate
+            </Button>
+            {isAutoRefreshEnabled && <CountdownTimer nextScrapeTime={nextScrapeTime} />}
+          </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
