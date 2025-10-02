@@ -61,7 +61,7 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const seconds = Math.floor((timeLeft / 1000) % 60);
 
     return (
-        <span className="text-xs font-mono text-muted-foreground ml-2">
+        <span className="text-xs font-mono text-muted-foreground mr-2">
             ({minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')})
         </span>
     );
@@ -156,11 +156,11 @@ export default function Watchlist() {
             </CardDescription>
           </div>
           <div className="flex items-center">
+            {isAutoRefreshEnabled && <CountdownTimer nextScrapeTime={nextScrapeTime} />}
             <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
                 <Wand2 className="mr-2 h-4 w-4" />
                 Automate
             </Button>
-            {isAutoRefreshEnabled && <CountdownTimer nextScrapeTime={nextScrapeTime} />}
           </div>
       </CardHeader>
       <CardContent>
