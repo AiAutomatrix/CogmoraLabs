@@ -11,7 +11,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import Link from 'next/link';
 
 export default function HomePage() {
-  const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTC-USDT');
+  const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTCUSDT');
   const [selectedCryptoScreener, setSelectedCryptoScreener] = useState('all_kucoin');
   const [activeView, setActiveView] = useState('paper_trading');
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
@@ -22,7 +22,7 @@ export default function HomePage() {
   const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
   const [multiChartSymbols, setMultiChartSymbols] = useState<string[]>([
-    'KUCOIN:BTC-USDT',
+    'KUCOIN:BTCUSDT',
     'BINANCE:ETHUSDT',
     'BINANCE:XRPUSDT',
     'BINANCE:SOLUSDT'
