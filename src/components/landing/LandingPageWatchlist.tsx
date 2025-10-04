@@ -39,7 +39,15 @@ const LandingPageWatchlist: React.FC = () => {
 
   }, []); // Run only once
 
-  return <Watchlist />;
+  // Provide default/dummy props for the landing page instance of the watchlist
+  return (
+    <Watchlist 
+      onSymbolSelect={() => {}} 
+      selectedChartLayout={1} 
+      setSelectedChartLayout={() => {}} 
+      selectedSymbolsForHighlight={[]} 
+    />
+  );
 };
 
 export default LandingPageWatchlist;

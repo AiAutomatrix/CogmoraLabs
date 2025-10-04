@@ -23,7 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText, Wand2 } from 'lucide-react';
+import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText, Wand2, Settings } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,9 @@ import { WatchlistTradeTriggerPopup } from './WatchlistTradeTriggerPopup';
 import { SpotSnapshotPopup } from './SpotSnapshotPopup';
 import type { SpotSnapshotData } from '@/types';
 import { AutomateWatchlistPopup } from './AutomateWatchlistPopup';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
 
 const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
@@ -67,8 +70,20 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     );
 };
 
+interface WatchlistProps {
+  onSymbolSelect: (symbol: string) => void;
+  selectedChartLayout: number;
+  setSelectedChartLayout: (num: number) => void;
+  selectedSymbolsForHighlight: string[];
+}
 
-export default function Watchlist() {
+
+export default function Watchlist({
+  onSymbolSelect,
+  selectedChartLayout,
+  setSelectedChartLayout,
+  selectedSymbolsForHighlight
+}: WatchlistProps) {
   const {
     watchlist,
     priceAlerts,
@@ -92,6 +107,7 @@ export default function Watchlist() {
   const [isAutomatePopupOpen, setIsAutomatePopupOpen] = useState(false);
   
   const isAutoRefreshEnabled = automationConfig.updateMode === 'auto-refresh';
+  const chartOptions = [1, 2, 3, 4];
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
@@ -152,15 +168,27 @@ export default function Watchlist() {
           <div>
             <CardTitle>My Watchlist</CardTitle>
             <CardDescription>
-              Track symbols, set price alerts, and create trade triggers.
+              Track symbols, set alerts, and load charts.
             </CardDescription>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
             {isAutoRefreshEnabled && <CountdownTimer nextScrapeTime={nextScrapeTime} />}
             <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
                 <Wand2 className="mr-2 h-4 w-4" />
                 Automate
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4" />{selectedChartLayout}</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {chartOptions.map(num => (
+                  <DropdownMenuItem key={num} onSelect={() => setSelectedChartLayout(num)}>
+                    Load {num} chart{num > 1 ? 's' : ''}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
       </CardHeader>
       <CardContent>
@@ -179,9 +207,15 @@ export default function Watchlist() {
               {watchlist.length > 0 ? (
                 watchlist.map((item) => {
                   const alert = priceAlerts[item.symbol];
+                  const tvSymbol = `KUCOIN:${item.symbol.replace('-', '')}`;
+                  const isSelected = selectedSymbolsForHighlight.includes(tvSymbol);
                   
                   return (
-                    <TableRow key={item.symbol}>
+                    <TableRow 
+                      key={item.symbol}
+                      onClick={() => onSymbolSelect(item.symbol)}
+                      className={cn("cursor-pointer", isSelected && "bg-primary/20 hover:bg-primary/30")}
+                    >
                       <TableCell className="font-medium px-2 py-2">{item.symbolName}</TableCell>
                       <TableCell className="px-2 py-2 hidden sm:table-cell"><Badge variant="secondary">{item.type}</Badge></TableCell>
                       <TableCell className="text-right px-2 py-2">{formatPrice(item.currentPrice)}</TableCell>
@@ -191,7 +225,7 @@ export default function Watchlist() {
                         {formatChange(item.priceChgPct)}
                       </TableCell>
                       
-                      <TableCell className="text-right px-2 py-2">
+                      <TableCell className="text-right px-2 py-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-0">
                            {item.type === 'spot' && (
                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSnapshotClick(item)} disabled={!item.snapshotData}>

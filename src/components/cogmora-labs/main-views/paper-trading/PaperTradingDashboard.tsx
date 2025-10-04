@@ -39,7 +39,19 @@ import { PositionDetailsPopup } from "./PositionDetailsPopup";
 import type { OpenPosition } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
 
-export default function PaperTradingDashboard() {
+interface PaperTradingDashboardProps {
+  onSymbolSelect: (symbol: string) => void;
+  selectedChartLayout: number;
+  setSelectedChartLayout: (num: number) => void;
+  selectedSymbolsForHighlight: string[];
+}
+
+export default function PaperTradingDashboard({
+  onSymbolSelect,
+  selectedChartLayout,
+  setSelectedChartLayout,
+  selectedSymbolsForHighlight,
+}: PaperTradingDashboardProps) {
   const {
     balance,
     openPositions,
@@ -337,7 +349,12 @@ export default function PaperTradingDashboard() {
             <TradeTriggersDashboard />
         </TabsContent>
         <TabsContent value="watchlist">
-            <Watchlist />
+            <Watchlist 
+              onSymbolSelect={onSymbolSelect}
+              selectedChartLayout={selectedChartLayout}
+              setSelectedChartLayout={setSelectedChartLayout}
+              selectedSymbolsForHighlight={selectedSymbolsForHighlight}
+            />
         </TabsContent>
         <TabsContent value="history">
             <Card>

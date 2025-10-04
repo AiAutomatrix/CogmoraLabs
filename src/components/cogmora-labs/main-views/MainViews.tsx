@@ -153,9 +153,14 @@ const MainViews: FC<MainViewsProps> = ({
 
       {/* 🔁 Tab Content */}
       <TabsContent value="paper_trading" className={`flex-grow overflow-y-auto py-2 m-0 h-full ${mobileContentClassName}`}>
-        <PaperTradingDashboard />
+        <PaperTradingDashboard 
+          onSymbolSelect={onSymbolSelect}
+          selectedChartLayout={selectedChartLayout}
+          setSelectedChartLayout={setSelectedChartLayout}
+          selectedSymbolsForHighlight={selectedSymbolsForHighlight}
+        />
       </TabsContent>
-      <TabsContent value="chart" className={`flex-grow overflow-hidden p-0 m-0 ${mobileContentClassName}`}>
+      <TabsContent value="chart" className="flex-grow overflow-hidden">
         {/* Mobile Carousel */}
         <div className="lg:hidden flex overflow-x-auto snap-x snap-mandatory h-full">
           {chartSrcDocs.map((srcDoc, i) => (
@@ -176,13 +181,13 @@ const MainViews: FC<MainViewsProps> = ({
           )}
         </div>
         {/* Desktop Grid */}
-        <div className={`hidden lg:grid w-full gap-0 p-0 m-0 h-full ${
+        <div className={`hidden lg:grid w-full gap-0 h-full ${
           selectedChartLayout === 1 ? 'grid-cols-1 grid-rows-1' :
           selectedChartLayout === 2 ? 'grid-cols-2 grid-rows-1' :
           'grid-cols-2 grid-rows-2'
         }`}>
           {chartSrcDocs.map((srcDoc, i) => (
-            <div key={i} className={`${BASE_CLASS} p-0 m-0 h-full`}>
+            <div key={i} className={`${BASE_CLASS} h-full`}>
               <iframe
                 srcDoc={srcDoc}
                 title={`Chart ${i + 1}`}
@@ -193,7 +198,7 @@ const MainViews: FC<MainViewsProps> = ({
             </div>
           ))}
           {selectedChartLayout === 3 && (
-            <div className={`${BASE_CLASS} p-0 m-0 h-full`}>
+            <div className={`${BASE_CLASS} h-full`}>
               <ThreeChartAnalysisPanel />
             </div>
           )}

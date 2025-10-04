@@ -1,4 +1,3 @@
-
 'use client';
 
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
@@ -85,7 +84,7 @@ export default function HomePage() {
 
   const handleSymbolSelect = (newSymbol: string) => {
     // This function is now for single-symbol selection which also triggers multi-select logic
-    if (numberOfChartsToSelect > 1) {
+    if (numberOfChartsToSelect > 1 && selectedSymbols.length < numberOfChartsToSelect) {
       handleMultiSymbolSelect(newSymbol);
     } else {
       handleSymbolChange(newSymbol);
