@@ -129,7 +129,7 @@ export default function HomePage() {
           </div>
         </header>
 
-        <main className="flex flex-col lg:flex-row flex-grow lg:min-h-0 container mx-auto">
+        <main className="flex flex-col lg:flex-row flex-grow lg:min-h-0">
           <section className="flex flex-col lg:w-2/3 lg:min-h-0">
             <MainViews
               activeView={activeView}
