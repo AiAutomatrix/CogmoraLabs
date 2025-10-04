@@ -17,8 +17,11 @@ import { Input } from "@/components/ui/input";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import { SpotTickerInfoPopup } from "../paper-trading/SpotTickerInfoPopup";
 
+interface AllTickersScreenerProps {
+  onSymbolSelect: (symbol: string) => void;
+}
 
-export default function AllTickersScreener() {
+export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreenerProps) {
   type SortKey = "last" | "changeRate" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
@@ -198,14 +201,22 @@ export default function AllTickersScreener() {
                 >
                   {/* Mobile Layout Group (Flex) */}
                   <div className="flex lg:hidden items-center gap-x-2">
-                      <div role="cell" className="text-left font-medium p-0 w-20 truncate">{token.symbolName}</div>
+                      <div role="cell" className="text-left font-medium p-0 w-20 truncate">
+                        <Button variant="link" className="p-0 h-auto text-xs font-medium text-left" onClick={() => onSymbolSelect(`KUCOIN:${token.symbol}`)}>
+                          {token.symbolName}
+                        </Button>
+                      </div>
                       <div role="cell" className="text-right font-mono p-0 w-16">${formatPrice(token.last)}</div>
                       <div role="cell" className={`text-right font-mono p-0 w-14 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatChange(token.changeRate)}</div>
                       <div role="cell" className="text-right font-mono p-0 w-14">{formatVolume(token.volValue)}</div>
                   </div>
 
                   {/* Desktop Layout Cells (Grid) */}
-                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">{token.symbolName}</div>
+                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">
+                    <Button variant="link" className="p-0 h-auto text-sm font-medium" onClick={() => onSymbolSelect(`KUCOIN:${token.symbol}`)}>
+                      {token.symbolName}
+                    </Button>
+                  </div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(token.last)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatChange(token.changeRate)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(token.volValue)}</div>
@@ -249,5 +260,3 @@ export default function AllTickersScreener() {
     </>
   );
 }
-
-    

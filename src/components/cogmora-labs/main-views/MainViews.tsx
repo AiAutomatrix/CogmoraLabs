@@ -21,6 +21,7 @@ interface MainViewsProps {
   activeView: string;
   setActiveView: (view: string) => void;
   currentSymbol: string;
+  onSymbolSelect: (symbol: string) => void;
   selectedCryptoScreener: string;
   setSelectedCryptoScreener: (screener: string) => void;
   selectedChartLayout: number;
@@ -32,7 +33,8 @@ interface MainViewsProps {
 const MainViews: FC<MainViewsProps> = ({ 
   activeView,
   setActiveView,
-  currentSymbol, 
+  currentSymbol,
+  onSymbolSelect, 
   selectedCryptoScreener, 
   setSelectedCryptoScreener,
   selectedChartLayout,
@@ -220,7 +222,7 @@ const MainViews: FC<MainViewsProps> = ({
       <TabsContent value="crypto_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
           {selectedCryptoScreener === 'all_kucoin' ? (
-            <AllTickersScreener />
+            <AllTickersScreener onSymbolSelect={onSymbolSelect} />
           ) : selectedCryptoScreener === 'kucoin_futures' ? (
             <AllFuturesScreener />
           ) : (

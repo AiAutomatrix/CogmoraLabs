@@ -11,7 +11,7 @@ import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPe
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 export default function HomePage() {
-  const [activeSymbol, setActiveSymbol] = useState<string>('BINANCE:BTCUSDT');
+  const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTC-USDT');
   const [selectedCryptoScreener, setSelectedCryptoScreener] = useState('all_kucoin');
   const [activeView, setActiveView] = useState('paper_trading');
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
@@ -22,10 +22,16 @@ export default function HomePage() {
     if (newSymbol && newSymbol.trim() !== '') {
       let formattedSymbol = newSymbol.toUpperCase().trim();
       if (!formattedSymbol.includes(':') && formattedSymbol.length > 0) {
-        formattedSymbol = `BINANCE:${formattedSymbol}`;
+        // Default to KUCOIN for symbols from our screeners
+        formattedSymbol = `KUCOIN:${formattedSymbol}`;
       }
       setActiveSymbol(formattedSymbol);
     }
+  };
+
+  const handleSymbolSelect = (newSymbol: string) => {
+    handleSymbolChange(newSymbol);
+    setActiveView('chart');
   };
 
   const handleViewChange = (view: string) => {
@@ -60,9 +66,11 @@ export default function HomePage() {
       <div className="flex flex-col bg-background h-full">
         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
           <div className="container mx-auto flex items-center justify-between h-14">
-            <div className="flex items-center lg:hidden justify-between w-full">
+            <div className="hidden lg:flex items-center">
+              <h1 className="text-xl font-bold">Cogmora Labs</h1>
+            </div>
+             <div className="flex items-center justify-between w-full lg:hidden">
                <h1 className="text-xl font-bold">Cogmora Labs</h1>
-               {/* Mobile Navigation */}
               <div>
                 <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
                   <SheetTrigger asChild>
@@ -135,6 +143,7 @@ export default function HomePage() {
               activeView={activeView}
               setActiveView={setActiveView}
               currentSymbol={activeSymbol}
+              onSymbolSelect={handleSymbolSelect}
               selectedCryptoScreener={selectedCryptoScreener}
               setSelectedCryptoScreener={setSelectedCryptoScreener}
               selectedChartLayout={selectedChartLayout}
