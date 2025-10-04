@@ -21,12 +21,14 @@ import { cn } from "@/lib/utils";
 
 interface AllTickersScreenerProps {
   onSymbolSelect: (symbol: string) => void;
+  selectedChartLayout: number;
   setSelectedChartLayout: (num: number) => void;
   selectedSymbolsForHighlight: string[];
 }
 
 export default function AllTickersScreener({ 
   onSymbolSelect, 
+  selectedChartLayout,
   setSelectedChartLayout,
   selectedSymbolsForHighlight
 }: AllTickersScreenerProps) {
@@ -154,11 +156,10 @@ export default function AllTickersScreener({
   
   const chartOptions = [1, 2, 3, 4];
   
-  const numberOfChartsToSelect = selectedSymbolsForHighlight.length > 0
-    ? (chartOptions.find(o => o > selectedSymbolsForHighlight.length) || chartOptions.find(o => o === selectedSymbolsForHighlight.length) || 1)
-    : 1;
-
-  const highlightMessage = `Select ${numberOfChartsToSelect - selectedSymbolsForHighlight.length} more symbol(s)...`;
+  const numberOfChartsToSelect = selectedChartLayout;
+  const highlightMessage = selectedSymbolsForHighlight.length > 0
+    ? `Select ${numberOfChartsToSelect - selectedSymbolsForHighlight.length} more symbol(s)...`
+    : "Real-time data feed from KuCoin. Click headers to sort.";
 
 
   return (
@@ -169,12 +170,12 @@ export default function AllTickersScreener({
           <div>
             <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
             <CardDescription>
-              {selectedSymbolsForHighlight.length > 0 ? highlightMessage : "Real-time data feed from KuCoin. Click headers to sort."}
+              {highlightMessage}
             </CardDescription>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm"><Settings className="mr-2" /> Chart Setting: {numberOfChartsToSelect}</Button>
+              <Button variant="outline" size="sm"><Settings className="mr-2" /> Chart Setting: {selectedChartLayout}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {chartOptions.map(num => (

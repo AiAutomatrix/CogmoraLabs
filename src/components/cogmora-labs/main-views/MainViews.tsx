@@ -221,6 +221,7 @@ const MainViews: FC<MainViewsProps> = ({
           {selectedCryptoScreener === 'all_kucoin' ? (
             <AllTickersScreener 
               onSymbolSelect={onSymbolSelect} 
+              selectedChartLayout={selectedChartLayout}
               setSelectedChartLayout={setSelectedChartLayout}
               selectedSymbolsForHighlight={selectedSymbolsForHighlight}
             />
