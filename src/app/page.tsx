@@ -9,7 +9,7 @@ import { Github, Twitter } from 'lucide-react';
 
 // Hero Section Component
 const Hero = () => (
-  <section className="h-screen flex flex-col justify-end items-center text-center p-4 pb-20" style={{ 
+  <section className="h-screen flex flex-col justify-center items-center text-center p-4" style={{ 
       backgroundImage: `
         linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
         url('/lottie/hero.png')
