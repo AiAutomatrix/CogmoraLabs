@@ -18,38 +18,78 @@ export default function HomePage() {
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
-  const handleSymbolChange = (newSymbol: string) => {
-    if (newSymbol && newSymbol.trim() !== '') {
-      let formattedSymbol = newSymbol.toUpperCase().trim();
-      
-      // If the symbol already has a ':' it's likely already formatted for TradingView
-      if (formattedSymbol.includes(':')) {
-        setActiveSymbol(formattedSymbol);
-        return;
-      }
-      
-      // Handle special KCS pair conversions for TradingView
-      // ETH-KCS -> KCSETH
-      if (formattedSymbol === 'ETH-KCS') {
-        formattedSymbol = 'KCSETH';
-      } 
-      // BTC-KCS -> KCSBTC
-      else if (formattedSymbol === 'BTC-KCS') {
-        formattedSymbol = 'KCSBTC';
-      }
-      // For all other pairs, just remove the hyphen
-      else {
-        formattedSymbol = formattedSymbol.replace('-', '');
-      }
+  // New state for multi-symbol selection
+  const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
+  const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
+  const [multiChartSymbols, setMultiChartSymbols] = useState<string[]>([
+    'KUCOIN:BTC-USDT',
+    'BINANCE:ETHUSDT',
+    'BINANCE:XRPUSDT',
+    'BINANCE:SOLUSDT'
+  ]);
 
-      // Default to KUCOIN exchange for symbols coming from our screeners
-      setActiveSymbol(`KUCOIN:${formattedSymbol}`);
+  const formatTradingViewSymbol = (kucoinSymbol: string): string => {
+    if (!kucoinSymbol || kucoinSymbol.trim() === '') return '';
+
+    let formattedSymbol = kucoinSymbol.toUpperCase().trim();
+    
+    // If the symbol already has a ':' it's likely already formatted for TradingView
+    if (formattedSymbol.includes(':')) {
+      return formattedSymbol;
+    }
+    
+    // Handle special KCS pair conversions for TradingView
+    if (formattedSymbol === 'ETH-KCS') {
+      formattedSymbol = 'KCSETH';
+    } else if (formattedSymbol === 'BTC-KCS') {
+      formattedSymbol = 'KCSBTC';
+    } else {
+      formattedSymbol = formattedSymbol.replace('-', '');
+    }
+
+    // Default to KUCOIN exchange for symbols coming from our screeners
+    return `KUCOIN:${formattedSymbol}`;
+  };
+
+  const handleSymbolChange = (newSymbol: string) => {
+    const formatted = formatTradingViewSymbol(newSymbol);
+    if (formatted) {
+      setActiveSymbol(formatted);
+      // Also update the first symbol in the multi-chart layout
+      setMultiChartSymbols(prev => [formatted, ...prev.slice(1)]);
+    }
+  };
+  
+  const handleMultiSymbolSelect = (kucoinSymbol: string) => {
+    const formattedSymbol = formatTradingViewSymbol(kucoinSymbol);
+    if (!formattedSymbol || selectedSymbols.includes(formattedSymbol)) return;
+
+    const newSelectedSymbols = [...selectedSymbols, formattedSymbol];
+
+    if (newSelectedSymbols.length < numberOfChartsToSelect) {
+      setSelectedSymbols(newSelectedSymbols);
+    } else {
+      // Last symbol selected, update charts and switch view
+      const finalSymbols = [...newSelectedSymbols];
+      // Fill remaining slots if necessary, to avoid breaking chart layout
+      while (finalSymbols.length < 4) {
+        finalSymbols.push(multiChartSymbols[finalSymbols.length] || 'BINANCE:SOLUSDT');
+      }
+      setMultiChartSymbols(finalSymbols);
+      setActiveSymbol(finalSymbols[0]); // Set the first symbol as the main active one
+      setSelectedSymbols([]); // Clear the buffer
+      setActiveView('chart'); // Switch to chart view
     }
   };
 
   const handleSymbolSelect = (newSymbol: string) => {
-    handleSymbolChange(newSymbol);
-    setActiveView('chart');
+    // This function is now for single-symbol selection which also triggers multi-select logic
+    if (numberOfChartsToSelect > 1) {
+      handleMultiSymbolSelect(newSymbol);
+    } else {
+      handleSymbolChange(newSymbol);
+      setActiveView('chart');
+    }
   };
 
   const handleViewChange = (view: string) => {
@@ -82,11 +122,13 @@ export default function HomePage() {
   return (
     <PaperTradingProvider>
       <div className="flex flex-col bg-background h-full">
-        <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
+         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
           <div className="container mx-auto flex items-center justify-between h-14">
+            {/* Desktop Header */}
             <div className="hidden lg:flex items-center">
               <h1 className="text-xl font-bold">Cogmora Labs</h1>
             </div>
+             {/* Mobile Header */}
              <div className="flex items-center justify-between w-full lg:hidden">
                <h1 className="text-xl font-bold">Cogmora Labs</h1>
               <div>
@@ -99,7 +141,7 @@ export default function HomePage() {
                   </SheetTrigger>
                   <SheetContent side="right" className="w-64 p-0">
                       <SheetHeader className="p-4 border-b">
-                          <SheetTitle className="text-lg font-semibold">Cogmora Labs</SheetTitle>
+                          <SheetTitle className="text-lg font-semibold sr-only">Cogmora Labs</SheetTitle>
                           <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
                       </SheetHeader>
                       <div className="overflow-y-auto p-4">
@@ -160,6 +202,7 @@ export default function HomePage() {
               activeView={activeView}
               setActiveView={setActiveView}
               currentSymbol={activeSymbol}
+              multiChartSymbols={multiChartSymbols}
               onSymbolSelect={handleSymbolSelect}
               selectedCryptoScreener={selectedCryptoScreener}
               setSelectedCryptoScreener={setSelectedCryptoScreener}
@@ -167,6 +210,9 @@ export default function HomePage() {
               setSelectedChartLayout={setSelectedChartLayout}
               selectedHeatmapView={selectedHeatmapView}
               setSelectedHeatmapView={setSelectedHeatmapView}
+              numberOfChartsToSelect={numberOfChartsToSelect}
+              setNumberOfChartsToSelect={setNumberOfChartsToSelect}
+              selectedSymbolsForHighlight={selectedSymbols}
             />
           </section>
           <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">
@@ -183,3 +229,5 @@ export default function HomePage() {
     </PaperTradingProvider>
   );
 }
+
+    

@@ -9,19 +9,29 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
-import { ArrowUp, ArrowDown, ShoppingCart, Search, Eye, FileText } from "lucide-react";
+import { ArrowUp, ArrowDown, ShoppingCart, Search, Eye, FileText, Settings } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TradePopup } from "../paper-trading/TradePopup";
 import { Input } from "@/components/ui/input";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import { SpotTickerInfoPopup } from "../paper-trading/SpotTickerInfoPopup";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 interface AllTickersScreenerProps {
   onSymbolSelect: (symbol: string) => void;
+  numberOfChartsToSelect: number;
+  setNumberOfChartsToSelect: (num: number) => void;
+  selectedSymbolsForHighlight: string[];
 }
 
-export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreenerProps) {
+export default function AllTickersScreener({ 
+  onSymbolSelect, 
+  numberOfChartsToSelect,
+  setNumberOfChartsToSelect,
+  selectedSymbolsForHighlight
+}: AllTickersScreenerProps) {
   type SortKey = "last" | "changeRate" | "volValue";
 
   const { tickers, loading } = useKucoinTickers();
@@ -143,16 +153,35 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
       />
     )
   }, [isInfoPopupOpen, selectedTickerForInfo]);
+  
+  const chartOptions = [1, 2, 3, 4];
+  const highlightMessage = numberOfChartsToSelect > 1 
+    ? `Select ${numberOfChartsToSelect - selectedSymbolsForHighlight.length} more symbol(s)...`
+    : "Click a symbol to load chart";
 
   return (
     <>
     <div className="w-full max-w-screen-xl mx-auto px-2 sm:px-6 lg:px-8">
       <CardHeader className="pb-2 space-y-4">
-        <div>
-          <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
-          <CardDescription>
-            Real-time data feed from KuCoin. Click headers to sort.
-          </CardDescription>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
+            <CardDescription>
+              {numberOfChartsToSelect > 1 && selectedSymbolsForHighlight.length > 0 ? highlightMessage : "Real-time data feed from KuCoin. Click headers to sort."}
+            </CardDescription>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm"><Settings className="mr-2" /> Chart Setting: {numberOfChartsToSelect}</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {chartOptions.map(num => (
+                <DropdownMenuItem key={num} onSelect={() => setNumberOfChartsToSelect(num)}>
+                  Load {num} chart{num > 1 ? 's' : ''}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -193,14 +222,21 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
         ) : (
           <div role="table" className="w-full caption-bottom">
             <div role="rowgroup">
-              {sortedMemo.map((token) => (
+              {sortedMemo.map((token) => {
+                const tvSymbol = `KUCOIN:${token.symbol.replace('-', '')}`;
+                const isSelected = selectedSymbolsForHighlight.includes(tvSymbol);
+                
+                return(
                 <div
                   key={token.symbol}
                   role="row"
-                  className="flex lg:grid lg:grid-cols-5 lg:gap-x-4 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50"
+                  onClick={() => onSymbolSelect(token.symbol)}
+                  className={cn("flex lg:grid lg:grid-cols-5 lg:gap-x-4 items-center justify-between px-4 py-2 text-xs lg:text-sm border-b transition-colors hover:bg-muted/50 cursor-pointer",
+                    isSelected && "bg-primary/20 hover:bg-primary/30"
+                  )}
                 >
                   {/* Mobile Layout Group (Flex) */}
-                  <div className="flex lg:hidden items-center gap-x-2">
+                  <div className="flex lg:hidden items-center gap-x-2" onClick={(e) => e.stopPropagation()}>
                       <div role="cell" className="text-left font-medium p-0 w-20 truncate">
                         <Button variant="link" className="p-0 h-auto text-xs font-medium text-left" onClick={() => onSymbolSelect(token.symbol)}>
                           {token.symbolName}
@@ -213,16 +249,14 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
 
                   {/* Desktop Layout Cells (Grid) */}
                   <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">
-                    <Button variant="link" className="p-0 h-auto text-sm font-medium" onClick={() => onSymbolSelect(token.symbol)}>
-                      {token.symbolName}
-                    </Button>
+                    {token.symbolName}
                   </div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(token.last)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${parseFloat(token.changeRate) >= 0 ? "text-green-500" : "text-red-500"}`}>{formatChange(token.changeRate)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(token.volValue)}</div>
                   
                   {/* Actions Column (Common) */}
-                  <div role="cell" className="flex items-center justify-center gap-0 p-0 w-24 lg:w-auto">
+                  <div role="cell" className="flex items-center justify-center gap-0 p-0 w-24 lg:w-auto" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -249,7 +283,7 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
                     </Button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         )}
@@ -260,3 +294,5 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
     </>
   );
 }
+
+    

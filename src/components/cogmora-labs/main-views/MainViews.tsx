@@ -21,6 +21,7 @@ interface MainViewsProps {
   activeView: string;
   setActiveView: (view: string) => void;
   currentSymbol: string;
+  multiChartSymbols: string[];
   onSymbolSelect: (symbol: string) => void;
   selectedCryptoScreener: string;
   setSelectedCryptoScreener: (screener: string) => void;
@@ -28,19 +29,26 @@ interface MainViewsProps {
   setSelectedChartLayout: (layout: number) => void;
   selectedHeatmapView: string;
   setSelectedHeatmapView: (view: string) => void;
+  numberOfChartsToSelect: number;
+  setNumberOfChartsToSelect: (num: number) => void;
+  selectedSymbolsForHighlight: string[];
 }
 
 const MainViews: FC<MainViewsProps> = ({ 
   activeView,
   setActiveView,
   currentSymbol,
+  multiChartSymbols,
   onSymbolSelect, 
   selectedCryptoScreener, 
   setSelectedCryptoScreener,
   selectedChartLayout,
   setSelectedChartLayout,
   selectedHeatmapView,
-  setSelectedHeatmapView
+  setSelectedHeatmapView,
+  numberOfChartsToSelect,
+  setNumberOfChartsToSelect,
+  selectedSymbolsForHighlight,
 }) => {
   const BASE_CLASS = "w-full overflow-hidden";
 
@@ -59,13 +67,6 @@ const MainViews: FC<MainViewsProps> = ({
     { value: 4, label: '4 Charts' },
   ];
   
-  const multiChartSymbols = useMemo(() => [
-    currentSymbol,
-    'BINANCE:ETHUSDT',
-    'BINANCE:XRPUSDT',
-    'BINANCE:SOLUSDT'
-  ], [currentSymbol]);
-
   const cryptoScreenerOptions = [
     { value: 'all_kucoin', label: 'Kucoin Spot' },
     { value: 'kucoin_futures', label: 'Kucoin Futures' },
@@ -222,7 +223,12 @@ const MainViews: FC<MainViewsProps> = ({
       <TabsContent value="crypto_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
           {selectedCryptoScreener === 'all_kucoin' ? (
-            <AllTickersScreener onSymbolSelect={onSymbolSelect} />
+            <AllTickersScreener 
+              onSymbolSelect={onSymbolSelect} 
+              numberOfChartsToSelect={numberOfChartsToSelect}
+              setNumberOfChartsToSelect={setNumberOfChartsToSelect}
+              selectedSymbolsForHighlight={selectedSymbolsForHighlight}
+            />
           ) : selectedCryptoScreener === 'kucoin_futures' ? (
             <AllFuturesScreener />
           ) : (
@@ -239,3 +245,5 @@ const MainViews: FC<MainViewsProps> = ({
 };
 
 export default MainViews;
+
+    
