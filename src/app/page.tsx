@@ -18,6 +18,7 @@ const Hero = () => (
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat'
     }}>
+    <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Welcome to Cogmora Labs</h1>
     <p className="text-lg md:text-xl text-white mb-8 max-w-2xl mx-auto">
       The ultimate AI-powered toolkit for cryptocurrency analysis and paper trading. 
       Explore real-time screeners, advanced charting, and test your strategies risk-free.
