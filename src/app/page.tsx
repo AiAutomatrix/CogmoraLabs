@@ -4,16 +4,22 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PaperTradingProvider } from '@/context/PaperTradingContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
+import WhatIsNotPresent from '@/components/landing/WhatIsNotPresent';
 import { Github, Twitter } from 'lucide-react';
 
 // Hero Section Component
 const Hero = () => (
-  <section className="h-screen flex flex-col justify-center items-center text-center p-4">
-    <h1 className="text-5xl md:text-7xl font-bold mb-4">
-      Welcome to Cogmora Labs
-    </h1>
-    <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl">
-      The ultimate AI-powered toolkit for cryptocurrency analysis and paper trading.
+  <section className="h-screen flex flex-col justify-end items-center text-center p-4 pb-20" style={{ 
+      backgroundImage: `
+        linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+        url('/lottie/hero.png')
+      `,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat'
+    }}>
+    <p className="text-lg md:text-xl text-white mb-8 max-w-2xl mx-auto">
+      The ultimate AI-powered toolkit for cryptocurrency analysis and paper trading. 
       Explore real-time screeners, advanced charting, and test your strategies risk-free.
     </p>
     <Link href="/dashboard" passHref>
@@ -60,6 +66,7 @@ export default function LandingPage() {
     <main>
       <Hero />
       <LiveDemo />
+      <WhatIsNotPresent />
       <Footer />
     </main>
   );
