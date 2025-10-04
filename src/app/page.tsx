@@ -59,7 +59,8 @@ export default function HomePage() {
     <PaperTradingProvider>
       <div className="flex flex-col bg-background h-full">
         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
-          <div className="container mx-auto flex items-center h-14">
+          <div className="container mx-auto flex items-center justify-between h-14">
+             <h1 className="text-xl font-bold lg:hidden">Cogmora Labs</h1>
              {/* Mobile Navigation */}
             <div className="lg:hidden">
               <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
@@ -69,7 +70,7 @@ export default function HomePage() {
                     <span className="sr-only">Open navigation menu</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-64 p-0">
+                <SheetContent side="right" className="w-64 p-0">
                     <SheetHeader className="p-4 border-b">
                         <SheetTitle className="sr-only">Cogmora Labs</SheetTitle>
                         <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
