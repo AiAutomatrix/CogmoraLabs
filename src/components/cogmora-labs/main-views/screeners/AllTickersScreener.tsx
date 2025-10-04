@@ -21,15 +21,13 @@ import { cn } from "@/lib/utils";
 
 interface AllTickersScreenerProps {
   onSymbolSelect: (symbol: string) => void;
-  numberOfChartsToSelect: number;
-  setNumberOfChartsToSelect: (num: number) => void;
+  setSelectedChartLayout: (num: number) => void;
   selectedSymbolsForHighlight: string[];
 }
 
 export default function AllTickersScreener({ 
   onSymbolSelect, 
-  numberOfChartsToSelect,
-  setNumberOfChartsToSelect,
+  setSelectedChartLayout,
   selectedSymbolsForHighlight
 }: AllTickersScreenerProps) {
   type SortKey = "last" | "changeRate" | "volValue";
@@ -155,9 +153,13 @@ export default function AllTickersScreener({
   }, [isInfoPopupOpen, selectedTickerForInfo]);
   
   const chartOptions = [1, 2, 3, 4];
-  const highlightMessage = numberOfChartsToSelect > 1 
-    ? `Select ${numberOfChartsToSelect - selectedSymbolsForHighlight.length} more symbol(s)...`
-    : "Click a symbol to load chart";
+  
+  const numberOfChartsToSelect = selectedSymbolsForHighlight.length > 0
+    ? (chartOptions.find(o => o > selectedSymbolsForHighlight.length) || chartOptions.find(o => o === selectedSymbolsForHighlight.length) || 1)
+    : 1;
+
+  const highlightMessage = `Select ${numberOfChartsToSelect - selectedSymbolsForHighlight.length} more symbol(s)...`;
+
 
   return (
     <>
@@ -167,7 +169,7 @@ export default function AllTickersScreener({
           <div>
             <CardTitle className="font-headline">KuCoin All Tickers Screener</CardTitle>
             <CardDescription>
-              {numberOfChartsToSelect > 1 && selectedSymbolsForHighlight.length > 0 ? highlightMessage : "Real-time data feed from KuCoin. Click headers to sort."}
+              {selectedSymbolsForHighlight.length > 0 ? highlightMessage : "Real-time data feed from KuCoin. Click headers to sort."}
             </CardDescription>
           </div>
           <DropdownMenu>
@@ -176,7 +178,7 @@ export default function AllTickersScreener({
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {chartOptions.map(num => (
-                <DropdownMenuItem key={num} onSelect={() => setNumberOfChartsToSelect(num)}>
+                <DropdownMenuItem key={num} onSelect={() => setSelectedChartLayout(num)}>
                   Load {num} chart{num > 1 ? 's' : ''}
                 </DropdownMenuItem>
               ))}
@@ -294,5 +296,3 @@ export default function AllTickersScreener({
     </>
   );
 }
-
-    

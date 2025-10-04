@@ -97,6 +97,11 @@ export default function HomePage() {
     setIsMobileNavOpen(false);
   };
   
+  const handleChartLayoutChange = (layout: number) => {
+    setSelectedChartLayout(layout);
+    setNumberOfChartsToSelect(layout);
+  };
+  
   const chartLayoutOptions = [
     { value: 1, label: '1 Chart' },
     { value: 2, label: '2 Charts' },
@@ -161,7 +166,7 @@ export default function HomePage() {
                                   </AccordionTrigger>
                                   <AccordionContent className="pl-4">
                                       {chartLayoutOptions.map(o => (
-                                          <Button key={`chart-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedChartLayout(o.value); handleViewChange('chart'); }}>{o.label}</Button>
+                                          <Button key={`chart-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { handleChartLayoutChange(o.value); handleViewChange('chart'); }}>{o.label}</Button>
                                       ))}
                                   </AccordionContent>
                               </AccordionItem>
@@ -207,11 +212,9 @@ export default function HomePage() {
               selectedCryptoScreener={selectedCryptoScreener}
               setSelectedCryptoScreener={setSelectedCryptoScreener}
               selectedChartLayout={selectedChartLayout}
-              setSelectedChartLayout={setSelectedChartLayout}
+              setSelectedChartLayout={handleChartLayoutChange}
               selectedHeatmapView={selectedHeatmapView}
               setSelectedHeatmapView={setSelectedHeatmapView}
-              numberOfChartsToSelect={numberOfChartsToSelect}
-              setNumberOfChartsToSelect={setNumberOfChartsToSelect}
               selectedSymbolsForHighlight={selectedSymbols}
             />
           </section>
@@ -229,5 +232,3 @@ export default function HomePage() {
     </PaperTradingProvider>
   );
 }
-
-    

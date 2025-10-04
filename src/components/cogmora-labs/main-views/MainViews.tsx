@@ -29,8 +29,6 @@ interface MainViewsProps {
   setSelectedChartLayout: (layout: number) => void;
   selectedHeatmapView: string;
   setSelectedHeatmapView: (view: string) => void;
-  numberOfChartsToSelect: number;
-  setNumberOfChartsToSelect: (num: number) => void;
   selectedSymbolsForHighlight: string[];
 }
 
@@ -46,8 +44,6 @@ const MainViews: FC<MainViewsProps> = ({
   setSelectedChartLayout,
   selectedHeatmapView,
   setSelectedHeatmapView,
-  numberOfChartsToSelect,
-  setNumberOfChartsToSelect,
   selectedSymbolsForHighlight,
 }) => {
   const BASE_CLASS = "w-full overflow-hidden";
@@ -225,8 +221,7 @@ const MainViews: FC<MainViewsProps> = ({
           {selectedCryptoScreener === 'all_kucoin' ? (
             <AllTickersScreener 
               onSymbolSelect={onSymbolSelect} 
-              numberOfChartsToSelect={numberOfChartsToSelect}
-              setNumberOfChartsToSelect={setNumberOfChartsToSelect}
+              setSelectedChartLayout={setSelectedChartLayout}
               selectedSymbolsForHighlight={selectedSymbolsForHighlight}
             />
           ) : selectedCryptoScreener === 'kucoin_futures' ? (
@@ -245,5 +240,3 @@ const MainViews: FC<MainViewsProps> = ({
 };
 
 export default MainViews;
-
-    
