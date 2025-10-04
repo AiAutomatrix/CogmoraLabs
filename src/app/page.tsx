@@ -60,74 +60,76 @@ export default function HomePage() {
       <div className="flex flex-col bg-background h-full">
         <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
           <div className="container mx-auto flex items-center justify-between h-14">
-             <h1 className="text-xl font-bold lg:hidden">Cogmora Labs</h1>
-             {/* Mobile Navigation */}
-            <div className="lg:hidden">
-              <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Menu className="h-6 w-6" />
-                    <span className="sr-only">Open navigation menu</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-64 p-0">
-                    <SheetHeader className="p-4 border-b">
-                        <SheetTitle className="sr-only">Cogmora Labs</SheetTitle>
-                        <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
-                        <h2 className="text-lg font-semibold">Cogmora Labs</h2>
-                    </SheetHeader>
-                    <div className="overflow-y-auto p-4">
-                        <Accordion type="single" collapsible defaultValue="main">
-                            <AccordionItem value="main">
-                                <Button
-                                    variant="ghost"
-                                    className="w-full justify-start text-base mb-2"
-                                    onClick={() => handleViewChange('paper_trading')}
-                                >
-                                    <NotebookPen className="mr-2 h-4 w-4" /> Paper Trading
-                                </Button>
-                            </AccordionItem>
-                            <AccordionItem value="charts">
-                                <AccordionTrigger>
-                                    <span className="flex items-center"><LineChart className="mr-2 h-4 w-4"/> Charts</span>
-                                </AccordionTrigger>
-                                <AccordionContent className="pl-4">
-                                    {chartLayoutOptions.map(o => (
-                                        <Button key={`chart-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedChartLayout(o.value); handleViewChange('chart'); }}>{o.label}</Button>
-                                    ))}
-                                </AccordionContent>
-                            </AccordionItem>
-                            <AccordionItem value="heatmaps">
-                                <AccordionTrigger>
-                                    <span className="flex items-center"><Columns className="mr-2 h-4 w-4"/> Heatmaps</span>
-                                </AccordionTrigger>
-                                <AccordionContent className="pl-4">
-                                     {heatmapViewOptions.map(o => (
-                                        <Button key={`heatmap-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedHeatmapView(o.value); handleViewChange('heatmap'); }}>{o.label}</Button>
-                                    ))}
-                                </AccordionContent>
-                            </AccordionItem>
-                            <AccordionItem value="screeners">
-                                <AccordionTrigger>
-                                    <span className="flex items-center"><ListFilter className="mr-2 h-4 w-4"/> Screeners</span>
-                                </AccordionTrigger>
-                                <AccordionContent className="pl-4">
-                                    <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('options_screener')}><Settings2 className="mr-2 h-4 w-4"/>Options</Button>
-                                    {cryptoScreenerOptions.map(o => (
-                                        <Button key={`crypto-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedCryptoScreener(o.value); handleViewChange('crypto_screener'); }}>{o.label}</Button>
-                                    ))}
-                                    <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('dex_screener')}><SearchCode className="mr-2 h-4 w-4"/>DEX</Button>
-                                </AccordionContent>
-                            </AccordionItem>
-                        </Accordion>
-                    </div>
-                </SheetContent>
-              </Sheet>
+            <div className="flex items-center lg:hidden justify-between w-full">
+               <h1 className="text-xl font-bold">Cogmora Labs</h1>
+               {/* Mobile Navigation */}
+              <div>
+                <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Menu className="h-6 w-6" />
+                      <span className="sr-only">Open navigation menu</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-64 p-0">
+                      <SheetHeader className="p-4 border-b">
+                          <SheetTitle className="sr-only">Cogmora Labs</SheetTitle>
+                          <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
+                          <h2 className="text-lg font-semibold">Cogmora Labs</h2>
+                      </SheetHeader>
+                      <div className="overflow-y-auto p-4">
+                          <Accordion type="single" collapsible defaultValue="main">
+                              <AccordionItem value="main">
+                                  <Button
+                                      variant="ghost"
+                                      className="w-full justify-start text-base mb-2"
+                                      onClick={() => handleViewChange('paper_trading')}
+                                  >
+                                      <NotebookPen className="mr-2 h-4 w-4" /> Paper Trading
+                                  </Button>
+                              </AccordionItem>
+                              <AccordionItem value="charts">
+                                  <AccordionTrigger>
+                                      <span className="flex items-center"><LineChart className="mr-2 h-4 w-4"/> Charts</span>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="pl-4">
+                                      {chartLayoutOptions.map(o => (
+                                          <Button key={`chart-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedChartLayout(o.value); handleViewChange('chart'); }}>{o.label}</Button>
+                                      ))}
+                                  </AccordionContent>
+                              </AccordionItem>
+                              <AccordionItem value="heatmaps">
+                                  <AccordionTrigger>
+                                      <span className="flex items-center"><Columns className="mr-2 h-4 w-4"/> Heatmaps</span>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="pl-4">
+                                       {heatmapViewOptions.map(o => (
+                                          <Button key={`heatmap-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedHeatmapView(o.value); handleViewChange('heatmap'); }}>{o.label}</Button>
+                                      ))}
+                                  </AccordionContent>
+                              </AccordionItem>
+                              <AccordionItem value="screeners">
+                                  <AccordionTrigger>
+                                      <span className="flex items-center"><ListFilter className="mr-2 h-4 w-4"/> Screeners</span>
+                                  </AccordionTrigger>
+                                  <AccordionContent className="pl-4">
+                                      <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('options_screener')}><Settings2 className="mr-2 h-4 w-4"/>Options</Button>
+                                      {cryptoScreenerOptions.map(o => (
+                                          <Button key={`crypto-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedCryptoScreener(o.value); handleViewChange('crypto_screener'); }}>{o.label}</Button>
+                                      ))}
+                                      <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('dex_screener')}><SearchCode className="mr-2 h-4 w-4"/>DEX</Button>
+                                  </AccordionContent>
+                              </AccordionItem>
+                          </Accordion>
+                      </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
             </div>
           </div>
         </header>
 
-        <main className="flex flex-col lg:flex-row flex-grow lg:min-h-0">
+        <main className="flex flex-col lg:flex-row flex-grow lg:min-h-0 container mx-auto">
           <section className="flex flex-col lg:w-2/3 lg:min-h-0">
             <MainViews
               activeView={activeView}
