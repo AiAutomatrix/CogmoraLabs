@@ -15,8 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Cogmora Labs',
-  description: 'Cryptocurrency trading analysis and tracking platform',
+  title: 'Cogmora Labs - AI-Powered Crypto Trading Tools',
+  description: 'Explore advanced crypto trading analysis, real-time data screeners, and paper trading with Cogmora Labs. Trade smarter with AI insights.',
+  keywords: ['crypto', 'trading', 'AI', 'screener', 'paper trading', 'technical analysis'],
 };
 
 export default function RootLayout({
@@ -40,7 +41,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full flex flex-col`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full flex flex-col bg-black text-white`}>
         <TooltipProvider>
           {children}
           <Toaster />
