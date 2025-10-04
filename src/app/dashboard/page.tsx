@@ -101,6 +101,7 @@ export default function HomePage() {
   const handleChartLayoutChange = (layout: number) => {
     setSelectedChartLayout(layout);
     setNumberOfChartsToSelect(layout);
+    setSelectedSymbols([]); // Reset selection when layout changes
   };
   
   const chartLayoutOptions = [

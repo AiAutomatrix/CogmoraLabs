@@ -153,7 +153,12 @@ const MainViews: FC<MainViewsProps> = ({
 
       {/* 🔁 Tab Content */}
       <TabsContent value="paper_trading" className={`flex-grow overflow-y-auto py-2 m-0 h-full ${mobileContentClassName}`}>
-        <PaperTradingDashboard />
+        <PaperTradingDashboard 
+           onSymbolSelect={onSymbolSelect}
+           selectedChartLayout={selectedChartLayout}
+           setSelectedChartLayout={setSelectedChartLayout}
+           selectedSymbolsForHighlight={selectedSymbolsForHighlight}
+        />
       </TabsContent>
       <TabsContent value="chart" className={`flex-grow overflow-hidden p-0 m-0 ${mobileContentClassName}`}>
         {/* Mobile Carousel */}

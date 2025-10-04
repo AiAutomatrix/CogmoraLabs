@@ -1,12 +1,14 @@
+
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import Watchlist from '@/components/cogmora-labs/main-views/paper-trading/Watchlist';
 
 // This component is a wrapper to pre-populate the watchlist for the demo.
 const LandingPageWatchlist: React.FC = () => {
   const { watchlist, toggleWatchlist } = usePaperTrading();
+  const [selectedLayout, setSelectedLayout] = useState(1);
 
   useEffect(() => {
     // We want to ensure a few items are on the watchlist for the demo.
@@ -39,7 +41,14 @@ const LandingPageWatchlist: React.FC = () => {
 
   }, []); // Run only once
 
-  return <Watchlist />;
+  return (
+    <Watchlist 
+      onSymbolSelect={() => {}} // Dummy function for landing page
+      selectedChartLayout={selectedLayout}
+      setSelectedChartLayout={setSelectedLayout}
+      selectedSymbolsForHighlight={[]} // Provide empty array
+    />
+  );
 };
 
 export default LandingPageWatchlist;
