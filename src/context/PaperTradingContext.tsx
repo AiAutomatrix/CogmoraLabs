@@ -245,78 +245,73 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
 
     try {
-      const [spotResponse, futuresResponse] = await Promise.all([
-        fetch("/api/kucoin-tickers"),
-        fetch("/api/kucoin-futures-tickers")
-      ]);
+        const spotResponse = await fetch("/api/kucoin-tickers");
+        const spotData = await spotResponse.json();
+        const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        
+        const allFuturesContracts = futuresContracts; // Use contracts from context state
 
-      const spotData = await spotResponse.json();
-      const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        if (!allSpotTickers.length && !allFuturesContracts.length) {
+            throw new Error('Could not fetch any screener data.');
+        }
 
-      const futuresData = await futuresResponse.json();
-      const allFuturesContracts: KucoinFuturesContract[] = futuresData?.data || [];
+        let finalItems: WatchlistItem[] = [];
+        const addedSymbols = new Set<string>();
 
-      if (!allSpotTickers.length && !allFuturesContracts.length) {
-        throw new Error('Could not fetch any screener data.');
-      }
+        config.rules.forEach(rule => {
+            let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
+            let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
 
-      let finalItems: WatchlistItem[] = [];
-      const addedSymbols = new Set<string>();
+            if (rule.source === 'spot') {
+                sourceData = allSpotTickers;
+                sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+            } else {
+                sourceData = allFuturesContracts;
+                sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+            }
 
-      config.rules.forEach(rule => {
-          let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
-          let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
+            const sorted = [...sourceData].sort((a, b) => {
+                const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
+                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+                return valB - valA;
+            });
 
-          if (rule.source === 'spot') {
-              sourceData = allSpotTickers;
-              sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
-          } else {
-              sourceData = allFuturesContracts;
-              sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
-          }
+            let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
+            if (rule.criteria.startsWith('top')) {
+                selected = sorted.slice(0, rule.count);
+            } else { // bottom
+                selected = sorted.slice(-rule.count);
+            }
 
-          const sorted = [...sourceData].sort((a, b) => {
-              const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
-              const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
-              return valB - valA;
-          });
+            selected.forEach(item => {
+                if (!addedSymbols.has(item.symbol)) {
+                    addedSymbols.add(item.symbol);
+                    const isSpot = rule.source === 'spot';
+                    finalItems.push({
+                        symbol: item.symbol,
+                        symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
+                        type: rule.source,
+                        currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
+                        priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                    });
+                }
+            });
+        });
 
-          let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
-          if (rule.criteria.startsWith('top')) {
-              selected = sorted.slice(0, rule.count);
-          } else { // bottom
-              selected = sorted.slice(-rule.count);
-          }
-
-          selected.forEach(item => {
-              if (!addedSymbols.has(item.symbol)) {
-                  addedSymbols.add(item.symbol);
-                  const isSpot = rule.source === 'spot';
-                  finalItems.push({
-                      symbol: item.symbol,
-                      symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
-                      type: rule.source,
-                      currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
-                      priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
-                  });
-              }
-          });
-      });
-
-      setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
-      setAutomationConfig(config);
-      if (config.updateMode === 'auto-refresh') {
-          localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-          setNextScrapeTime(Date.now() + config.refreshInterval);
-      } else {
-          setNextScrapeTime(0); // Not in auto-refresh mode
-      }
-      toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+        setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
+        setAutomationConfig(config);
+        if (config.updateMode === 'auto-refresh') {
+            localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
+            setNextScrapeTime(Date.now() + config.refreshInterval);
+        } else {
+            setNextScrapeTime(0); // Not in auto-refresh mode
+        }
+        toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
     } catch(error) {
       console.error('Watchlist automation failed:', error);
       toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
     }
-  }, [toast]);
+  }, [toast, futuresContracts]);
 
   // Effect for Auto-Refresh Automation
   useEffect(() => {
@@ -1061,4 +1056,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
 
