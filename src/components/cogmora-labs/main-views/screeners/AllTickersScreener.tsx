@@ -202,7 +202,7 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
                   {/* Mobile Layout Group (Flex) */}
                   <div className="flex lg:hidden items-center gap-x-2">
                       <div role="cell" className="text-left font-medium p-0 w-20 truncate">
-                        <Button variant="link" className="p-0 h-auto text-xs font-medium text-left" onClick={() => onSymbolSelect(`KUCOIN:${token.symbol}`)}>
+                        <Button variant="link" className="p-0 h-auto text-xs font-medium text-left" onClick={() => onSymbolSelect(token.symbol)}>
                           {token.symbolName}
                         </Button>
                       </div>
@@ -213,7 +213,7 @@ export default function AllTickersScreener({ onSymbolSelect }: AllTickersScreene
 
                   {/* Desktop Layout Cells (Grid) */}
                   <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">
-                    <Button variant="link" className="p-0 h-auto text-sm font-medium" onClick={() => onSymbolSelect(`KUCOIN:${token.symbol}`)}>
+                    <Button variant="link" className="p-0 h-auto text-sm font-medium" onClick={() => onSymbolSelect(token.symbol)}>
                       {token.symbolName}
                     </Button>
                   </div>

@@ -21,11 +21,29 @@ export default function HomePage() {
   const handleSymbolChange = (newSymbol: string) => {
     if (newSymbol && newSymbol.trim() !== '') {
       let formattedSymbol = newSymbol.toUpperCase().trim();
-      if (!formattedSymbol.includes(':') && formattedSymbol.length > 0) {
-        // Default to KUCOIN for symbols from our screeners
-        formattedSymbol = `KUCOIN:${formattedSymbol}`;
+      
+      // If the symbol already has a ':' it's likely already formatted for TradingView
+      if (formattedSymbol.includes(':')) {
+        setActiveSymbol(formattedSymbol);
+        return;
       }
-      setActiveSymbol(formattedSymbol);
+      
+      // Handle special KCS pair conversions for TradingView
+      // ETH-KCS -> KCSETH
+      if (formattedSymbol === 'ETH-KCS') {
+        formattedSymbol = 'KCSETH';
+      } 
+      // BTC-KCS -> KCSBTC
+      else if (formattedSymbol === 'BTC-KCS') {
+        formattedSymbol = 'KCSBTC';
+      }
+      // For all other pairs, just remove the hyphen
+      else {
+        formattedSymbol = formattedSymbol.replace('-', '');
+      }
+
+      // Default to KUCOIN exchange for symbols coming from our screeners
+      setActiveSymbol(`KUCOIN:${formattedSymbol}`);
     }
   };
 
@@ -81,9 +99,8 @@ export default function HomePage() {
                   </SheetTrigger>
                   <SheetContent side="right" className="w-64 p-0">
                       <SheetHeader className="p-4 border-b">
-                          <SheetTitle className="sr-only">Cogmora Labs</SheetTitle>
+                          <SheetTitle className="text-lg font-semibold">Cogmora Labs</SheetTitle>
                           <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
-                          <h2 className="text-lg font-semibold">Cogmora Labs</h2>
                       </SheetHeader>
                       <div className="overflow-y-auto p-4">
                           <Accordion type="single" collapsible defaultValue="main">
