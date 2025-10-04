@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PaperTradingProvider } from '@/context/PaperTradingContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
-import WhatIsNotPresent from '@/components/landing/WhatIsNotPresent';
+import Features from '@/components/landing/Features';
 import { Github, Twitter } from 'lucide-react';
 
 // Hero Section Component
@@ -66,7 +66,7 @@ export default function LandingPage() {
     <main>
       <Hero />
       <LiveDemo />
-      <WhatIsNotPresent />
+      <Features />
       <Footer />
     </main>
   );
