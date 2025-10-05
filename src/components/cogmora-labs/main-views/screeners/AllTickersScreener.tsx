@@ -175,7 +175,7 @@ export default function AllTickersScreener({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm"><Settings className="mr-2" /> Chart Setting: {selectedChartLayout}</Button>
+              <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4" />{selectedChartLayout}</Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               {chartOptions.map(num => (
@@ -297,3 +297,5 @@ export default function AllTickersScreener({
     </>
   );
 }
+
+    
