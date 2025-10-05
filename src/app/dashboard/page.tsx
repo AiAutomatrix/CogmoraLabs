@@ -79,6 +79,7 @@ export default function HomePage() {
       setActiveSymbol(finalSymbols[0]); // Set the first symbol as the main active one
       setSelectedSymbols([]); // Clear the buffer
       setActiveView('chart'); // Switch to chart view
+      window.scrollTo(0, 0); // Scroll to top
     }
   };
 
@@ -89,6 +90,7 @@ export default function HomePage() {
     } else {
       handleSymbolChange(newSymbol);
       setActiveView('chart');
+      window.scrollTo(0, 0); // Scroll to top
     }
   };
 
