@@ -4,9 +4,9 @@ This document outlines the structure and styling that creates the desktop-first,
 
 ## Core Philosophy
 
-On screens larger than the 'lg' breakpoint (1024px), the layout shifts from a single-column mobile view to a two-column split-screen. This is achieved primarily through responsive Tailwind CSS classes in `src/app/page.tsx`.
+On screens larger than the 'lg' breakpoint (1024px), the layout shifts from a single-column mobile view to a two-column split-screen. This is achieved primarily through responsive Tailwind CSS classes in `src/app/dashboard/page.tsx`.
 
-## Layout Structure (`src/app/page.tsx`)
+## Layout Structure (`src/app/dashboard/page.tsx`)
 
 The main layout is controlled by the `<main>` element within the `HomePage` component.
 
@@ -28,13 +28,13 @@ The main layout is controlled by the `<main>` element within the `HomePage` comp
 
 -   **`lg:flex-row`**: This is the crucial class. On large screens (`lg:`), it overrides the default `flex-col` and arranges the `<section>` (Main View) and `<aside>` (Mini Widgets/Sidebar) into a horizontal row.
 -   **`lg:w-2/3` and `lg:w-1/3`**: These classes assign a proportional width to the main content and sidebar, creating the 2/3 and 1/3 split.
--   **`flex-grow`**: This ensures that the `<main>` element expands to fill any available vertical space within its parent container (`body` and `html`, which are set to `h-full`).
--   **`lg:min-h-0`**: This class is applied to both the `<main>` container and its direct children (`<section>` and `<aside>`). On large screens, it prevents the flex items from expanding beyond their flex-basis (the `lg:w-2/3` and `lg:w-1/3` properties), which is essential for allowing independent scrolling within each column if the content overflows.
+-   **`flex-grow`**: This ensures that the `<main>` element expands to fill any available vertical space within its parent container.
+-   **`lg:min-h-0`**: This class is applied to both the `<main>` container and its direct children (`<section>` and `<aside>`). On large screens, it prevents the flex items from expanding beyond their flex-basis, which is essential for allowing independent scrolling within each column if the content overflows.
 
 ## Component Behavior
 
 ### `MainViews.tsx`
--   On desktop, this component fills the entire `lg:w-2/3` container. The internal `Tabs` and `TabsContent` are configured to take up the full height of this section, allowing content like charts and screeners to expand fully.
+-   On desktop, this component fills the entire `lg:w-2/3` container. The internal `Tabs` and `TabsContent` are configured to take up the full height of this section. This allows content like the `PaperTradingDashboard`, charts, and screeners to expand fully and manage their own internal scrolling.
 
 ### `MiniWidgets.tsx`
 -   This component fills the `lg:w-1/3` sidebar. The `TabsContent` within it, particularly the `AiWebchat`, is set to be `flex-grow`, ensuring it fills all available vertical space in the sidebar. This makes the chat and technical analysis widgets feel integrated and properly sized.
