@@ -43,7 +43,6 @@ interface PaperTradingContextType {
   watchlist: WatchlistItem[];
   priceAlerts: Record<string, PriceAlert>;
   tradeTriggers: TradeTrigger[];
-  futuresContracts: KucoinFuturesContract[];
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
@@ -87,7 +86,7 @@ interface PaperTradingContextType {
   futuresWsStatus: string;
   automationConfig: AutomationConfig;
   setAutomationConfig: (config: AutomationConfig) => void;
-  applyWatchlistAutomation: (config: AutomationConfig) => void;
+  applyWatchlistAutomation: (config: AutomationConfig, forceScrape?: boolean) => void;
   nextScrapeTime: number;
 }
 
@@ -107,7 +106,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
-  const [automationConfig, setAutomationConfig] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
+  const [automationConfig, setAutomationConfigInternal] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
   const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
 
 
@@ -149,14 +148,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedTriggers) setTradeTriggers(JSON.parse(savedTriggers));
       if (savedAutomation) {
           const config = JSON.parse(savedAutomation);
-          setAutomationConfig(config);
+          setAutomationConfigInternal(config);
           // If it was auto-refreshing, re-initiate the timer logic
           if(config.updateMode === 'auto-refresh') {
             const lastScrape = localStorage.getItem('paperTrading_lastScrapeTime');
             const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
             const timeSinceLast = Date.now() - lastScrapeTime;
             const remainingTime = config.refreshInterval - timeSinceLast;
-            setNextScrapeTime(Date.now() + remainingTime);
+            setNextScrapeTime(Date.now() + Math.max(0, remainingTime));
           }
       }
 
@@ -168,10 +167,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setWatchlist([]);
       setPriceAlerts({});
       setTradeTriggers([]);
-      setAutomationConfig(INITIAL_AUTOMATION_CONFIG);
+      setAutomationConfigInternal(INITIAL_AUTOMATION_CONFIG);
     }
     
-    // Fetch futures contracts list once for other parts of the context
     const fetchInitialData = async () => {
         try {
             const futuresResponse = await fetch("/api/kucoin-futures-tickers");
@@ -241,17 +239,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       prevWatchlistRef.current = watchlist;
   }, [watchlist, isLoaded, toast]);
   
-  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig) => {
-    toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
+  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
+    if (forceScrape) {
+      toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
+    }
 
     try {
         const spotResponse = await fetch("/api/kucoin-tickers");
         const spotData = await spotResponse.json();
         const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
         
-        const allFuturesContracts = futuresContracts; // Use contracts from context state
-
-        if (!allSpotTickers.length && !allFuturesContracts.length) {
+        if (!allSpotTickers.length && !futuresContracts.length) {
             throw new Error('Could not fetch any screener data.');
         }
 
@@ -266,7 +264,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 sourceData = allSpotTickers;
                 sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
             } else {
-                sourceData = allFuturesContracts;
+                sourceData = futuresContracts;
                 sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
             }
 
@@ -299,19 +297,38 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
 
         setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
-        setAutomationConfig(config);
+        
         if (config.updateMode === 'auto-refresh') {
             localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
             setNextScrapeTime(Date.now() + config.refreshInterval);
-        } else {
-            setNextScrapeTime(0); // Not in auto-refresh mode
         }
-        toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+        
+        if (forceScrape) {
+          toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+        }
     } catch(error) {
       console.error('Watchlist automation failed:', error);
-      toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
+      if (forceScrape) {
+        toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
+      }
     }
   }, [toast, futuresContracts]);
+
+  const setAutomationConfig = useCallback((config: AutomationConfig) => {
+    setAutomationConfigInternal(config);
+    if (config.updateMode === 'auto-refresh') {
+        localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
+        setNextScrapeTime(Date.now() + config.refreshInterval);
+        toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
+    } else {
+        setNextScrapeTime(0);
+        if (automationIntervalRef.current) {
+          clearInterval(automationIntervalRef.current);
+        }
+        toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
+    }
+  }, [toast]);
+
 
   // Effect for Auto-Refresh Automation
   useEffect(() => {
@@ -319,15 +336,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         clearInterval(automationIntervalRef.current);
     }
     if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        automationIntervalRef.current = setInterval(() => {
-            applyWatchlistAutomation(automationConfig);
-        }, automationConfig.refreshInterval);
-    }
-    return () => {
-        if (automationIntervalRef.current) {
+        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
+        
+        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
+        const timeSinceLast = Date.now() - lastScrapeTime;
+        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
+
+        const timeoutId = setTimeout(() => {
+          runAutomation(); // Run first scrape after initial delay
+          automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
+        }, initialDelay);
+        
+        return () => {
+          clearTimeout(timeoutId);
+          if (automationIntervalRef.current) {
             clearInterval(automationIntervalRef.current);
-        }
-    };
+          }
+        };
+    }
   }, [automationConfig, applyWatchlistAutomation]);
 
 
@@ -1023,7 +1049,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist,
         priceAlerts,
         tradeTriggers,
-        futuresContracts,
         toggleWatchlist,
         addPriceAlert,
         removePriceAlert,
@@ -1056,5 +1081,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-

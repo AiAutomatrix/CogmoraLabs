@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import {
   Card,
@@ -20,10 +20,47 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUp, ArrowDown, XCircle } from 'lucide-react';
+import { ArrowUp, ArrowDown, XCircle, Timer, Wand2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+
+const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
+    const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
+
+    useEffect(() => {
+        if (nextScrapeTime <= 0) return;
+
+        const interval = setInterval(() => {
+            const newTimeLeft = nextScrapeTime - Date.now();
+            if (newTimeLeft <= 0) {
+                clearInterval(interval);
+                setTimeLeft(0);
+            } else {
+                setTimeLeft(newTimeLeft);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [nextScrapeTime]);
+
+    if (timeLeft <= 0) {
+        return <span className="font-mono">...</span>;
+    }
+
+    const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+    const seconds = Math.floor((timeLeft / 1000) % 60);
+
+    return (
+        <span className="font-mono">
+            {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+        </span>
+    );
+};
+
 
 export default function TradeTriggersDashboard() {
-  const { tradeTriggers, removeTradeTrigger } = usePaperTrading();
+  const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime } = usePaperTrading();
+  
+  const isAutomationActive = automationConfig.updateMode === 'auto-refresh';
 
   const formatPrice = (price: number) => {
     if (!price || isNaN(price)) return "$0.00";
@@ -39,9 +76,9 @@ export default function TradeTriggersDashboard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Active Trade Triggers</CardTitle>
+        <CardTitle>Active Triggers</CardTitle>
         <CardDescription>
-          These are conditional orders waiting to be executed when the target price is met.
+          Conditional orders and automations waiting to execute.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -49,16 +86,40 @@ export default function TradeTriggersDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Symbol</TableHead>
+                <TableHead>Symbol/Automation</TableHead>
                 <TableHead>Condition</TableHead>
                 <TableHead>Action</TableHead>
-                <TableHead className="text-right">Amount/Collateral</TableHead>
+                <TableHead className="text-right">Amount/Next Run</TableHead>
                 <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tradeTriggers.length > 0 ? (
-                tradeTriggers.map((trigger) => (
+              {isAutomationActive && (
+                 <TableRow>
+                    <TableCell className="font-medium">
+                        <div className="flex items-center">
+                            <Wand2 className="h-4 w-4 mr-2 text-primary"/>
+                            Watchlist Automation
+                        </div>
+                    </TableCell>
+                    <TableCell>
+                        <Badge variant="outline">Auto-Refresh</Badge>
+                    </TableCell>
+                    <TableCell>
+                        <Badge variant="secondary">Scrape</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                        <div className="flex items-center justify-end">
+                            <Timer className="h-4 w-4 mr-2 text-muted-foreground"/>
+                            <CountdownTimer nextScrapeTime={nextScrapeTime} />
+                        </div>
+                    </TableCell>
+                    <TableCell className="text-center">-</TableCell>
+                </TableRow>
+              )}
+              {tradeTriggers.length > 0 && isAutomationActive && <TableRow><TableCell colSpan={5} className="p-0"><Separator /></TableCell></TableRow>}
+
+              {tradeTriggers.map((trigger) => (
                   <TableRow key={trigger.id}>
                     <TableCell className="font-medium">{trigger.symbolName}</TableCell>
                     <TableCell>
@@ -86,11 +147,12 @@ export default function TradeTriggersDashboard() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
+              ))}
+
+              {tradeTriggers.length === 0 && !isAutomationActive && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center h-24">
-                    No active trade triggers.
+                    No active triggers or automations.
                   </TableCell>
                 </TableRow>
               )}

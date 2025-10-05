@@ -48,7 +48,7 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
   
   const handleApply = () => {
     const config: AutomationConfig = { rules, updateMode, refreshInterval, clearExisting };
-    applyWatchlistAutomation(config);
+    applyWatchlistAutomation(config, true); // Force immediate scrape
     onOpenChange(false);
   };
   
@@ -145,7 +145,7 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" variant="outline" onClick={handleSave}>Save</Button>
-          <Button type="button" onClick={handleApply}>Scrape</Button>
+          <Button type="button" onClick={handleApply}>Scrape Now</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

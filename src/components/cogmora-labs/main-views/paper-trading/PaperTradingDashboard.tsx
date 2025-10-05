@@ -206,7 +206,7 @@ export default function PaperTradingDashboard({
       <Tabs defaultValue="positions" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="positions">Open Positions</TabsTrigger>
-          <TabsTrigger value="triggers">Trade Triggers</TabsTrigger>
+          <TabsTrigger value="triggers">Triggers</TabsTrigger>
           <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
           <TabsTrigger value="history">Trade History</TabsTrigger>
         </TabsList>
