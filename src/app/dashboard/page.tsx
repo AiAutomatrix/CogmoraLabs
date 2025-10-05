@@ -1,3 +1,4 @@
+
 'use client';
 
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
