@@ -44,7 +44,7 @@ export default function HomePage() {
   
     let formattedSymbol = kucoinSymbol.toUpperCase().trim();
   
-    // If it's already formatted (e.g., from watchlist), return it.
+    // If it's already formatted (e.g., from a previous manual entry or another source)
     if (formattedSymbol.includes(':')) {
       return formattedSymbol;
     }

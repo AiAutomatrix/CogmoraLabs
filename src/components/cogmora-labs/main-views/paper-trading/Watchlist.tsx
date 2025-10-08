@@ -160,6 +160,16 @@ export default function Watchlist({
     const colorClass = isPositive ? "text-green-500" : "text-red-500";
     return <span className={colorClass}>{`${isPositive ? "+" : ""}${(changeRate * 100).toFixed(2)}%`}</span>;
   };
+  
+  const getHighlightSymbol = (item: WatchlistItem) => {
+    let symbolForHighlight = '';
+    if (item.type === 'spot') {
+      symbolForHighlight = `KUCOIN:${item.symbol.replace('-', '')}`;
+    } else if (item.type === 'futures') {
+      symbolForHighlight = item.symbol.endsWith('M') ? item.symbol.slice(0, -1) : item.symbol;
+    }
+    return symbolForHighlight;
+  }
 
   return (
     <>
@@ -207,8 +217,8 @@ export default function Watchlist({
               {watchlist.length > 0 ? (
                 watchlist.map((item) => {
                   const alert = priceAlerts[item.symbol];
-                  const tvSymbol = `KUCOIN:${item.symbol.replace('-', '')}`;
-                  const isSelected = selectedSymbolsForHighlight.includes(tvSymbol);
+                  const symbolForHighlight = getHighlightSymbol(item);
+                  const isSelected = selectedSymbolsForHighlight.includes(symbolForHighlight);
                   
                   return (
                     <TableRow 
@@ -330,3 +340,5 @@ export default function Watchlist({
     </>
   );
 }
+
+    
