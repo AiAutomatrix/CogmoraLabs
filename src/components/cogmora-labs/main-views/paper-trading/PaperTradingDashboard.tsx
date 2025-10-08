@@ -282,7 +282,13 @@ export default function PaperTradingDashboard({
                             return (
                             <TableRow key={`${pos.id}-${pos.symbolName}`}>
                                 <TableCell className="font-medium px-2 py-2">
-                                {pos.symbolName}
+                                  <Button
+                                    variant="link"
+                                    className="p-0 h-auto text-left font-medium"
+                                    onClick={() => onSymbolSelect(pos.symbol)}
+                                  >
+                                    {pos.symbolName}
+                                  </Button>
                                 </TableCell>
                                 <TableCell className="px-1 py-2 text-center">
                                 {pos.positionType === "futures" ? (
