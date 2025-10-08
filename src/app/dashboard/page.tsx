@@ -41,33 +41,35 @@ export default function HomePage() {
 
   const formatTradingViewSymbol = (kucoinSymbol: string): string => {
     if (!kucoinSymbol || kucoinSymbol.trim() === '') return '';
-
+  
     let formattedSymbol = kucoinSymbol.toUpperCase().trim();
-    
+  
+    // If it's already formatted (e.g., from watchlist), return it.
     if (formattedSymbol.includes(':')) {
       return formattedSymbol;
     }
-    
-    // For futures contracts, which end in 'M' from the KuCoin API
+  
+    // For futures contracts from the screener (e.g., COAIUSDTM)
     if (formattedSymbol.endsWith('M')) {
-      // Remove the 'M' suffix
-      const baseSymbol = formattedSymbol.slice(0, -1);
-      // Default to the KUCOIN spot chart for futures symbols as a safe fallback
-      return `KUCOIN:${baseSymbol}`;
+      // Just strip the 'M' and let TradingView find the best match (e.g., COAIUSDT)
+      return formattedSymbol.slice(0, -1);
     }
-
-    // Handle special KCS pair conversions for TradingView (for spot)
+  
+    // Handle special KCS spot pairs for TradingView
     if (formattedSymbol === 'ETH-KCS') {
-      formattedSymbol = 'KCSETH';
+      return 'KCSETH';
     } else if (formattedSymbol === 'BTC-KCS') {
-      formattedSymbol = 'KCSBTC';
-    } else {
-      // For spot symbols like 'BTC-USDT', this becomes 'BTCUSDT'
-      formattedSymbol = formattedSymbol.replace('-', '');
+      return 'KCSBTC';
     }
-
-    // Default to KUCOIN exchange for spot symbols
-    return `KUCOIN:${formattedSymbol}`;
+  
+    // For standard spot symbols like 'BTC-USDT', format for KuCoin
+    if (formattedSymbol.includes('-')) {
+      formattedSymbol = formattedSymbol.replace('-', '');
+      return `KUCOIN:${formattedSymbol}`;
+    }
+  
+    // Fallback for any other case
+    return formattedSymbol;
   };
 
   const handleSymbolChange = (newSymbol: string) => {
@@ -263,3 +265,4 @@ export default function HomePage() {
   );
 }
 
+    
