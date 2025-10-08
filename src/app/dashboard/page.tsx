@@ -4,7 +4,7 @@
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
 import MiniWidgets from '@/components/cogmora-labs/mini-widgets/MiniWidgets';
 import { PaperTradingProvider } from '@/context/PaperTradingContext';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
@@ -15,6 +15,7 @@ export default function HomePage() {
   const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTCUSDT');
   const [selectedCryptoScreener, setSelectedCryptoScreener] = useState('all_kucoin');
   const [activeView, setActiveView] = useState('paper_trading');
+  const [activeMiniView, setActiveMiniView] = useState('ai_chat');
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -28,6 +29,14 @@ export default function HomePage() {
     'BINANCE:XRPUSDT',
     'BINANCE:SOLUSDT'
   ]);
+
+  useEffect(() => {
+    if (activeView === 'chart') {
+      setActiveMiniView('tech_analysis');
+    } else {
+      setActiveMiniView('ai_chat');
+    }
+  }, [activeView]);
 
   const formatTradingViewSymbol = (kucoinSymbol: string): string => {
     if (!kucoinSymbol || kucoinSymbol.trim() === '') return '';
@@ -226,7 +235,12 @@ export default function HomePage() {
             />
           </section>
           <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">
-            <MiniWidgets currentSymbol={activeSymbol} onSymbolChange={handleSymbolChange} />
+            <MiniWidgets
+              currentSymbol={activeSymbol}
+              onSymbolChange={handleSymbolChange}
+              activeMiniView={activeMiniView}
+              setActiveMiniView={setActiveMiniView}
+            />
           </aside>
         </main>
 
