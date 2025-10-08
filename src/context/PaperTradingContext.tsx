@@ -400,8 +400,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               const totalValue = (existing.size * existing.averageEntryPrice) + (size * currentPrice);
               existing.averageEntryPrice = totalValue / totalSize;
               existing.size = totalSize;
-              if (stopLoss) existing.details.stopLoss = stopLoss;
-              if (takeProfit) existing.details.takeProfit = takeProfit;
+              if (existing.details) {
+                  if (stopLoss) existing.details.stopLoss = stopLoss;
+                  if (takeProfit) existing.details.takeProfit = takeProfit;
+              }
               return updatedPositions;
           } else {
               const newPosition: OpenPosition = {
@@ -726,7 +728,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     if (isSpot) {
       const spotData = data as SpotSnapshotData;
-      newPrice = spotData.lastTradedPrice;
+      newPrice = spotData.lastTradedPrice ?? undefined;
       high = spotData.high ?? undefined;
       low = spotData.low ?? undefined;
       priceChgPct = spotData.changeRate ?? undefined;
