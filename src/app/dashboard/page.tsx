@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
@@ -43,17 +44,20 @@ export default function HomePage() {
 
     let formattedSymbol = kucoinSymbol.toUpperCase().trim();
     
-    // If the symbol already has a ':' it's likely already formatted for TradingView
     if (formattedSymbol.includes(':')) {
       return formattedSymbol;
     }
-
-    // For futures contracts, KuCoin symbols often end in 'M'. TradingView doesn't want this.
-    if (formattedSymbol.endsWith('M')) {
-      formattedSymbol = formattedSymbol.slice(0, -1);
-    }
     
-    // Handle special KCS pair conversions for TradingView
+    // For futures contracts, which end in 'M' from the KuCoin API
+    if (formattedSymbol.endsWith('M')) {
+      // Remove the 'M' suffix
+      const baseSymbol = formattedSymbol.slice(0, -1);
+      // Attempt to format for Binance perpetual contracts first (e.g., COAIUSDT -> BINANCE:COAIUSDT.P)
+      // This is often the correct mapping on TradingView
+      return `BINANCE:${baseSymbol}.P`;
+    }
+
+    // Handle special KCS pair conversions for TradingView (for spot)
     if (formattedSymbol === 'ETH-KCS') {
       formattedSymbol = 'KCSETH';
     } else if (formattedSymbol === 'BTC-KCS') {
@@ -63,7 +67,7 @@ export default function HomePage() {
       formattedSymbol = formattedSymbol.replace('-', '');
     }
 
-    // Default to KUCOIN exchange for symbols coming from our screeners
+    // Default to KUCOIN exchange for spot symbols
     return `KUCOIN:${formattedSymbol}`;
   };
 
@@ -259,3 +263,4 @@ export default function HomePage() {
     </PaperTradingProvider>
   );
 }
+
