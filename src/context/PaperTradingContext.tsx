@@ -25,6 +25,7 @@ import type {
   KucoinFuturesContract,
   AutomationConfig,
   KucoinTicker,
+  FuturesSnapshotData,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
@@ -403,6 +404,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               if (existing.details) {
                   if (stopLoss) existing.details.stopLoss = stopLoss;
                   if (takeProfit) existing.details.takeProfit = takeProfit;
+              } else {
+                  existing.details = { stopLoss, takeProfit, triggeredBy };
               }
               return updatedPositions;
           } else {
@@ -733,11 +736,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       low = spotData.low ?? undefined;
       priceChgPct = spotData.changeRate ?? undefined;
     } else { // Futures
-      const futuresData = data as any; 
-      newPrice = parseFloat(futuresData.lastPrice || '0');
-      high = futuresData.highPrice ? parseFloat(futuresData.highPrice) : undefined;
-      low = futuresData.lowPrice ? parseFloat(futuresData.lowPrice) : undefined;
-      priceChgPct = futuresData.priceChgPct ? parseFloat(futuresData.priceChgPct) : undefined;
+      const futuresData = data as FuturesSnapshotData; 
+      newPrice = futuresData.lastPrice ?? undefined;
+      high = futuresData.highPrice ?? undefined;
+      low = futuresData.lowPrice ?? undefined;
+      priceChgPct = futuresData.priceChgPct ?? undefined;
     }
     
     if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
