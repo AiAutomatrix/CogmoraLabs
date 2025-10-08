@@ -231,7 +231,7 @@ const MainViews: FC<MainViewsProps> = ({
               selectedSymbolsForHighlight={selectedSymbolsForHighlight}
             />
           ) : selectedCryptoScreener === 'kucoin_futures' ? (
-            <AllFuturesScreener />
+            <AllFuturesScreener onSymbolSelect={onSymbolSelect} />
           ) : (
             <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
           )}

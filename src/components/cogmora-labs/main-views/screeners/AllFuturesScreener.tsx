@@ -20,8 +20,11 @@ import { Button } from "@/components/ui/button";
 import { FuturesTradePopup } from "../paper-trading/FuturesTradePopup";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 
+interface AllFuturesScreenerProps {
+  onSymbolSelect: (symbol: string) => void;
+}
 
-export default function AllFuturesScreener() {
+export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreenerProps) {
   type SortKey = "markPrice" | "priceChgPct" | "volumeOf24h" | "openInterest" | "maxLeverage";
 
   const { contracts, loading: httpLoading } = useKucoinFuturesContracts();
@@ -177,9 +180,15 @@ export default function AllFuturesScreener() {
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="flex flex-grow items-center justify-start lg:hidden">
+                    <div className="flex flex-grow items-center justify-start lg:hidden" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col w-24 text-left mr-2">
-                            <span className="font-medium text-foreground truncate">{contract.symbol.replace(/M$/, "")}</span>
+                           <Button
+                              variant="link"
+                              className="p-0 h-auto text-xs font-medium text-left justify-start truncate"
+                              onClick={() => onSymbolSelect(contract.symbol)}
+                            >
+                              {contract.symbol.replace(/M$/, "")}
+                            </Button>
                             <span className="font-mono text-foreground">${formatPrice(contract.markPrice)}</span>
                         </div>
                         <div className="flex flex-grow justify-around">
@@ -205,14 +214,22 @@ export default function AllFuturesScreener() {
                     </div>
                       
                   {/* === DESKTOP VIEW === */}
-                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">{contract.symbol.replace(/M$/, "")}</div>
+                  <div role="cell" className="hidden lg:flex items-center text-left font-medium p-0 truncate">
+                     <Button
+                      variant="link"
+                      className="p-0 h-auto text-sm font-medium text-left justify-start"
+                      onClick={() => onSymbolSelect(contract.symbol)}
+                    >
+                      {contract.symbol.replace(/M$/, "")}
+                    </Button>
+                  </div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{contract.maxLeverage}x</div>
 
-                  <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0">
+                  <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                         <BarChartHorizontal className="h-4 w-4" />
                       </Button>
@@ -237,4 +254,3 @@ export default function AllFuturesScreener() {
     </>
   );
 }
-
