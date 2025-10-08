@@ -47,6 +47,11 @@ export default function HomePage() {
     if (formattedSymbol.includes(':')) {
       return formattedSymbol;
     }
+
+    // For futures contracts, KuCoin symbols often end in 'M'. TradingView doesn't want this.
+    if (formattedSymbol.endsWith('M')) {
+      formattedSymbol = formattedSymbol.slice(0, -1);
+    }
     
     // Handle special KCS pair conversions for TradingView
     if (formattedSymbol === 'ETH-KCS') {
@@ -54,6 +59,7 @@ export default function HomePage() {
     } else if (formattedSymbol === 'BTC-KCS') {
       formattedSymbol = 'KCSBTC';
     } else {
+      // For spot symbols like 'BTC-USDT', this becomes 'BTCUSDT'
       formattedSymbol = formattedSymbol.replace('-', '');
     }
 
