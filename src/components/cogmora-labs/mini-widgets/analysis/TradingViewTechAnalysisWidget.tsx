@@ -1,6 +1,5 @@
 'use client';
-import React, { useEffect, useRef, memo, useState } from 'react';
-import { Skeleton } from '@/components/ui/skeleton';
+import React, { useMemo, memo } from 'react';
 
 interface TradingViewTechAnalysisWidgetProps {
   symbol?: string;
@@ -9,24 +8,7 @@ interface TradingViewTechAnalysisWidgetProps {
 const TradingViewTechAnalysisWidgetComponent: React.FC<TradingViewTechAnalysisWidgetProps> = ({
   symbol = "BINANCE:BTCUSDT",
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const scriptRef = useRef<HTMLScriptElement | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const currentContainer = containerRef.current;
-    if (!currentContainer) {
-      return;
-    }
-
-    // Clean up any existing script to prevent duplicates
-    if (scriptRef.current) {
-      scriptRef.current.remove();
-      scriptRef.current = null;
-    }
-    currentContainer.innerHTML = '';
-    setIsLoading(true);
-
+  const widgetSrcDoc = useMemo(() => {
     const widgetConfig = {
       "interval": "1m",
       "width": "100%",
@@ -38,41 +20,50 @@ const TradingViewTechAnalysisWidgetComponent: React.FC<TradingViewTechAnalysisWi
       "colorTheme": "dark"
     };
 
-    const script = document.createElement('script');
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js";
-    script.type = "text/javascript";
-    script.async = true;
-    script.innerHTML = JSON.stringify(widgetConfig);
-
-    script.onload = () => setIsLoading(false);
-    script.onerror = () => {
-      console.error("Failed to load TradingView Technical Analysis widget script.");
-      setIsLoading(false);
-    }
-    
-    currentContainer.appendChild(script);
-    scriptRef.current = script;
-
-    return () => {
-      if (scriptRef.current) {
-        scriptRef.current.remove();
-      }
-       if (currentContainer) {
-        currentContainer.innerHTML = '';
-      }
-    };
+    return `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            html, body { 
+              width: 100%; 
+              height: 100%; 
+              margin: 0; 
+              padding: 0; 
+              overflow: hidden; 
+              background-color: transparent;
+            }
+            .tradingview-widget-container {
+              height: calc(100% - 30px); /* Adjust height to leave space for copyright */
+            }
+          </style>
+        </head>
+        <body>
+          <div class="tradingview-widget-container">
+            <div class="tradingview-widget-container__widget"></div>
+            <div class="tradingview-widget-copyright">
+              <a href="https://www.tradingview.com/symbols/${symbol}/technicals/" rel="noopener nofollow" target="_blank">
+                <span class="blue-text">Technical analysis for ${symbol} by TradingView</span>
+              </a>
+            </div>
+          </div>
+          <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js" async>
+            ${JSON.stringify(widgetConfig)}
+          </script>
+        </body>
+      </html>
+    `;
   }, [symbol]);
 
   return (
-    <div className="tradingview-widget-container h-full w-full relative">
-       {isLoading && <Skeleton className="absolute inset-0 w-full h-full" />}
-      <div ref={containerRef} className="tradingview-widget-container__widget h-full w-full"></div>
-       <div className="tradingview-widget-copyright absolute bottom-0 left-0 right-0 text-center p-1 bg-background/50 backdrop-blur-sm z-20">
-          <a href={`https://www.tradingview.com/symbols/${symbol}/technicals/`} rel="noopener nofollow" target="_blank" className="text-xs text-muted-foreground hover:text-accent-foreground">
-            Technical analysis for {symbol} by TradingView
-          </a>
-        </div>
-    </div>
+    <iframe
+      srcDoc={widgetSrcDoc}
+      title={`Technical Analysis for ${symbol}`}
+      className="w-full h-full border-0"
+      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+    />
   );
 };
 
