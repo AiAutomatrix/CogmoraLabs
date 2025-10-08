@@ -27,8 +27,8 @@ const BotpressIframePage = () => {
       <div id="webchat"></div>
 
       
-      <script src="https://cdn.botpress.cloud/webchat/v3.0/inject.js" defer></script>
-      <script src="https://files.bpcontent.cloud/2025/06/25/16/20250625163528-WAZ2CJ43.js" defer></script>
+      <script src="https://cdn.botpress.cloud/webchat/v3.3/inject.js"></script>
+      <script src="https://files.bpcontent.cloud/2025/09/22/16/20250922164312-IJBEBNKY.js" defer></script>
     
       
       <script>
