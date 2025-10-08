@@ -52,9 +52,8 @@ export default function HomePage() {
     if (formattedSymbol.endsWith('M')) {
       // Remove the 'M' suffix
       const baseSymbol = formattedSymbol.slice(0, -1);
-      // Attempt to format for Binance perpetual contracts first (e.g., COAIUSDT -> BINANCE:COAIUSDT.P)
-      // This is often the correct mapping on TradingView
-      return `BINANCE:${baseSymbol}.P`;
+      // Default to the KUCOIN spot chart for futures symbols as a safe fallback
+      return `KUCOIN:${baseSymbol}`;
     }
 
     // Handle special KCS pair conversions for TradingView (for spot)
