@@ -39,13 +39,15 @@ A new Genkit flow is required to handle the core AI logic.
 
 #### New "AI Paper Trading" Tab in Mini View
 
+A new tab will be added to the mini-view (sidebar) to house the AI Paper Trading agent's chat interface. This will exist alongside the current "Technical Analysis" and "AI Chat" tabs.
+
 1.  **File to Modify**: `src/components/cogmora-labs/mini-widgets/MiniWidgets.tsx`
 2.  **Changes**:
     -   Add a new `TabsTrigger` for "AI Paper Trading". This will create a third tab in the sidebar.
-    -   Add a new `TabsContent` section for this view.
+    -   Add a new `TabsContent` section for this new view.
     -   Create a new component, `AiPaperTradingChat.tsx`, to be rendered inside this new tab content. This component will manage the state and interaction with the `proposeTradeTriggersFlow`.
 
-#### New "AI Trigger" Button
+#### New "AI Trigger Analysis" Button
 
 1.  **File to Modify**: `src/components/cogmora-labs/main-views/paper-trading/TradeTriggersDashboard.tsx`
 2.  **Changes**:
@@ -55,22 +57,23 @@ A new Genkit flow is required to handle the core AI logic.
         2.  Call a new function (e.g., `handleAiTriggerAnalysis`) that will invoke the `proposeTradeTriggersFlow` server action.
         3.  Pass the `watchlist` data to the flow.
         4.  Take the response from the flow (the analysis and proposed triggers) and pass it to the state of the new `AiPaperTradingChat.tsx` component.
-        5.  Switch the `activeMiniView` to the new "AI Paper Trading" tab.
+        5.  Switch the `activeMiniView` to the new "AI Paper Trading" tab, bringing the agent into focus.
 
 #### New `AiPaperTradingChat.tsx` Component
 
 1.  **File Location**: `src/components/cogmora-labs/mini-widgets/chat/AiPaperTradingChat.tsx`
-2.  **Purpose**: This component will be the interface for the new agent.
+2.  **Purpose**: This component will be the dedicated chat and interaction interface for the new paper trading agent.
 3.  **State Management**:
     -   `analysisText`: To store the AI's market summary.
-    -   `proposedTriggers`: To store the array of `TradeTrigger` objects from the AI.
-    -   `isLoading`: To show a loading state while the AI is processing.
+    -   `proposedTriggers`: To store the array of `TradeTrigger` objects received from the AI.
+    -   `isLoading`: To show a loading state while the AI is processing the request.
 4.  **Functionality**:
-    -   Display the `analysisText` in a readable format.
-    -   Render each of the `proposedTriggers` in a clear, card-like format, showing the symbol, action, condition, and amount.
+    -   Display the `analysisText` in a readable format at the top of the chat.
+    -   Render each of the `proposedTriggers` in a clear, card-like format, showing the symbol, action (buy/long/short), condition (price), and amount.
     -   Include "Approve" and "Decline" buttons for each proposed trigger.
-    -   Clicking "Approve" will call the `addTradeTrigger` function from the `PaperTradingContext`.
-    -   Clicking "Decline" will simply remove the proposed trigger from the view.
+    -   Clicking "Approve" will call the `addTradeTrigger` function from the `PaperTradingContext`, officially adding it to the user's active triggers.
+    -   Clicking "Decline" will simply remove the proposed trigger from the chat view.
+    -   Include a text input field to allow the user to ask follow-up questions about the watchlist or specific coins, creating a conversational experience.
 
 ---
 
@@ -79,6 +82,8 @@ A new Genkit flow is required to handle the core AI logic.
 1.  **User** clicks the "AI Trigger Analysis" button in the `TradeTriggersDashboard`.
 2.  The `watchlist` state is fetched from `PaperTradingContext`.
 3.  A server action calls the `proposeTradeTriggersFlow` with the `watchlist` data.
-4.  **Genkit (Gemini 2.5 Flash)** processes the data and returns an analysis and an array of proposed `TradeTrigger` objects.
-5.  The response is sent to the new `AiPaperTradingChat` component and displayed to the user.
-6.  The user reviews the proposed triggers and can approve them, which adds them to the main paper trading system via the `addTradeTrigger` context function.
+4.  **Genkit (Gemini 2.5 Flash)** processes the data and returns an analysis string and an array of proposed `TradeTrigger` objects.
+5.  The response is sent to the new `AiPaperTradingChat` component, and the mini-view automatically switches to the "AI Paper Trading" tab.
+6.  The user can read the analysis, review the proposed triggers, and approve/decline them.
+7.  Approving a trigger calls `addTradeTrigger` from the context, adding it to the main paper trading system.
+8.  The user can continue to interact with the agent via the chat input.
