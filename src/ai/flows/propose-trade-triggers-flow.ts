@@ -44,7 +44,7 @@ Based on this data, perform the following actions:
 
 2.  **Propose 3-5 diverse trade triggers**: Create a list of 'TradeTrigger' objects. These triggers should be varied and demonstrate different trading strategies.
     *   Include a mix of actions: 'buy' (for spot), 'long' (for futures), and 'short' (for futures).
-    *   Set sensible `targetPrice` conditions. For example, suggest buying on a dip (price is below current), or shorting on a move above a recent high if the sentiment is bearish.
+    *   Set sensible \`targetPrice\` conditions. For example, suggest buying on a dip (price is below current), or shorting on a move above a recent high if the sentiment is bearish.
     *   Use realistic but varied allocation amounts (e.g., between 50 and 500 USD).
     *   For futures triggers ('long' or 'short'), suggest a reasonable leverage (e.g., between 2x and 20x).
     *   Make sure the 'type' field is correctly set to 'spot' for 'buy' actions and 'futures' for 'long'/'short' actions.
