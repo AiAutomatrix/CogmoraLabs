@@ -138,10 +138,14 @@ export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
 export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 
-// This is the type from the AI flow, which includes the analysis and proposed triggers
+export const ProposeTradeTriggersInputSchema = z.object({
+  watchlist: z.array(WatchlistItemSchema),
+});
+export type ProposeTradeTriggersInput = z.infer<typeof ProposeTradeTriggersInputSchema>;
+
 export const ProposeTradeTriggersOutputSchema = z.object({
-  analysis: z.string(),
-  proposedTriggers: z.array(ProposedTradeTriggerSchema),
+  analysis: z.string().describe("A brief, high-level summary of the overall market sentiment based on the provided symbols. Should be conversational and insightful."),
+  proposedTriggers: z.array(ProposedTradeTriggerSchema).describe("An array of 3-5 diverse trade trigger objects based on the watchlist data."),
 });
 export type ProposeTradeTriggersOutput = z.infer<typeof ProposeTradeTriggersOutputSchema>;
 

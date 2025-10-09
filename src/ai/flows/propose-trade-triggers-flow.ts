@@ -8,19 +8,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'zod';
-import { WatchlistItemSchema, TradeTriggerSchema } from '@/types';
-
-export const ProposeTradeTriggersInputSchema = z.object({
-  watchlist: z.array(WatchlistItemSchema),
-});
-export type ProposeTradeTriggersInput = z.infer<typeof ProposeTradeTriggersInputSchema>;
-
-export const ProposeTradeTriggersOutputSchema = z.object({
-  analysis: z.string().describe("A brief, high-level summary of the overall market sentiment based on the provided symbols. Should be conversational and insightful."),
-  proposedTriggers: z.array(TradeTriggerSchema.omit({ id: true, status: true })).describe("An array of 3-5 diverse trade trigger objects based on the watchlist data."),
-});
-export type ProposeTradeTriggersOutput = z.infer<typeof ProposeTradeTriggersOutputSchema>;
+import { ProposeTradeTriggersInputSchema, ProposeTradeTriggersOutputSchema, ProposeTradeTriggersInput, ProposeTradeTriggersOutput } from '@/types';
 
 
 export async function proposeTradeTriggers(input: ProposeTradeTriggersInput): Promise<ProposeTradeTriggersOutput> {
