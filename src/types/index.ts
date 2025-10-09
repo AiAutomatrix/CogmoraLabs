@@ -135,14 +135,15 @@ export const TradeTriggerSchema = z.object({
 export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 
 // This is the type for the AI output, omitting fields the AI should not generate
-export type ProposedTradeTrigger = z.infer<typeof TradeTriggerSchema.omit({ id: true, status: true })>;
-
+export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
+export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 
 // This is the type from the AI flow, which includes the analysis and proposed triggers
-export interface ProposeTradeTriggersOutput {
-  analysis: string;
-  proposedTriggers: ProposedTradeTrigger[];
-}
+export const ProposeTradeTriggersOutputSchema = z.object({
+  analysis: z.string(),
+  proposedTriggers: z.array(ProposedTradeTriggerSchema),
+});
+export type ProposeTradeTriggersOutput = z.infer<typeof ProposeTradeTriggersOutputSchema>;
 
 
 // Automation Feature Types
