@@ -1011,33 +1011,44 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       id: crypto.randomUUID(),
       status: 'active',
     };
-    
-    let executedInstantly = false;
-    
-    const watchlistItem = watchlist.find(item => item.symbol === newTrigger.symbol);
-    const currentPrice = watchlistItem?.currentPrice;
-    if (currentPrice) {
+    setTradeTriggers(prev => [newTrigger, ...prev]);
+    toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+  }, [toast]);
+
+  // Effect to check for instant trigger execution
+  useEffect(() => {
+    const triggersToCheck = tradeTriggers.filter(t => t.status === 'active');
+    if (triggersToCheck.length === 0) return;
+
+    const instantlyExecutedIds = new Set<string>();
+    const symbolsToCancel = new Set<string>();
+
+    triggersToCheck.forEach(trigger => {
+        const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
+        const currentPrice = watchlistItem?.currentPrice;
+        if (!currentPrice) return;
+
         const conditionMet =
-            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
-            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
+            (trigger.condition === 'above' && currentPrice >= trigger.targetPrice) ||
+            (trigger.condition === 'below' && currentPrice <= trigger.targetPrice);
 
         if (conditionMet) {
-            executeTrigger(newTrigger, currentPrice);
-            executedInstantly = true;
-            if (newTrigger.cancelOthers) {
-                setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
+            executeTrigger(trigger, currentPrice);
+            instantlyExecutedIds.add(trigger.id);
+            if (trigger.cancelOthers) {
+                symbolsToCancel.add(trigger.symbol);
             }
         }
-    }
+    });
 
-    if (!executedInstantly) {
-        setTradeTriggers(prev => {
-           const newTriggers = [newTrigger, ...prev];
-           toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-           return newTriggers;
-        });
+    if (instantlyExecutedIds.size > 0) {
+        setTradeTriggers(prev => prev.filter(t => {
+            if (instantlyExecutedIds.has(t.id)) return false;
+            if (symbolsToCancel.has(t.symbol)) return false;
+            return true;
+        }));
     }
-  }, [watchlist, executeTrigger, toast]);
+  }, [tradeTriggers, watchlist, executeTrigger]);
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
