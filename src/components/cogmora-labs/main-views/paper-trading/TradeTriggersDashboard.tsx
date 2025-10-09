@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, XCircle, Timer, Wand2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { proposeTradeTriggers } from '@/ai/flows/propose-trade-triggers-flow';
-import type { ProposeTradeTriggersOutput } from '@/ai/flows/propose-trade-triggers-flow';
+import type { ProposeTradeTriggersOutput } from '@/types';
 
 const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());

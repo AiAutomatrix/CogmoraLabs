@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, MessageCircle, Bot } from 'lucide-react';
@@ -14,6 +14,8 @@ interface MiniWidgetsProps {
   onSymbolChange: (symbol: string) => void;
   activeMiniView: string;
   setActiveMiniView: (view: string) => void;
+  aiAgentState: ProposeTradeTriggersOutput & { isLoading: boolean };
+  setAiAgentState: React.Dispatch<React.SetStateAction<ProposeTradeTriggersOutput & { isLoading: boolean }>>;
 }
 
 const MiniWidgets: FC<MiniWidgetsProps> = ({
@@ -21,13 +23,9 @@ const MiniWidgets: FC<MiniWidgetsProps> = ({
   onSymbolChange,
   activeMiniView,
   setActiveMiniView,
+  aiAgentState,
+  setAiAgentState,
 }) => {
-  const [aiAgentState, setAiAgentState] = useState<ProposeTradeTriggersOutput & { isLoading: boolean }>({
-    analysis: '',
-    proposedTriggers: [],
-    isLoading: false,
-  });
-
   return (
     <Tabs
       value={activeMiniView}

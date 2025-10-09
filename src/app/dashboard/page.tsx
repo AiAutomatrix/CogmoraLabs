@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
+import type { ProposeTradeTriggersOutput } from '@/types';
 
 export default function HomePage() {
   const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTCUSDT');
@@ -20,6 +21,13 @@ export default function HomePage() {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
+  // State for AI Agent moved here
+  const [aiAgentState, setAiAgentState] = useState<ProposeTradeTriggersOutput & { isLoading: boolean }>({
+    analysis: '',
+    proposedTriggers: [],
+    isLoading: false,
+  });
 
   // New state for multi-symbol selection
   const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
@@ -247,6 +255,8 @@ export default function HomePage() {
               selectedHeatmapView={selectedHeatmapView}
               setSelectedHeatmapView={setSelectedHeatmapView}
               selectedSymbolsForHighlight={selectedSymbols}
+              setAiAgentState={setAiAgentState}
+              setActiveMiniView={setActiveMiniView}
             />
           </section>
           <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">
@@ -255,6 +265,8 @@ export default function HomePage() {
               onSymbolChange={handleSymbolChange}
               activeMiniView={activeMiniView}
               setActiveMiniView={setActiveMiniView}
+              aiAgentState={aiAgentState}
+              setAiAgentState={setAiAgentState}
             />
           </aside>
         </main>
@@ -268,5 +280,3 @@ export default function HomePage() {
     </PaperTradingProvider>
   );
 }
-
-    
