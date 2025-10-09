@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, XCircle, Timer, Wand2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { proposeTradeTriggers } from '@/ai/flows/propose-trade-triggers-flow';
+import type { ProposeTradeTriggersOutput } from '@/ai/flows/propose-trade-triggers-flow';
 
 const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
@@ -57,10 +59,30 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
 };
 
 
-export default function TradeTriggersDashboard() {
-  const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime } = usePaperTrading();
+export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniView }: {
+    setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
+    setActiveMiniView: (view: string) => void;
+}) {
+  const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime, watchlist } = usePaperTrading();
   
   const isAutomationActive = automationConfig.updateMode === 'auto-refresh';
+
+  const handleAiTriggerAnalysis = async () => {
+    if (watchlist.length === 0) {
+        alert("Please add items to your watchlist first.");
+        return;
+    }
+    setActiveMiniView('ai_paper_trading');
+    setAiAgentState({ analysis: '', proposedTriggers: [], isLoading: true });
+
+    try {
+        const response = await proposeTradeTriggers({ watchlist });
+        setAiAgentState({ ...response, isLoading: false });
+    } catch (error) {
+        console.error("AI Trigger Analysis failed:", error);
+        setAiAgentState({ analysis: 'An error occurred while analyzing the watchlist.', proposedTriggers: [], isLoading: false });
+    }
+  };
 
   const formatPrice = (price: number) => {
     if (!price || isNaN(price)) return "$0.00";
@@ -75,11 +97,17 @@ export default function TradeTriggersDashboard() {
   
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Active Triggers</CardTitle>
-        <CardDescription>
-          Conditional orders and automations waiting to execute.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-start justify-between">
+        <div>
+            <CardTitle>Active Triggers</CardTitle>
+            <CardDescription>
+            Conditional orders and automations waiting to execute.
+            </CardDescription>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis}>
+            <Wand2 className="mr-2 h-4 w-4" />
+            AI Trigger Analysis
+        </Button>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">

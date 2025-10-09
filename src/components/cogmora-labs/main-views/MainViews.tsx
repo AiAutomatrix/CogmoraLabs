@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { FC } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -16,6 +16,8 @@ import AllTickersScreener from './screeners/AllTickersScreener';
 import ForexHeatmapWidget from './heatmaps/ForexHeatmapWidget';
 import AllFuturesScreener from './screeners/AllFuturesScreener';
 import PaperTradingDashboard from './paper-trading/PaperTradingDashboard';
+import type { ProposeTradeTriggersOutput } from '@/types';
+
 
 interface MainViewsProps {
   activeView: string;
@@ -30,6 +32,8 @@ interface MainViewsProps {
   selectedHeatmapView: string;
   setSelectedHeatmapView: (view: string) => void;
   selectedSymbolsForHighlight: string[];
+  setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
+  setActiveMiniView: (view: string) => void;
 }
 
 const MainViews: FC<MainViewsProps> = ({ 
@@ -45,6 +49,8 @@ const MainViews: FC<MainViewsProps> = ({
   selectedHeatmapView,
   setSelectedHeatmapView,
   selectedSymbolsForHighlight,
+  setAiAgentState,
+  setActiveMiniView,
 }) => {
   const BASE_CLASS = "w-full overflow-hidden";
 
@@ -158,6 +164,8 @@ const MainViews: FC<MainViewsProps> = ({
            selectedChartLayout={selectedChartLayout}
            setSelectedChartLayout={setSelectedChartLayout}
            selectedSymbolsForHighlight={selectedSymbolsForHighlight}
+           setAiAgentState={setAiAgentState}
+           setActiveMiniView={setActiveMiniView}
         />
       </TabsContent>
       <TabsContent value="chart" className={`flex-grow overflow-hidden ${mobileContentClassName}`}>

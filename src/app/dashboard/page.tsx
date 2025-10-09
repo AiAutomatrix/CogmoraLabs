@@ -33,11 +33,15 @@ export default function HomePage() {
 
   useEffect(() => {
     if (activeView === 'chart') {
-      setActiveMiniView('tech_analysis');
+      if (activeMiniView !== 'ai_paper_trading') {
+         setActiveMiniView('tech_analysis');
+      }
     } else {
-      setActiveMiniView('ai_chat');
+       if (activeMiniView !== 'ai_paper_trading') {
+        setActiveMiniView('ai_chat');
+      }
     }
-  }, [activeView]);
+  }, [activeView, activeMiniView]);
 
   const formatTradingViewSymbol = (kucoinSymbol: string): string => {
     if (!kucoinSymbol || kucoinSymbol.trim() === '') return '';

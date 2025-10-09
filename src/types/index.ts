@@ -1,6 +1,5 @@
 
 
-
 import { z } from 'zod';
 
 export const PaperTradeSchema = z.object({
@@ -134,6 +133,17 @@ export const TradeTriggerSchema = z.object({
   takeProfit: z.number().optional(),
 });
 export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
+
+// This is the type for the AI output, omitting fields the AI should not generate
+export type ProposedTradeTrigger = z.infer<typeof TradeTriggerSchema.omit({ id: true, status: true })>;
+
+
+// This is the type from the AI flow, which includes the analysis and proposed triggers
+export interface ProposeTradeTriggersOutput {
+  analysis: string;
+  proposedTriggers: ProposedTradeTrigger[];
+}
+
 
 // Automation Feature Types
 export const AutomationRuleSchema = z.object({
