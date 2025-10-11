@@ -20,10 +20,12 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUp, ArrowDown, XCircle, Timer, Wand2, Settings } from 'lucide-react';
+import { ArrowUp, ArrowDown, XCircle, Timer, Wand2, Settings, Info } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import type { AiTriggerSettings } from '@/types';
 import { AiTriggerSettingsPopup } from './AiTriggerSettingsPopup';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
 
 const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
@@ -50,7 +52,7 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     }, [nextScrapeTime]);
 
     if (timeLeft <= 0) {
-        return <span className="font-mono">...</span>;
+        return <span className="font-mono text-xs md:text-sm">...</span>;
     }
 
     const hours = Math.floor((timeLeft / (1000 * 60 * 60)) % 24);
@@ -63,7 +65,7 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     parts.push(seconds.toString().padStart(2, '0'));
 
     return (
-        <span className="font-mono">
+        <span className="font-mono text-xs md:text-sm">
             {parts.join(':')}
         </span>
     );
@@ -102,16 +104,33 @@ export default function TradeTriggersDashboard({
     <>
     <Card>
       <CardHeader className="flex flex-row items-start justify-between">
-        <div>
-            <CardTitle>Active Triggers & Automations</CardTitle>
-            <CardDescription>
-            Conditional orders and scheduled automations.
+        <div className="flex-grow">
+            <div className="flex items-center gap-2">
+                <CardTitle className="text-xl">Automations</CardTitle>
+                 <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4" /></Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                       <div className="grid gap-4">
+                            <div className="space-y-2">
+                                <h4 className="font-medium leading-none">Automation Engine</h4>
+                                <p className="text-sm text-muted-foreground">
+                                    This section shows your active conditional trade triggers and scheduled automations for the AI agent and watchlist scraper.
+                                </p>
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            </div>
+            <CardDescription className="text-xs md:text-sm">
+                Conditional orders and scheduled automations.
             </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             <Button variant="outline" size="sm" onClick={() => handleAiTriggerAnalysis(false)}>
-                <Wand2 className="mr-2 h-4 w-4" />
-                Run AI Now
+                <Wand2 className="mr-0 md:mr-2 h-4 w-4" />
+                <span className="hidden md:inline">Run AI Now</span>
             </Button>
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsSettingsOpen(true)}>
                 <Settings className="h-4 w-4" />
@@ -123,58 +142,58 @@ export default function TradeTriggersDashboard({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Symbol/Automation</TableHead>
-                <TableHead>Condition</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead className="text-right">Amount/Next Run</TableHead>
-                <TableHead className="text-center">Actions</TableHead>
+                <TableHead className="px-2">Symbol/Task</TableHead>
+                <TableHead className="px-2">Condition</TableHead>
+                <TableHead className="hidden md:table-cell px-2">Action</TableHead>
+                <TableHead className="text-right px-2">Amount/Next Run</TableHead>
+                <TableHead className="text-center px-2">Cancel</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isAiAutomationActive && (
                  <TableRow>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium px-2 py-3">
                         <div className="flex items-center">
                             <Wand2 className="h-4 w-4 mr-2 text-purple-400"/>
                             AI Trigger Analysis
                         </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="px-2 py-3">
                         <Badge variant="outline">Scheduled</Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell px-2 py-3">
                         <Badge variant="secondary">Analyze</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right px-2 py-3">
                         <div className="flex items-center justify-end">
-                            <Timer className="h-4 w-4 mr-2 text-muted-foreground"/>
+                            <Timer className="h-4 w-4 mr-1 md:mr-2 text-muted-foreground"/>
                             <CountdownTimer nextScrapeTime={nextAiScrapeTime} />
                         </div>
                     </TableCell>
-                    <TableCell className="text-center">-</TableCell>
+                    <TableCell className="text-center px-2 py-3">-</TableCell>
                 </TableRow>
               )}
               {isWatchlistAutomationActive && (
                  <TableRow>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium px-2 py-3">
                         <div className="flex items-center">
                             <Wand2 className="h-4 w-4 mr-2 text-primary"/>
-                            Watchlist Automation
+                            Watchlist Scraper
                         </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="px-2 py-3">
                         <Badge variant="outline">Auto-Refresh</Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell px-2 py-3">
                         <Badge variant="secondary">Scrape</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right px-2 py-3">
                         <div className="flex items-center justify-end">
-                            <Timer className="h-4 w-4 mr-2 text-muted-foreground"/>
+                            <Timer className="h-4 w-4 mr-1 md:mr-2 text-muted-foreground"/>
                             <CountdownTimer nextScrapeTime={nextWatchlistScrapeTime} />
                         </div>
                     </TableCell>
-                    <TableCell className="text-center">-</TableCell>
+                    <TableCell className="text-center px-2 py-3">-</TableCell>
                 </TableRow>
               )}
               
@@ -182,27 +201,30 @@ export default function TradeTriggersDashboard({
 
               {tradeTriggers.map((trigger) => (
                   <TableRow key={trigger.id}>
-                    <TableCell className="font-medium">{trigger.symbolName}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium px-2 py-3">{trigger.symbolName}</TableCell>
+                    <TableCell className="px-2 py-3">
                       <div className="flex items-center">
+                         <Badge variant={trigger.action === 'short' ? 'destructive' : 'default'} className="capitalize md:hidden mr-2">
+                           {trigger.action} {trigger.type === 'futures' ? `${trigger.leverage}x` : ''}
+                         </Badge>
                         {trigger.condition === 'above' ? 
                           <ArrowUp className="h-4 w-4 text-green-500 mr-1"/> : 
                           <ArrowDown className="h-4 w-4 text-red-500 mr-1"/>}
-                        {trigger.condition === 'above' ? 'Above' : 'Below'} {formatPrice(trigger.targetPrice)}
+                        {formatPrice(trigger.targetPrice)}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell px-2 py-3">
                       <Badge variant={trigger.action === 'short' ? 'destructive' : 'default'} className="capitalize">
                         {trigger.action} {trigger.type === 'futures' ? `${trigger.leverage}x` : ''}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">{formatPrice(trigger.amount)}</TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-right px-2 py-3">{formatPrice(trigger.amount)}</TableCell>
+                    <TableCell className="text-center px-2 py-3">
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => removeTradeTrigger(trigger.id)}
-                        className="text-destructive"
+                        className="text-destructive h-8 w-8"
                       >
                         <XCircle className="h-4 w-4" />
                       </Button>
@@ -212,7 +234,7 @@ export default function TradeTriggersDashboard({
 
               {tradeTriggers.length === 0 && !isWatchlistAutomationActive && !isAiAutomationActive && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center h-24">
+                  <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
                     No active triggers or automations.
                   </TableCell>
                 </TableRow>
