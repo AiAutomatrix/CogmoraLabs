@@ -822,14 +822,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onerror = (e) => {
           console.error("Spot WS Error", e);
           setSpotWsStatus("error");
+          // Use setTimeout to avoid calling toast during render cycle
+          setTimeout(() => {
+            toast({ title: "Spot WebSocket Error", description: "Connection failed. Watchlist prices may not update.", variant: "destructive" });
+          }, 0);
           ws.close();
         };
       }).catch(error => {
         console.error("Spot Connection failed", error);
         setSpotWsStatus("error");
+        setTimeout(() => {
+          toast({ title: "Spot Connection Failed", description: "Could not get a connection token.", variant: "destructive" });
+        }, 0);
       });
     },
-    [processUpdate]
+    [processUpdate, toast]
   );
   
   const connectToFutures = useCallback(
