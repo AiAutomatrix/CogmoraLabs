@@ -106,7 +106,7 @@ export default function TradeTriggersDashboard({
       <CardHeader className="flex flex-row items-start justify-between">
         <div className="flex-grow">
             <div className="flex items-center gap-2">
-                <CardTitle className="text-xl">Automations</CardTitle>
+                <CardTitle className="text-lg md:text-xl">Active Triggers & Automations</CardTitle>
                  <Popover>
                     <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4" /></Button>
@@ -116,7 +116,7 @@ export default function TradeTriggersDashboard({
                             <div className="space-y-2">
                                 <h4 className="font-medium leading-none">Automation Engine</h4>
                                 <p className="text-sm text-muted-foreground">
-                                    This section shows your active conditional trade triggers and scheduled automations for the AI agent and watchlist scraper.
+                                    This section shows your conditional trade triggers and scheduled automations for the AI agent and watchlist scraper.
                                 </p>
                             </div>
                         </div>
@@ -210,7 +210,7 @@ export default function TradeTriggersDashboard({
                         {trigger.condition === 'above' ? 
                           <ArrowUp className="h-4 w-4 text-green-500 mr-1"/> : 
                           <ArrowDown className="h-4 w-4 text-red-500 mr-1"/>}
-                        {formatPrice(trigger.targetPrice)}
+                        <div className="w-[80px] text-left">{formatPrice(trigger.targetPrice)}</div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell px-2 py-3">
