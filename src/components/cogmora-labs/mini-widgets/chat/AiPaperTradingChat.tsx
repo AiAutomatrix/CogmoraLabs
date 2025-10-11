@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThumbsUp, ThumbsDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { ProposeTradeTriggersOutput, TradeTrigger } from '@/types';
+import { Separator } from '@/components/ui/separator';
 
 interface AiPaperTradingChatProps {
     agentState: ProposeTradeTriggersOutput & { isLoading: boolean };
@@ -37,8 +38,8 @@ const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, set
         }));
     };
 
-    const formatPrice = (price: number) => {
-        if (!price || isNaN(price)) return "$0.00";
+    const formatPrice = (price?: number) => {
+        if (price === undefined || isNaN(price)) return "N/A";
         return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: price < 0.1 ? 8 : 4 }).format(price);
     };
 
@@ -99,6 +100,16 @@ const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, set
                                         </div>
                                         <p className="text-sm mt-2">Amount: <span className="font-semibold">{formatPrice(trigger.amount)}</span></p>
                                         
+                                        {(trigger.stopLoss || trigger.takeProfit) && (
+                                            <>
+                                                <Separator className="my-2" />
+                                                <div className="text-xs space-y-1">
+                                                    {trigger.stopLoss && <p>Stop Loss: <span className="font-mono text-destructive">{formatPrice(trigger.stopLoss)}</span></p>}
+                                                    {trigger.takeProfit && <p>Take Profit: <span className="font-mono text-green-500">{formatPrice(trigger.takeProfit)}</span></p>}
+                                                </div>
+                                            </>
+                                        )}
+
                                         <div className="flex justify-end gap-2 mt-3">
                                             <Button variant="outline" size="sm" onClick={() => handleDecline(trigger)}>
                                                 <ThumbsDown className="h-4 w-4 mr-1" /> Decline

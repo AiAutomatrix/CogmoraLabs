@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUp, ArrowDown, XCircle, Timer, Wand2, Settings, Info } from 'lucide-react';
+import { ArrowUp, ArrowDown, XCircle, Timer, Wand2, Settings, Info, ShieldCheck } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import type { AiTriggerSettings } from '@/types';
 import { AiTriggerSettingsPopup } from './AiTriggerSettingsPopup';
@@ -89,8 +89,8 @@ export default function TradeTriggersDashboard({
   const isWatchlistAutomationActive = automationConfig.updateMode === 'auto-refresh';
   const isAiAutomationActive = !!aiSettings.scheduleInterval;
 
-  const formatPrice = (price: number) => {
-    if (!price || isNaN(price)) return "$0.00";
+  const formatPrice = (price?: number) => {
+    if (price === undefined || isNaN(price)) return "N/A";
     const options: Intl.NumberFormatOptions = {
       style: "currency",
       currency: "USD",
@@ -201,16 +201,36 @@ export default function TradeTriggersDashboard({
 
               {tradeTriggers.map((trigger) => (
                   <TableRow key={trigger.id}>
-                    <TableCell className="font-medium px-2 py-3">{trigger.symbolName}</TableCell>
+                    <TableCell className="font-medium px-2 py-3">
+                      <div className="flex items-center gap-2">
+                        {trigger.symbolName}
+                        {(trigger.stopLoss || trigger.takeProfit) && (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6"><ShieldCheck className="h-4 w-4 text-primary" /></Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 text-sm">
+                              <div className="grid gap-2">
+                                <h4 className="font-medium leading-none">Risk Management</h4>
+                                {trigger.stopLoss && <p>Stop Loss: <span className="font-mono text-destructive">{formatPrice(trigger.stopLoss)}</span></p>}
+                                {trigger.takeProfit && <p>Take Profit: <span className="font-mono text-green-500">{formatPrice(trigger.takeProfit)}</span></p>}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="px-2 py-3">
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center">
-                          {trigger.condition === 'above' ? 
-                            <ArrowUp className="h-4 w-4 text-green-500 mr-1"/> : 
-                            <ArrowDown className="h-4 w-4 text-red-500 mr-1"/>}
-                          <span className="hidden md:inline">{trigger.condition === 'above' ? 'Above' : 'Below'}:</span>
-                        </div>
-                        <span className="font-mono text-right">{formatPrice(trigger.targetPrice)}</span>
+                      <div className="flex items-center w-full">
+                          <div className="flex items-center flex-shrink-0">
+                            {trigger.condition === 'above' ? 
+                              <ArrowUp className="h-4 w-4 text-green-500 mr-1"/> : 
+                              <ArrowDown className="h-4 w-4 text-red-500 mr-1"/>}
+                            <span className="hidden md:inline">{trigger.condition === 'above' ? 'Above' : 'Below'}:</span>
+                          </div>
+                           <div className="flex-grow text-right">
+                             <span className="font-mono">{formatPrice(trigger.targetPrice)}</span>
+                          </div>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell px-2 py-3">
