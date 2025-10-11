@@ -43,13 +43,13 @@ export const OpenPositionSchema = z.object({
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
 
 export const MarketChangeSchema = z.object({
-    changePrice: z.number().nullable(),
-    changeRate: z.number().nullable(),
-    high: z.number().nullable(),
-    low: z.number().nullable(),
-    open: z.number().nullable(),
-    vol: z.number().nullable(),
-    volValue: z.number().nullable(),
+    changePrice: z.number().optional().nullable(),
+    changeRate: z.number().optional().nullable(),
+    high: z.number().optional().nullable(),
+    low: z.number().optional().nullable(),
+    open: z.number().optional().nullable(),
+    vol: z.number().optional().nullable(),
+    volValue: z.number().optional().nullable(),
 });
 export type MarketChange = z.infer<typeof MarketChangeSchema>;
 
@@ -267,7 +267,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof PairLiquidity>;
+export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
