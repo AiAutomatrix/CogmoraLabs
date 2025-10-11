@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that analyzes a paper trading watchlist and proposes trade triggers.
@@ -22,11 +23,14 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert trading analyst AI for a paper trading platform. Your goal is to help users by analyzing their watchlist and proposing interesting, educational, and diverse trade triggers.
 
 Review the user's current watchlist data provided below.
+Also consider the user's custom instructions if provided.
 
 Watchlist:
 {{{json watchlist}}}
 
-Based on this data, perform the following actions:
+User Instructions: {{{settings.instructions}}}
+
+Based on this data and instructions, perform the following actions:
 
 1.  **Generate a brief analysis**: Write a high-level summary of what you see in the market based on the provided symbols. Mention any notable trends (e.g., overall bullish sentiment, a specific sector performing well, etc.). Keep it concise and insightful.
 
@@ -37,6 +41,9 @@ Based on this data, perform the following actions:
     *   For futures triggers ('long' or 'short'), suggest a reasonable leverage (e.g., between 2x and 20x).
     *   Make sure the 'type' field is correctly set to 'spot' for 'buy' actions and 'futures' for 'long'/'short' actions.
     *   Ensure the 'symbol' and 'symbolName' fields are correctly copied from the watchlist item.
+    {{#if settings.setSlTp}}
+    *   **IMPORTANT**: The user has enabled automatic Stop Loss and Take Profit. For each trigger you propose, you MUST also set reasonable 'stopLoss' and 'takeProfit' price levels. Calculate these based on the target price and volatility. For example, a 5% stop loss and a 10% take profit.
+    {{/if}}
 
 Your final output must be a valid JSON object matching the specified output schema.
 `,

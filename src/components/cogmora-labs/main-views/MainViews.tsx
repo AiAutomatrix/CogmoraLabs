@@ -16,7 +16,7 @@ import AllTickersScreener from './screeners/AllTickersScreener';
 import ForexHeatmapWidget from './heatmaps/ForexHeatmapWidget';
 import AllFuturesScreener from './screeners/AllFuturesScreener';
 import PaperTradingDashboard from './paper-trading/PaperTradingDashboard';
-import type { ProposeTradeTriggersOutput } from '@/types';
+import type { ProposeTradeTriggersOutput, AiTriggerSettings } from '@/types';
 
 
 interface MainViewsProps {
@@ -34,6 +34,8 @@ interface MainViewsProps {
   selectedSymbolsForHighlight: string[];
   setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
   setActiveMiniView: (view: string) => void;
+  aiSettings: AiTriggerSettings;
+  setAiSettings: (settings: AiTriggerSettings) => void;
 }
 
 const MainViews: FC<MainViewsProps> = ({ 
@@ -51,6 +53,8 @@ const MainViews: FC<MainViewsProps> = ({
   selectedSymbolsForHighlight,
   setAiAgentState,
   setActiveMiniView,
+  aiSettings,
+  setAiSettings,
 }) => {
   const BASE_CLASS = "w-full overflow-hidden";
 
@@ -166,6 +170,8 @@ const MainViews: FC<MainViewsProps> = ({
            selectedSymbolsForHighlight={selectedSymbolsForHighlight}
            setAiAgentState={setAiAgentState}
            setActiveMiniView={setActiveMiniView}
+           aiSettings={aiSettings}
+           setAiSettings={setAiSettings}
         />
       </TabsContent>
       <TabsContent value="chart" className={`flex-grow overflow-hidden ${mobileContentClassName}`}>

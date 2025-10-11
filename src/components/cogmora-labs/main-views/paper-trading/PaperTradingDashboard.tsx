@@ -36,7 +36,7 @@ import {
 import Watchlist from "./Watchlist";
 import TradeTriggersDashboard from "./TradeTriggersDashboard";
 import { PositionDetailsPopup } from "./PositionDetailsPopup";
-import type { OpenPosition, ProposeTradeTriggersOutput } from "@/types";
+import type { OpenPosition, ProposeTradeTriggersOutput, AiTriggerSettings } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
 
 interface PaperTradingDashboardProps {
@@ -46,6 +46,8 @@ interface PaperTradingDashboardProps {
   selectedSymbolsForHighlight: string[];
   setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
   setActiveMiniView: (view: string) => void;
+  aiSettings: AiTriggerSettings;
+  setAiSettings: (settings: AiTriggerSettings) => void;
 }
 
 export default function PaperTradingDashboard({
@@ -55,6 +57,8 @@ export default function PaperTradingDashboard({
   selectedSymbolsForHighlight,
   setAiAgentState,
   setActiveMiniView,
+  aiSettings,
+  setAiSettings,
 }: PaperTradingDashboardProps) {
   const {
     balance,
@@ -356,7 +360,12 @@ export default function PaperTradingDashboard({
             </Card>
         </TabsContent>
         <TabsContent value="triggers">
-            <TradeTriggersDashboard setAiAgentState={setAiAgentState} setActiveMiniView={setActiveMiniView} />
+            <TradeTriggersDashboard 
+              setAiAgentState={setAiAgentState} 
+              setActiveMiniView={setActiveMiniView}
+              aiSettings={aiSettings}
+              setAiSettings={setAiSettings}
+            />
         </TabsContent>
         <TabsContent value="watchlist">
             <Watchlist 
@@ -511,5 +520,3 @@ export default function PaperTradingDashboard({
     </>
   );
 }
-
-    

@@ -20,10 +20,11 @@ import {
 } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUp, ArrowDown, XCircle, Timer, Wand2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, XCircle, Timer, Wand2, Settings } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { proposeTradeTriggers } from '@/ai/flows/propose-trade-triggers-flow';
-import type { ProposeTradeTriggersOutput } from '@/types';
+import type { ProposeTradeTriggersOutput, AiTriggerSettings } from '@/types';
+import { AiTriggerSettingsPopup } from './AiTriggerSettingsPopup';
 
 const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
@@ -59,12 +60,15 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
 };
 
 
-export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniView }: {
+export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniView, aiSettings, setAiSettings }: {
     setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
     setActiveMiniView: (view: string) => void;
+    aiSettings: AiTriggerSettings;
+    setAiSettings: (settings: AiTriggerSettings) => void;
 }) {
   const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime, watchlist } = usePaperTrading();
   
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const isAutomationActive = automationConfig.updateMode === 'auto-refresh';
 
   const handleAiTriggerAnalysis = async () => {
@@ -76,7 +80,7 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
     setAiAgentState({ analysis: '', proposedTriggers: [], isLoading: true });
 
     try {
-        const response = await proposeTradeTriggers({ watchlist });
+        const response = await proposeTradeTriggers({ watchlist, settings: aiSettings });
         setAiAgentState({ ...response, isLoading: false });
     } catch (error) {
         console.error("AI Trigger Analysis failed:", error);
@@ -96,6 +100,7 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
   };
   
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
@@ -104,10 +109,15 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
             Conditional orders and automations waiting to execute.
             </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            AI Trigger Analysis
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis}>
+                <Wand2 className="mr-2 h-4 w-4" />
+                AI Trigger Analysis
+            </Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsSettingsOpen(true)}>
+                <Settings className="h-4 w-4" />
+            </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -189,5 +199,12 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
         </div>
       </CardContent>
     </Card>
+    <AiTriggerSettingsPopup
+        isOpen={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        settings={aiSettings}
+        onSave={setAiSettings}
+    />
+    </>
   );
 }

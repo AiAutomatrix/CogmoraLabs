@@ -1,5 +1,4 @@
 
-
 import { z } from 'zod';
 
 export const PaperTradeSchema = z.object({
@@ -138,8 +137,15 @@ export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
 export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 
+export const AiTriggerSettingsSchema = z.object({
+  instructions: z.string().optional(),
+  setSlTp: z.boolean().optional(),
+});
+export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
+
 export const ProposeTradeTriggersInputSchema = z.object({
   watchlist: z.array(WatchlistItemSchema),
+  settings: AiTriggerSettingsSchema,
 });
 export type ProposeTradeTriggersInput = z.infer<typeof ProposeTradeTriggersInputSchema>;
 
@@ -503,5 +509,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    

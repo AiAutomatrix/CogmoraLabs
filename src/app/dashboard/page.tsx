@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
@@ -11,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
-import type { ProposeTradeTriggersOutput } from '@/types';
+import type { ProposeTradeTriggersOutput, AiTriggerSettings } from '@/types';
 
 export default function HomePage() {
   const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTCUSDT');
@@ -28,6 +27,12 @@ export default function HomePage() {
     proposedTriggers: [],
     isLoading: false,
   });
+
+  const [aiSettings, setAiSettings] = useState<AiTriggerSettings>({
+    instructions: '',
+    setSlTp: true,
+  });
+
 
   // New state for multi-symbol selection
   const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
@@ -63,7 +68,6 @@ export default function HomePage() {
   
     // For futures contracts from the screener (e.g., COAIUSDTM)
     if (formattedSymbol.endsWith('M')) {
-      // Just strip the 'M' and let TradingView find the best match (e.g., COAIUSDT)
       return formattedSymbol.slice(0, -1);
     }
   
@@ -257,6 +261,8 @@ export default function HomePage() {
               selectedSymbolsForHighlight={selectedSymbols}
               setAiAgentState={setAiAgentState}
               setActiveMiniView={setActiveMiniView}
+              aiSettings={aiSettings}
+              setAiSettings={setAiSettings}
             />
           </section>
           <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">
