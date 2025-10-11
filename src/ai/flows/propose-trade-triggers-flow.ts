@@ -22,19 +22,23 @@ const prompt = ai.definePrompt({
   output: { schema: ProposeTradeTriggersOutputSchema },
   prompt: `You are an expert trading analyst AI for a paper trading platform. Your goal is to help users by analyzing their watchlist and proposing interesting, educational, and diverse trade triggers.
 
-Review the user's current watchlist data provided below.
-Also consider the user's custom instructions if provided.
+You will be given the user's current watchlist and a list of their already active trade triggers.
 
-Watchlist:
+- Watchlist:
 {{{json watchlist}}}
 
-User Instructions: {{{settings.instructions}}}
+- Active Triggers:
+{{{json activeTriggers}}}
 
-Based on this data and instructions, perform the following actions:
+- User Instructions: {{{settings.instructions}}}
 
-1.  **Generate a brief analysis**: Write a high-level summary of what you see in the market based on the provided symbols. Mention any notable trends (e.g., overall bullish sentiment, a specific sector performing well, etc.). Keep it concise and insightful.
+Based on all this information, perform the following actions:
 
-2.  **Propose 3-5 diverse trade triggers**: Create a list of 'TradeTrigger' objects. These triggers should be varied and demonstrate different trading strategies.
+1.  **Analyze the Full Context**: Review the watchlist and the active triggers. Note which symbols from the watchlist already have active triggers. Your goal is to provide suggestions for symbols that are NOT yet covered, or to suggest different kinds of trades for symbols that are. DO NOT propose a trigger that is identical or very similar to an existing one.
+
+2.  **Generate a brief analysis**: Write a high-level summary of what you see in the market based on the provided symbols. Mention any notable trends and identify which symbols you are targeting for new triggers.
+
+3.  **Propose 3-5 diverse trade triggers**: Create a list of 'TradeTrigger' objects for symbols that don't have active triggers, or for which a new strategy makes sense. These should be varied and demonstrate different trading strategies.
     *   Include a mix of actions: 'buy' (for spot), 'long' (for futures), and 'short' (for futures).
     *   Set sensible 'targetPrice' conditions. For example, suggest buying on a dip (price is below current), or shorting on a move above a recent high if the sentiment is bearish.
     *   Use realistic but varied allocation amounts (e.g., between 50 and 500 USD).

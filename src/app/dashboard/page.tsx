@@ -22,7 +22,7 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const { watchlist, addTradeTrigger } = usePaperTrading();
+  const { watchlist, addTradeTrigger, tradeTriggers } = usePaperTrading();
   const { toast } = useToast();
 
   // State for AI Agent moved here
@@ -66,7 +66,7 @@ const PageContent: React.FC = () => {
     setAiAgentState(prev => ({ ...prev, isLoading: true }));
 
     try {
-      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings });
+      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers });
 
       if (aiSettings.autoExecute) {
         response.proposedTriggers.forEach((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
@@ -86,7 +86,7 @@ const PageContent: React.FC = () => {
       }
       toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
     }
-  }, [watchlist, aiSettings, addTradeTrigger, toast, setActiveMiniView]);
+  }, [watchlist, aiSettings, addTradeTrigger, toast, setActiveMiniView, tradeTriggers]);
 
   // Effect for AI scheduling
   useEffect(() => {

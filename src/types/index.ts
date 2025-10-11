@@ -147,6 +147,7 @@ export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
 
 export const ProposeTradeTriggersInputSchema = z.object({
   watchlist: z.array(WatchlistItemSchema),
+  activeTriggers: z.array(TradeTriggerSchema),
   settings: AiTriggerSettingsSchema,
 });
 export type ProposeTradeTriggersInput = z.infer<typeof ProposeTradeTriggersInputSchema>;
