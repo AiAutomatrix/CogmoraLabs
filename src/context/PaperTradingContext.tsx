@@ -702,7 +702,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPos;
         let shouldClose = false;
         let reason = '';
-        let closePrice = currentPrice;
+        let closePrice: number = currentPrice;
     
         // Check for liquidation only for futures
         if (positionType === 'futures' && liquidationPrice !== undefined) {
@@ -1268,3 +1268,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
