@@ -203,14 +203,14 @@ export default function TradeTriggersDashboard({
                   <TableRow key={trigger.id}>
                     <TableCell className="font-medium px-2 py-3">{trigger.symbolName}</TableCell>
                     <TableCell className="px-2 py-3">
-                      <div className="flex items-center">
-                         <Badge variant={trigger.action === 'short' ? 'destructive' : 'default'} className="capitalize md:hidden mr-2">
-                           {trigger.action} {trigger.type === 'futures' ? `${trigger.leverage}x` : ''}
-                         </Badge>
-                        {trigger.condition === 'above' ? 
-                          <ArrowUp className="h-4 w-4 text-green-500 mr-1"/> : 
-                          <ArrowDown className="h-4 w-4 text-red-500 mr-1"/>}
-                        <div className="w-[80px] text-left">{formatPrice(trigger.targetPrice)}</div>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center">
+                          {trigger.condition === 'above' ? 
+                            <ArrowUp className="h-4 w-4 text-green-500 mr-1"/> : 
+                            <ArrowDown className="h-4 w-4 text-red-500 mr-1"/>}
+                          <span className="hidden md:inline">{trigger.condition === 'above' ? 'Above' : 'Below'}:</span>
+                        </div>
+                        <span className="font-mono text-right">{formatPrice(trigger.targetPrice)}</span>
                       </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell px-2 py-3">
