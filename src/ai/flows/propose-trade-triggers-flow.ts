@@ -89,7 +89,7 @@ Based on all this information, your task is to **formulate a plan of action**.
 2.  **Generate a brief analysis**: Write a high-level summary of what you see in the market and what your overall strategy is for this plan. Explain your reasoning.
 
 3.  **Formulate the Plan**: Use the provided tools ('createTradeTrigger', 'updateTradeTrigger', 'cancelTradeTrigger') to build your plan.
-    *   For each action, provide a clear 'reasoning' for why you are recommending it.
+    *   **CRITICAL**: For each action you take, you MUST provide a clear 'reasoning' field inside the action object explaining why you are recommending it.
     *   Do not create duplicate triggers. Either update existing ones or ignore them.
     *   If creating a new trigger, use sensible target prices and varied, realistic allocation amounts.
     *   For futures, suggest reasonable leverage (2x-20x).
@@ -103,7 +103,7 @@ Based on all this information, your task is to **formulate a plan of action**.
     *   The user has requested to ONLY adjust active triggers. Do not use the create tool.
 {{/if}}
 
-Your final output must be a valid JSON object matching the 'AgentActionPlan' schema, containing your analysis and the array of actions in the 'plan' field.
+Your final output must be a valid JSON object matching the 'AgentActionPlan' schema, containing your analysis and the array of actions in the 'plan' field. Each action in the plan must have a 'reasoning' field.
 `,
 });
 
