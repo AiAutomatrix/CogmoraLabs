@@ -123,13 +123,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const notifiedAlerts = useRef(new Set());
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [prevWatchlist, setPrevWatchlist] = useState<WatchlistItem[]>([]);
-
-  // Correctly track previous open positions to prevent duplicate closures.
+  
+  // State to correctly track the previous open positions to prevent duplicate closures.
   const [prevOpenPositions, setPrevOpenPositions] = useState<OpenPosition[]>([]);
   useEffect(() => {
-    setPrevOpenPositions(openPositions);
+    if (isLoaded) {
+      setPrevOpenPositions(openPositions);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openPositions]);
+
+  // State for previous watchlist to show add/remove toasts
+  const [prevWatchlist, setPrevWatchlist] = useState<WatchlistItem[]>([]);
+  useEffect(() => {
+    if (isLoaded) {
+      setPrevWatchlist(watchlist);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchlist]);
 
 
   // Load from local storage on mount
@@ -243,7 +254,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
       });
 
-      setPrevWatchlist(watchlist);
   }, [watchlist, isLoaded, toast, prevWatchlist]);
 
   const buy = useCallback(
@@ -437,10 +447,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     setTimeout(() => {
-        toast({
-        title: 'Trade Trigger Executed!',
-        description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
-        });
+      toast({
+      title: 'Trade Trigger Executed!',
+      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
+      });
     }, 0);
 
     const triggeredBy = `trigger:${trigger.condition}`;
@@ -494,9 +504,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePrice?: number) => {
     setOpenPositions(currentOpenPositions => {
+        // Check if the position still exists. If not, it was already closed.
         const positionToClose = currentOpenPositions.find(p => p.id === positionId);
-        
-        // If position doesn't exist, it was already closed. Abort.
         if (!positionToClose) {
             return currentOpenPositions;
         }
@@ -551,18 +560,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   // Effect for automated closures (SL/TP/Liquidation)
   useEffect(() => {
     if (!isLoaded) return;
-  
-    const currentPositions = openPositions;
-    const previousPositions = prevOpenPositions;
     
-    // Find positions that existed in the previous state but not in the current one.
-    const manuallyClosedIds = new Set(previousPositions.filter(pp => !currentPositions.some(cp => cp.id === pp.id)).map(p => p.id));
-    
-    currentPositions.forEach(position => {
-      // If position was manually closed in this cycle, skip auto-check.
-      if (manuallyClosedIds.has(position.id)) return;
+    // Check against the true previous state before the current render cycle's updates.
+    prevOpenPositions.forEach(position => {
+      // Find the current state of this position. If it doesn't exist, it was already closed (e.g., manually).
+      const currentPositionState = openPositions.find(p => p.id === position.id);
+      if (!currentPositionState) {
+        return; // Skip if already closed.
+      }
 
-      const { id, details, currentPrice, side, liquidationPrice, positionType } = position;
+      const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPositionState;
       let shouldClose = false;
       let reason = '';
       let closePrice = currentPrice;
@@ -603,7 +610,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     });
   
-  }, [openPositions, isLoaded, closePosition, prevOpenPositions]);
+  }, [openPositions, prevOpenPositions, isLoaded, closePosition]);
 
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
     if (forceScrape) {
@@ -1079,26 +1086,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
     const currentPrice = watchlistItem?.currentPrice;
     
-    setTimeout(() => {
-        let shouldExecuteImmediately = false;
-        if (currentPrice) {
-            shouldExecuteImmediately =
-                (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
-                (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
-        }
+    let shouldExecuteImmediately = false;
+    if (currentPrice) {
+        shouldExecuteImmediately =
+            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
+            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
+    }
 
-        if (shouldExecuteImmediately) {
-            executeTrigger(newTrigger, currentPrice!);
-            if (newTrigger.cancelOthers) {
-                setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
-            }
-        } else {
-            setTradeTriggers(prev => [newTrigger, ...prev]);
-            setTimeout(() => {
-              toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-            }, 0);
+    if (shouldExecuteImmediately) {
+        executeTrigger(newTrigger, currentPrice!);
+        if (newTrigger.cancelOthers) {
+            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
         }
-    }, 0);
+    } else {
+        setTradeTriggers(prev => [newTrigger, ...prev]);
+        setTimeout(() => {
+          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+        }, 0);
+    }
   }, [toast, watchlist, executeTrigger]);
 
   const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {

@@ -57,7 +57,9 @@ const PageContent: React.FC = () => {
   const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
     if (watchlist.length === 0) {
       if (!isScheduled) {
-        toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
+        setTimeout(() => {
+          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
+        }, 0);
       }
       return;
     }
@@ -84,10 +86,12 @@ const PageContent: React.FC = () => {
                 executedCount++;
             }
         });
-        toast({ 
-          title: 'AI Auto-Execution Complete', 
-          description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
-        });
+        setTimeout(() => {
+          toast({ 
+            title: 'AI Auto-Execution Complete', 
+            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
+          });
+        }, 0);
         // We still set the state so the user can see the analysis, but the plan will be empty as it's been "executed".
         setAiAgentState({ analysis: response.analysis, plan: [], isLoading: false });
       } else {
@@ -100,7 +104,9 @@ const PageContent: React.FC = () => {
       if (!isScheduled) {
         setAiAgentState({ analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false });
       }
-      toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
+      setTimeout(() => {
+        toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
+      }, 0);
     }
   }, [watchlist, aiSettings, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, toast, setActiveMiniView, tradeTriggers, balance]);
 
