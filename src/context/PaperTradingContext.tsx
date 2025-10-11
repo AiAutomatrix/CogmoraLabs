@@ -124,6 +124,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const notifiedAlerts = useRef(new Set());
   const prevWatchlistRef = useRef<WatchlistItem[]>([]);
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const openPositionsRef = useRef(openPositions);
+  useEffect(() => {
+    openPositionsRef.current = openPositions;
+  }, [openPositions]);
 
 
   // Load from local storage on mount
@@ -690,45 +695,61 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   useEffect(() => {
-    if (!isLoaded) return;
-  
-    const positionsToProcess: { id: string; reason: string; price: number }[] = [];
-  
-    openPositions.forEach(position => {
-      const { id, details, currentPrice, side, liquidationPrice } = position;
-  
-      // Check for liquidation first
-      if (position.positionType === 'futures' && liquidationPrice !== undefined) {
-          if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
-              positionsToProcess.push({ id, reason: 'Position Liquidated', price: liquidationPrice });
-              return; // Stop processing this position if it's liquidated
-          }
-      }
+    const prevPositions = openPositionsRef.current;
+    if (!isLoaded || prevPositions === openPositions) return;
 
-      if (!details) return;
-      const { stopLoss, takeProfit } = details;
-  
-      if (stopLoss !== undefined) {
-        if ((side === 'buy' && currentPrice <= stopLoss) || (side === 'long' && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-          positionsToProcess.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
-          return; // Stop checking this position if SL is hit
+    const positionsToProcess: { id: string; reason: string; price: number }[] = [];
+
+    // Check for positions that were in prev but not in current (manually closed)
+    const currentPositionIds = new Set(openPositions.map(p => p.id));
+    
+    prevPositions.forEach(prevPos => {
+        // If the position was just closed manually, don't check SL/TP for it.
+        if (!currentPositionIds.has(prevPos.id)) {
+            return;
         }
-      }
-  
-      if (takeProfit !== undefined) {
-        if ((side === 'buy' && currentPrice >= takeProfit) || (side === 'long' && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-          positionsToProcess.push({ id, reason: 'Take Profit Hit', price: takeProfit });
+
+        const position = openPositions.find(p => p.id === prevPos.id);
+        if (!position) return;
+
+        const { id, details, currentPrice, side, liquidationPrice } = position;
+
+        // Check for liquidation first
+        if (position.positionType === 'futures' && liquidationPrice !== undefined) {
+            if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
+                positionsToProcess.push({ id, reason: 'Position Liquidated', price: liquidationPrice });
+                return;
+            }
         }
-      }
+
+        if (!details) return;
+        const { stopLoss, takeProfit } = details;
+
+        if (stopLoss !== undefined) {
+            if ((side === 'buy' || side === 'long') && currentPrice <= stopLoss || side === 'short' && currentPrice >= stopLoss) {
+                positionsToProcess.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
+                return;
+            }
+        }
+
+        if (takeProfit !== undefined) {
+            if ((side === 'buy' || side === 'long') && currentPrice >= takeProfit || side === 'short' && currentPrice <= takeProfit) {
+                positionsToProcess.push({ id, reason: 'Take Profit Hit', price: takeProfit });
+            }
+        }
     });
-  
+
     if (positionsToProcess.length > 0) {
-      // Use a timeout to ensure this runs after the current render cycle
-      setTimeout(() => {
-        positionsToProcess.forEach(p => closePosition(p.id, p.reason, p.price));
-      }, 0);
+        setTimeout(() => {
+            positionsToProcess.forEach(p => {
+                // Final check to ensure position hasn't been closed by another process in this cycle
+                if (openPositionsRef.current.some(pos => pos.id === p.id)) {
+                    closePosition(p.id, p.reason, p.price);
+                }
+            });
+        }, 0);
     }
-  }, [openPositions, isLoaded, closePosition]);
+}, [openPositions, isLoaded, closePosition]);
 
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
@@ -1150,5 +1171,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
