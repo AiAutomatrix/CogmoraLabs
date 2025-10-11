@@ -206,10 +206,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     Object.entries(priceAlerts).forEach(([symbol, alert]) => {
       if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
         const watchlistItem = watchlist.find(item => item.symbol === symbol);
-        toast({
-          title: "Price Alert Triggered!",
-          description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
-        });
+        setTimeout(() => {
+          toast({
+            title: "Price Alert Triggered!",
+            description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
+          });
+        }, 0);
         notifiedAlerts.current.add(symbol); // Mark as notified
       }
     });
@@ -225,14 +227,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       // Check for added items
       watchlist.forEach(item => {
           if (!prevSymbols.has(item.symbol)) {
+            setTimeout(() => {
               toast({ title: 'Watchlist', description: `${item.symbolName} added to watchlist.` });
+            }, 0);
           }
       });
 
       // Check for removed items
       prevWatchlistRef.current.forEach(item => {
           if (!currentSymbols.has(item.symbol)) {
+            setTimeout(() => {
               toast({ title: 'Watchlist', description: `${item.symbolName} removed from watchlist.` });
+            }, 0);
           }
       });
 
@@ -241,7 +247,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
     if (forceScrape) {
-      toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
+      setTimeout(() => {
+        toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
+      }, 0);
     }
 
     try {
@@ -304,12 +312,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
         
         if (forceScrape) {
-          toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+          setTimeout(() => {
+            toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+          }, 0);
         }
     } catch(error) {
       console.error('Watchlist automation failed:', error);
       if (forceScrape) {
-        toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
+        setTimeout(() => {
+          toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
+        }, 0);
       }
     }
   }, [toast, futuresContracts]);
@@ -319,13 +331,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     if (config.updateMode === 'auto-refresh') {
         localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
         setNextScrapeTime(Date.now() + config.refreshInterval);
-        toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
+        setTimeout(() => {
+          toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
+        }, 0);
     } else {
         setNextScrapeTime(0);
         if (automationIntervalRef.current) {
           clearInterval(automationIntervalRef.current);
         }
-        toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
+        setTimeout(() => {
+          toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
+        }, 0);
     }
   }, [toast]);
 
@@ -386,7 +402,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       priceChgPct?: number,
     ) => {
       if (balance < amountUSD) {
-        toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
+        setTimeout(() => {
+          toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
+        }, 0);
         return;
       }
       const size = amountUSD / currentPrice;
@@ -438,8 +456,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         timestamp: Date.now(),
         status: 'open',
       }, ...prev]);
-
-      toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
+      
+      setTimeout(() => {
+        toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
+      }, 0);
     },
     [balance, toast]
   );
@@ -455,7 +475,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     priceChgPct?: number,
   ) => {
       if (balance < collateral) {
-          toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+          setTimeout(() => {
+            toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+          }, 0);
           return;
       }
       const positionValue = collateral * leverage;
@@ -495,7 +517,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           status: "open",
       }, ...prev]);
 
-      toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+      setTimeout(() => {
+        toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+      }, 0);
   }, [balance, toast]);
 
   const futuresSell = useCallback((
@@ -509,7 +533,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     priceChgPct?: number,
   ) => {
       if (balance < collateral) {
-          toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+          setTimeout(() => {
+            toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
+          }, 0);
           return;
       }
       const positionValue = collateral * leverage;
@@ -548,7 +574,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           status: "open",
       }, ...prev]);
 
-      toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+      setTimeout(() => {
+        toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
+      }, 0);
   }, [balance, toast]);
   
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
@@ -652,7 +680,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             return [closingTrade, ...th];
         });
         
-        toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+        setTimeout(() => {
+          toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+        }, 0);
 
         return prev.filter(p => p.id !== positionId);
     });
@@ -719,10 +749,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       })
     );
     if (symbolName) {
-      toast({
-        title: "Position Updated",
-        description: `SL/TP updated for ${symbolName}.`
-      });
+      setTimeout(() => {
+        toast({
+          title: "Position Updated",
+          description: `SL/TP updated for ${symbolName}.`
+        });
+      }, 0);
     }
   }, [toast]);
 
@@ -972,7 +1004,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const clearHistory = useCallback(() => {
     setTradeHistory([]);
-    toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
+    setTimeout(() => {
+      toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
+    }, 0);
   }, [toast]);
 
   const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => {
@@ -1000,7 +1034,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
     setPriceAlerts(prev => ({ ...prev, [symbol]: newAlert }));
-    toast({ title: 'Alert Set', description: `Alert set for ${symbol} when price is ${condition} ${price}.` });
+    setTimeout(() => {
+      toast({ title: 'Alert Set', description: `Alert set for ${symbol} when price is ${condition} ${price}.` });
+    }, 0);
     notifiedAlerts.current.delete(symbol);
   }, [toast]);
 
@@ -1010,7 +1046,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return rest;
     });
     notifiedAlerts.current.delete(symbol);
-    toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
+    setTimeout(() => {
+      toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
+    }, 0);
   }, [toast]);
   
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
@@ -1039,14 +1077,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         } else {
             setTradeTriggers(prev => [newTrigger, ...prev]);
-            toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+            setTimeout(() => {
+              toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+            }, 0);
         }
     }, 0);
   }, [toast, watchlist, executeTrigger]);
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
-    toast({ title: 'Trade Trigger Removed' });
+    setTimeout(() => {
+      toast({ title: 'Trade Trigger Removed' });
+    }, 0);
   }, [toast]);
   
 
@@ -1091,5 +1133,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
