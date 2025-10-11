@@ -47,6 +47,7 @@ interface PaperTradingContextType {
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'status'>) => void;
+  updateTradeTrigger: (triggerId: string, updates: Partial<TradeTrigger>) => void;
   removeTradeTrigger: (triggerId: string) => void;
   buy: (
     symbol: string,
@@ -578,7 +579,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
       }, 0);
   }, [balance, toast]);
-  
+
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     setTimeout(() => {
         toast({
@@ -602,7 +603,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
   }, [toast, buy, futuresBuy, futuresSell, watchlist]);
-
+  
   const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
     let cancelSymbols = new Set<string>();
@@ -855,7 +856,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onerror = (e) => {
           console.error("Spot WS Error", e);
           setSpotWsStatus("error");
-          // Use setTimeout to avoid calling toast during render cycle
           setTimeout(() => {
             toast({ title: "Spot WebSocket Error", description: "Connection failed. Watchlist prices may not update.", variant: "destructive" });
           }, 0);
@@ -1084,6 +1084,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }, 0);
   }, [toast, watchlist, executeTrigger]);
 
+  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
+    let triggerSymbol = '';
+    setTradeTriggers(prev => prev.map(t => {
+      if (t.id === triggerId) {
+        triggerSymbol = t.symbolName;
+        return { ...t, ...updates };
+      }
+      return t;
+    }));
+    if (triggerSymbol) {
+        setTimeout(() => {
+            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
+        }, 0);
+    }
+  }, [toast]);
+
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
     setTimeout(() => {
@@ -1105,6 +1121,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         addPriceAlert,
         removePriceAlert,
         addTradeTrigger,
+        updateTradeTrigger,
         removeTradeTrigger,
         buy,
         futuresBuy,
@@ -1112,15 +1129,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         closePosition,
         updatePositionSlTp,
         closeAllPositions,
-clearHistory,
-spotWsStatus,
-futuresWsStatus,
-automationConfig,
-setAutomationConfig,
-applyWatchlistAutomation,
-nextScrapeTime,
-}}
->
+        clearHistory,
+        spotWsStatus,
+        futuresWsStatus,
+        automationConfig,
+        setAutomationConfig,
+        applyWatchlistAutomation,
+        nextScrapeTime,
+      }}
+    >
       {children}
     </PaperTradingContext.Provider>
   );
@@ -1133,3 +1150,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
