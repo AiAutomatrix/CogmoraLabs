@@ -142,6 +142,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const notifiedAlerts = useRef(new Set());
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const aiAutomationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [prevOpenPositions, setPrevOpenPositions] = useState<OpenPosition[]>([]);
 
   // Load from local storage on mount
   useEffect(() => {
@@ -159,6 +160,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedPositions) {
         const parsedPositions = JSON.parse(savedPositions);
         setOpenPositions(parsedPositions);
+        setPrevOpenPositions(parsedPositions);
       }
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
       if (savedWatchlist) {
@@ -404,12 +406,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePrice?: number) => {
     setOpenPositions(currentOpenPositions => {
         const positionToClose = currentOpenPositions.find(p => p.id === positionId);
-        // If the position is not in the array, it means it has already been processed.
         if (!positionToClose) {
             return currentOpenPositions;
         }
 
         const exitPrice = closePrice !== undefined ? closePrice : positionToClose.currentPrice;
+        if(exitPrice === undefined) return currentOpenPositions; // Should not happen
+
         let pnl = 0;
         let returnedValue = 0;
 
@@ -487,6 +490,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }, 0);
   }, [toast]);
 
+  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
+    let triggerSymbol = '';
+    setTradeTriggers(prev => prev.map(t => {
+      if (t.id === triggerId) {
+        triggerSymbol = t.symbolName;
+        return { ...t, ...updates };
+      }
+      return t;
+    }));
+    if (triggerSymbol) {
+        setTimeout(() => {
+            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
+        }, 0);
+    }
+  }, [toast]);
+
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -517,22 +536,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast, watchlist, executeTrigger]);
   
-  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
-    let triggerSymbol = '';
-    setTradeTriggers(prev => prev.map(t => {
-      if (t.id === triggerId) {
-        triggerSymbol = t.symbolName;
-        return { ...t, ...updates };
-      }
-      return t;
-    }));
-    if (triggerSymbol) {
-        setTimeout(() => {
-            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
-        }, 0);
-    }
-  }, [toast]);
-
   const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
     if (watchlist.length === 0) {
       if (!isScheduled) {
@@ -683,28 +686,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     );
   }, [checkPriceAlerts, checkTradeTriggers]);
   
-  const [prevOpenPositions, setPrevOpenPositions] = useState<OpenPosition[]>([]);
   useEffect(() => {
-    // This effect runs after every render where openPositions changes.
-    // It captures the state of openPositions *before* the next render's update.
-    if (isLoaded) {
-      setPrevOpenPositions(openPositions);
-    }
-  }, [openPositions, isLoaded]);
+    setPrevOpenPositions(openPositions);
+  }, [openPositions]);
 
   useEffect(() => {
       if (!isLoaded) return;
       
       const prevPositionsMap = new Map(prevOpenPositions.map(p => [p.id, p]));
 
-      // Check for automatic closures (SL/TP, Liquidation)
       openPositions.forEach(currentPos => {
         const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPos;
+        
+        if (currentPrice === undefined) return;
+
         let shouldClose = false;
         let reason = '';
         let closePrice: number = currentPrice;
     
-        // Check for liquidation only for futures
         if (positionType === 'futures' && liquidationPrice !== undefined) {
           if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
             shouldClose = true;
@@ -713,10 +712,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
         }
     
-        // Check for SL/TP if not already marked for liquidation
         if (!shouldClose && details) {
           const { stopLoss, takeProfit } = details;
-          if (stopLoss !== undefined && ((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
+          if (stopLoss !== undefined && ((side === 'buy' || side === 'long') && currentPrice <= stopLoss)) {
             shouldClose = true;
             reason = 'Stop Loss Hit';
             closePrice = stopLoss;
@@ -849,6 +847,96 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }, 0);
       }
   }, [toast]);
+  
+  const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
+    const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
+    setPriceAlerts(prev => ({ ...prev, [symbol]: newAlert }));
+    setTimeout(() => {
+      toast({ title: 'Alert Set', description: `Alert set for ${symbol} when price is ${condition} ${price}.` });
+    }, 0);
+    notifiedAlerts.current.delete(symbol);
+  }, [toast]);
+
+  const removePriceAlert = useCallback((symbol: string) => {
+    setPriceAlerts(prev => {
+      const { [symbol]: _, ...rest } = prev;
+      return rest;
+    });
+    notifiedAlerts.current.delete(symbol);
+    setTimeout(() => {
+      toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
+    }, 0);
+  }, [toast]);
+
+  useEffect(() => {
+    if (automationIntervalRef.current) {
+        clearInterval(automationIntervalRef.current);
+    }
+    if (isLoaded && automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
+        const runAutomation = () => applyWatchlistAutomation(automationConfig, false);
+        
+        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
+        const timeSinceLast = Date.now() - lastScrapeTime;
+        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
+
+        const timeoutId = setTimeout(() => {
+          runAutomation();
+          setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
+          automationIntervalRef.current = setInterval(() => {
+            runAutomation();
+            setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
+          }, automationConfig.refreshInterval);
+        }, initialDelay);
+        
+        setNextScrapeTime(Date.now() + initialDelay);
+
+        return () => {
+          clearTimeout(timeoutId);
+          if (automationIntervalRef.current) {
+            clearInterval(automationIntervalRef.current);
+          }
+        };
+    } else {
+        setNextScrapeTime(0);
+    }
+  }, [isLoaded, automationConfig, applyWatchlistAutomation]);
+  
+  useEffect(() => {
+    if (aiAutomationIntervalRef.current) {
+      clearInterval(aiAutomationIntervalRef.current);
+    }
+    if (isLoaded && aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
+      const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
+      
+      const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
+      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
+      const timeSinceLast = Date.now() - lastScrapeTime;
+      const initialDelay = Math.max(0, aiSettings.scheduleInterval - timeSinceLast);
+
+      const timeoutId = setTimeout(() => {
+        runScheduledAnalysis();
+        localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+        setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
+
+        aiAutomationIntervalRef.current = setInterval(() => {
+          runScheduledAnalysis();
+          localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+          setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
+        }, aiSettings.scheduleInterval!);
+      }, initialDelay);
+      
+      setNextAiScrapeTime(Date.now() + initialDelay);
+
+      return () => {
+        clearTimeout(timeoutId);
+        if (aiAutomationIntervalRef.current) {
+          clearInterval(aiAutomationIntervalRef.current);
+        }
+      };
+    } else {
+      setNextAiScrapeTime(0);
+    }
+  }, [isLoaded, aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
   
   useEffect(() => {
     Object.entries(priceAlerts).forEach(([symbol, alert]) => {
@@ -1078,7 +1166,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     positionsToClose.forEach(p => {
         const currentPositionState = openPositions.find(op => op.id === p.id);
         const closePrice = currentPositionState ? currentPositionState.currentPrice : p.currentPrice;
-        closePosition(p.id, 'Manual Close All', closePrice);
+        if(closePrice !== undefined) {
+          closePosition(p.id, 'Manual Close All', closePrice);
+        }
     });
   }, [openPositions, closePosition]);
 
@@ -1116,111 +1206,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
     });
 }, [futuresContracts, toast]);
-
-  const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
-    const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
-    setPriceAlerts(prev => ({ ...prev, [symbol]: newAlert }));
-    setTimeout(() => {
-      toast({ title: 'Alert Set', description: `Alert set for ${symbol} when price is ${condition} ${price}.` });
-    }, 0);
-    notifiedAlerts.current.delete(symbol);
-  }, [toast]);
-
-  const removePriceAlert = useCallback((symbol: string) => {
-    setPriceAlerts(prev => {
-      const { [symbol]: _, ...rest } = prev;
-      return rest;
-    });
-    notifiedAlerts.current.delete(symbol);
-    setTimeout(() => {
-      toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
-    }, 0);
-  }, [toast]);
-  
-  useEffect(() => {
-    if (automationIntervalRef.current) {
-        clearInterval(automationIntervalRef.current);
-    }
-    if (isLoaded && automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
-        
-        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
-        const timeSinceLast = Date.now() - lastScrapeTime;
-        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
-
-        const timeoutId = setTimeout(() => {
-          runAutomation();
-          setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
-          automationIntervalRef.current = setInterval(() => {
-            runAutomation();
-            setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
-          }, automationConfig.refreshInterval);
-        }, initialDelay);
-        
-        setNextScrapeTime(Date.now() + initialDelay);
-
-        return () => {
-          clearTimeout(timeoutId);
-          if (automationIntervalRef.current) {
-            clearInterval(automationIntervalRef.current);
-          }
-        };
-    } else {
-        setNextScrapeTime(0);
-    }
-  }, [isLoaded, automationConfig, applyWatchlistAutomation]);
-  
-  useEffect(() => {
-    if (aiAutomationIntervalRef.current) {
-      clearInterval(aiAutomationIntervalRef.current);
-    }
-    if (isLoaded && aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
-      const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
-      
-      const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
-      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
-      const timeSinceLast = Date.now() - lastScrapeTime;
-      const initialDelay = Math.max(0, aiSettings.scheduleInterval - timeSinceLast);
-
-      const timeoutId = setTimeout(() => {
-        runScheduledAnalysis();
-        localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-        setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
-
-        aiAutomationIntervalRef.current = setInterval(() => {
-          runScheduledAnalysis();
-          localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-          setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
-        }, aiSettings.scheduleInterval!);
-      }, initialDelay);
-      
-      setNextAiScrapeTime(Date.now() + initialDelay);
-
-      return () => {
-        clearTimeout(timeoutId);
-        if (aiAutomationIntervalRef.current) {
-          clearInterval(aiAutomationIntervalRef.current);
-        }
-      };
-    } else {
-      setNextAiScrapeTime(0);
-    }
-  }, [isLoaded, aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
-  
-  useEffect(() => {
-    Object.entries(priceAlerts).forEach(([symbol, alert]) => {
-      if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
-        const watchlistItem = watchlist.find(item => item.symbol === symbol);
-        setTimeout(() => {
-          toast({
-            title: "Price Alert Triggered!",
-            description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
-          });
-        }, 0);
-        notifiedAlerts.current.add(symbol);
-      }
-    });
-  }, [priceAlerts, watchlist, toast]);
 
   return (
     <PaperTradingContext.Provider
@@ -1268,5 +1253,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
