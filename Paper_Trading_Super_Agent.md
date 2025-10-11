@@ -1,3 +1,4 @@
+
 # Architecture Plan: The Advanced Paper Trading AI Agent
 
 This document outlines the architectural plan to evolve the current paper trading AI from a simple "proposer" into a sophisticated, stateful, and autonomous trading assistant.
@@ -99,3 +100,5 @@ The idea of an "MCP Agent" (Multi-Component-Persona) is an advanced concept, oft
 -   **Recommendation**: While MCP is a powerful end-goal, the most practical and impactful next step is to implement the **Genkit Tools** architecture described in **Phase 2**. This gives us the core "super agent" capabilities (Create, Update, Cancel) in a structured way. Once that is stable, we can further decompose the agent's logic into multiple personas (MCP) if needed for even more complex reasoning.
 
 By following this roadmap, we can incrementally build the highly intelligent and capable paper trading agent you've envisioned.
+
+    
