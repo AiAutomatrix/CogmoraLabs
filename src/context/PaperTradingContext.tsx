@@ -245,151 +245,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       setPrevWatchlist(watchlist);
   }, [watchlist, isLoaded, toast, prevWatchlist]);
-  
-  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
-    if (forceScrape) {
-      setTimeout(() => {
-        toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
-      }, 0);
-    }
-
-    try {
-        const spotResponse = await fetch("/api/kucoin-tickers");
-        const spotData = await spotResponse.json();
-        const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
-        
-        if (!allSpotTickers.length && !futuresContracts.length) {
-            throw new Error('Could not fetch any screener data.');
-        }
-
-        let finalItems: WatchlistItem[] = [];
-        const addedSymbols = new Set<string>();
-
-        config.rules.forEach(rule => {
-            let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
-            let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
-
-            if (rule.source === 'spot') {
-                sourceData = allSpotTickers;
-                sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
-            } else {
-                sourceData = futuresContracts;
-                sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
-            }
-
-            const sorted = [...sourceData].sort((a, b) => {
-                const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
-                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
-                return valB - valA;
-            });
-
-            let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
-            if (rule.criteria.startsWith('top')) {
-                selected = sorted.slice(0, rule.count);
-            } else { // bottom
-                selected = sorted.slice(-rule.count);
-            }
-
-            selected.forEach(item => {
-                if (!addedSymbols.has(item.symbol)) {
-                    addedSymbols.add(item.symbol);
-                    const isSpot = rule.source === 'spot';
-                    finalItems.push({
-                        symbol: item.symbol,
-                        symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
-                        type: rule.source,
-                        currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
-                        priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
-                    });
-                }
-            });
-        });
-
-        setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
-        
-        if (config.updateMode === 'auto-refresh') {
-            localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-            setNextScrapeTime(Date.now() + config.refreshInterval);
-        }
-        
-        if (forceScrape) {
-          setTimeout(() => {
-            toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
-          }, 0);
-        }
-    } catch(error) {
-      console.error('Watchlist automation failed:', error);
-      if (forceScrape) {
-        setTimeout(() => {
-          toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
-        }, 0);
-      }
-    }
-  }, [toast, futuresContracts]);
-
-  const setAutomationConfig = useCallback((config: AutomationConfig) => {
-    setAutomationConfigInternal(config);
-    if (config.updateMode === 'auto-refresh') {
-        localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-        setNextScrapeTime(Date.now() + config.refreshInterval);
-        setTimeout(() => {
-          toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
-        }, 0);
-    } else {
-        setNextScrapeTime(0);
-        if (automationIntervalRef.current) {
-          clearInterval(automationIntervalRef.current);
-        }
-        setTimeout(() => {
-          toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
-        }, 0);
-    }
-  }, [toast]);
-
-
-  // Effect for Auto-Refresh Automation
-  useEffect(() => {
-    if (automationIntervalRef.current) {
-        clearInterval(automationIntervalRef.current);
-    }
-    if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
-        
-        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
-        const timeSinceLast = Date.now() - lastScrapeTime;
-        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
-
-        const timeoutId = setTimeout(() => {
-          runAutomation();
-          automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
-        }, initialDelay);
-        
-        return () => {
-          clearTimeout(timeoutId);
-          if (automationIntervalRef.current) {
-            clearInterval(automationIntervalRef.current);
-          }
-        };
-    }
-  }, [automationConfig, applyWatchlistAutomation]);
-
-
-  const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
-    setPriceAlerts(prev => {
-      const alert = prev[symbol];
-      if (!alert || alert.triggered) return prev;
-
-      const conditionMet = 
-        (alert.condition === 'above' && newPrice >= alert.price) ||
-        (alert.condition === 'below' && newPrice <= alert.price);
-      
-      if (conditionMet) {
-        return { ...prev, [symbol]: { ...alert, triggered: true } };
-      }
-      
-      return prev;
-    });
-  }, []);
 
   const buy = useCallback(
     (
@@ -638,9 +493,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [executeTrigger]);
   
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePrice?: number) => {
-    setOpenPositions(prev => {
-        const positionToClose = prev.find(p => p.id === positionId);
-        if (!positionToClose) return prev;
+    setOpenPositions(currentOpenPositions => {
+        const positionToClose = currentOpenPositions.find(p => p.id === positionId);
+        
+        // If position doesn't exist, it was already closed. Abort.
+        if (!positionToClose) {
+            return currentOpenPositions;
+        }
 
         const exitPrice = closePrice !== undefined ? closePrice : positionToClose.currentPrice;
         let pnl = 0;
@@ -685,7 +544,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
         }, 0);
 
-        return prev.filter(p => p.id !== positionId);
+        return currentOpenPositions.filter(p => p.id !== positionId);
     });
   }, [toast]);
   
@@ -693,58 +552,203 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (!isLoaded) return;
   
-    const positionsToClose: { id: string; reason: string; price: number }[] = [];
-    const currentPositionIds = new Set(openPositions.map(p => p.id));
-  
-    // Check for changes based on current and previous openPositions state
-    openPositions.forEach(position => {
+    const currentPositions = openPositions;
+    const previousPositions = prevOpenPositions;
+    
+    // Find positions that existed in the previous state but not in the current one.
+    const manuallyClosedIds = new Set(previousPositions.filter(pp => !currentPositions.some(cp => cp.id === pp.id)).map(p => p.id));
+    
+    currentPositions.forEach(position => {
+      // If position was manually closed in this cycle, skip auto-check.
+      if (manuallyClosedIds.has(position.id)) return;
+
       const { id, details, currentPrice, side, liquidationPrice, positionType } = position;
+      let shouldClose = false;
+      let reason = '';
+      let closePrice = currentPrice;
   
       // Check for liquidation first
       if (positionType === 'futures' && liquidationPrice !== undefined) {
         if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
-          positionsToClose.push({ id, reason: 'Position Liquidated', price: liquidationPrice });
-          return; // Don't check SL/TP if liquidated
+          shouldClose = true;
+          reason = 'Position Liquidated';
+          closePrice = liquidationPrice;
         }
       }
   
-      if (details) {
+      if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
   
         // Check Stop Loss
         if (stopLoss !== undefined) {
           if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-            positionsToClose.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
-            return; // Don't check TP if SL is hit
+            shouldClose = true;
+            reason = 'Stop Loss Hit';
+            closePrice = stopLoss;
           }
         }
   
-        // Check Take Profit
-        if (takeProfit !== undefined) {
+        // Check Take Profit (only if not already closing for SL)
+        if (!shouldClose && takeProfit !== undefined) {
           if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-            positionsToClose.push({ id, reason: 'Take Profit Hit', price: takeProfit });
+            shouldClose = true;
+            reason = 'Take Profit Hit';
+            closePrice = takeProfit;
           }
         }
       }
+
+      if (shouldClose) {
+        closePosition(id, reason, closePrice);
+      }
     });
-
-    // This handles manual closures. If a position was in the previous state but not the current one, it was closed.
-    // The `closePosition` function already handles the history and balance, so we just need to avoid re-processing it.
-    const closedPositionIds = prevOpenPositions.filter(p => !currentPositionIds.has(p.id)).map(p => p.id);
-
-    if (positionsToClose.length > 0) {
-      setTimeout(() => {
-        positionsToClose.forEach(p => {
-          // Make sure the position wasn't manually closed in the same render cycle
-          if (openPositions.some(pos => pos.id === p.id) && !closedPositionIds.includes(p.id)) {
-            closePosition(p.id, p.reason, p.price);
-          }
-        });
-      }, 0);
-    }
   
   }, [openPositions, isLoaded, closePosition, prevOpenPositions]);
 
+  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
+    if (forceScrape) {
+      setTimeout(() => {
+        toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
+      }, 0);
+    }
+
+    try {
+        const spotResponse = await fetch("/api/kucoin-tickers");
+        const spotData = await spotResponse.json();
+        const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        
+        if (!allSpotTickers.length && !futuresContracts.length) {
+            throw new Error('Could not fetch any screener data.');
+        }
+
+        let finalItems: WatchlistItem[] = [];
+        const addedSymbols = new Set<string>();
+
+        config.rules.forEach(rule => {
+            let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
+            let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
+
+            if (rule.source === 'spot') {
+                sourceData = allSpotTickers;
+                sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+            } else {
+                sourceData = futuresContracts;
+                sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+            }
+
+            const sorted = [...sourceData].sort((a, b) => {
+                const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
+                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+                return valB - valA;
+            });
+
+            let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
+            if (rule.criteria.startsWith('top')) {
+                selected = sorted.slice(0, rule.count);
+            } else { // bottom
+                selected = sorted.slice(-rule.count);
+            }
+
+            selected.forEach(item => {
+                if (!addedSymbols.has(item.symbol)) {
+                    addedSymbols.add(item.symbol);
+                    const isSpot = rule.source === 'spot';
+                    finalItems.push({
+                        symbol: item.symbol,
+                        symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
+                        type: rule.source,
+                        currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
+                        priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                    });
+                }
+            });
+        });
+
+        setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
+        
+        if (config.updateMode === 'auto-refresh') {
+            localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
+            setNextScrapeTime(Date.now() + config.refreshInterval);
+        }
+        
+        if (forceScrape) {
+          setTimeout(() => {
+            toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
+          }, 0);
+        }
+    } catch(error) {
+      console.error('Watchlist automation failed:', error);
+      if (forceScrape) {
+        setTimeout(() => {
+          toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
+        }, 0);
+      }
+    }
+  }, [toast, futuresContracts]);
+
+  const setAutomationConfig = useCallback((config: AutomationConfig) => {
+    setAutomationConfigInternal(config);
+    if (config.updateMode === 'auto-refresh') {
+        localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
+        setNextScrapeTime(Date.now() + config.refreshInterval);
+        setTimeout(() => {
+          toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
+        }, 0);
+    } else {
+        setNextScrapeTime(0);
+        if (automationIntervalRef.current) {
+          clearInterval(automationIntervalRef.current);
+        }
+        setTimeout(() => {
+          toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
+        }, 0);
+    }
+  }, [toast]);
+
+
+  // Effect for Auto-Refresh Automation
+  useEffect(() => {
+    if (automationIntervalRef.current) {
+        clearInterval(automationIntervalRef.current);
+    }
+    if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
+        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
+        
+        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
+        const timeSinceLast = Date.now() - lastScrapeTime;
+        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
+
+        const timeoutId = setTimeout(() => {
+          runAutomation();
+          automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
+        }, initialDelay);
+        
+        return () => {
+          clearTimeout(timeoutId);
+          if (automationIntervalRef.current) {
+            clearInterval(automationIntervalRef.current);
+          }
+        };
+    }
+  }, [automationConfig, applyWatchlistAutomation]);
+
+
+  const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
+    setPriceAlerts(prev => {
+      const alert = prev[symbol];
+      if (!alert || alert.triggered) return prev;
+
+      const conditionMet = 
+        (alert.condition === 'above' && newPrice >= alert.price) ||
+        (alert.condition === 'below' && newPrice <= alert.price);
+      
+      if (conditionMet) {
+        return { ...prev, [symbol]: { ...alert, triggered: true } };
+      }
+      
+      return prev;
+    });
+  }, []);
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
     let symbolName = '';
