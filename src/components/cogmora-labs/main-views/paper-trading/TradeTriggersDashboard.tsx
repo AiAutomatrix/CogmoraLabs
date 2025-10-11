@@ -29,17 +29,22 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
     const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
 
     useEffect(() => {
-        if (nextScrapeTime <= 0) return;
+        if (nextScrapeTime <= 0) {
+            setTimeLeft(0);
+            return;
+        };
 
-        const interval = setInterval(() => {
+        const updateTimer = () => {
             const newTimeLeft = nextScrapeTime - Date.now();
-            if (newTimeLeft <= 0) {
-                clearInterval(interval);
+             if (newTimeLeft <= 0) {
                 setTimeLeft(0);
             } else {
                 setTimeLeft(newTimeLeft);
             }
-        }, 1000);
+        }
+        
+        updateTimer(); // Initial update
+        const interval = setInterval(updateTimer, 1000);
 
         return () => clearInterval(interval);
     }, [nextScrapeTime]);
