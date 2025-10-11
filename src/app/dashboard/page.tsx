@@ -127,16 +127,21 @@ const PageContent: React.FC = () => {
   }, [aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
 
   useEffect(() => {
+    // This effect now only sets the *default* mini-view when the main view changes.
+    // The user is free to change the mini-view tab afterwards.
     if (activeView === 'chart') {
       if (activeMiniView !== 'ai_paper_trading') {
          setActiveMiniView('tech_analysis');
       }
     } else {
-       if (activeMiniView !== 'ai_paper_trading') {
+      // For any other view, default back to AI Chat if not on the paper trading agent
+       if (activeMiniView === 'tech_analysis') {
         setActiveMiniView('ai_chat');
       }
     }
-  }, [activeView, activeMiniView]);
+  // We only want this to run when the MAIN view changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView]);
 
   const formatTradingViewSymbol = (kucoinSymbol: string): string => {
     if (!kucoinSymbol || kucoinSymbol.trim() === '') return '';
