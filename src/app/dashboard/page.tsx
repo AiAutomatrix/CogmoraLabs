@@ -10,8 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
-import type { AgentActionPlan, AiTriggerSettings, TradeTrigger } from '@/types';
-import { proposeTradeTriggers } from '@/ai/flows/propose-trade-triggers-flow';
+import type { AgentActionPlan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 const PageContent: React.FC = () => {
@@ -22,27 +21,16 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const { watchlist, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, tradeTriggers, balance } = usePaperTrading();
-  const { toast } = useToast();
-
-  // State for AI Agent moved here
+  
+  // AI Agent state is now local to the page for UI purposes
   const [aiAgentState, setAiAgentState] = useState<AgentActionPlan & { isLoading: boolean }>({
     analysis: '',
     plan: [],
     isLoading: false,
   });
 
-  const [aiSettings, setAiSettings] = useState<AiTriggerSettings>({
-    instructions: '',
-    setSlTp: true,
-    scheduleInterval: null,
-    autoExecute: false,
-    justCreate: false,
-    justUpdate: false,
-  });
-  
-  const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
-  const aiAutomationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { toast } = useToast();
+  const { handleAiTriggerAnalysis, nextAiScrapeTime } = usePaperTrading();
 
   // New state for multi-symbol selection
   const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
@@ -54,114 +42,25 @@ const PageContent: React.FC = () => {
     'BINANCE:SOLUSDT'
   ]);
   
-  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
-    if (watchlist.length === 0) {
-      if (!isScheduled) {
-        setTimeout(() => {
-          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
-        }, 0);
-      }
-      return;
+  const runAiAnalysis = useCallback(async () => {
+    setActiveMiniView('ai_paper_trading');
+    setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [], analysis: '' }));
+    const response = await handleAiTriggerAnalysis();
+    if (response) {
+      setAiAgentState(response);
     }
-    
-    if (!isScheduled) {
-      setActiveMiniView('ai_paper_trading');
-    }
-    setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [], analysis: isScheduled ? prev.analysis : '' }));
-
-    try {
-      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
-
-      if (aiSettings.autoExecute) {
-        let executedCount = 0;
-        response.plan.forEach(action => {
-            if (action.type === 'CREATE') {
-                addTradeTrigger(action.trigger);
-                executedCount++;
-            } else if (action.type === 'UPDATE') {
-                updateTradeTrigger(action.triggerId, action.updates);
-                executedCount++;
-            } else if (action.type === 'CANCEL') {
-                removeTradeTrigger(action.triggerId);
-                executedCount++;
-            }
-        });
-        setTimeout(() => {
-          toast({ 
-            title: 'AI Auto-Execution Complete', 
-            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
-          });
-        }, 0);
-        // We still set the state so the user can see the analysis, but the plan will be empty as it's been "executed".
-        setAiAgentState({ analysis: response.analysis, plan: [], isLoading: false });
-      } else {
-        setAiAgentState({ ...response, isLoading: false });
-      }
-
-    } catch (error) {
-      console.error("AI Trigger Analysis failed:", error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-      if (!isScheduled) {
-        setAiAgentState({ analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false });
-      }
-      setTimeout(() => {
-        toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
-      }, 0);
-    }
-  }, [watchlist, aiSettings, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, toast, setActiveMiniView, tradeTriggers, balance]);
-
-  // Effect for AI scheduling
-  useEffect(() => {
-    if (aiAutomationIntervalRef.current) {
-      clearInterval(aiAutomationIntervalRef.current);
-    }
-    if (aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
-      const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
-      
-      const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
-      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
-      const timeSinceLast = Date.now() - lastScrapeTime;
-      const initialDelay = Math.max(0, aiSettings.scheduleInterval - timeSinceLast);
-
-      const timeoutId = setTimeout(() => {
-        runScheduledAnalysis(); // Run first scrape after initial delay
-        localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-        setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
-
-        aiAutomationIntervalRef.current = setInterval(() => {
-          runScheduledAnalysis();
-          localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-          setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
-        }, aiSettings.scheduleInterval!);
-      }, initialDelay);
-      
-      setNextAiScrapeTime(Date.now() + initialDelay);
-
-      return () => {
-        clearTimeout(timeoutId);
-        if (aiAutomationIntervalRef.current) {
-          clearInterval(aiAutomationIntervalRef.current);
-        }
-      };
-    } else {
-      setNextAiScrapeTime(0);
-    }
-  }, [aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
+  }, [handleAiTriggerAnalysis, setActiveMiniView]);
 
   useEffect(() => {
-    // This effect now only sets the *default* mini-view when the main view changes.
-    // The user is free to change the mini-view tab afterwards.
     if (activeView === 'chart') {
       if (activeMiniView !== 'ai_paper_trading' && activeMiniView !== 'ai_chat') {
          setActiveMiniView('tech_analysis');
       }
     } else {
-      // For any other view, default back to AI Chat if not on the paper trading agent
        if (activeMiniView === 'tech_analysis') {
         setActiveMiniView('ai_chat');
       }
     }
-  // We only want this to run when the MAIN view changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView]);
 
@@ -366,12 +265,7 @@ const PageContent: React.FC = () => {
             selectedHeatmapView={selectedHeatmapView}
             setSelectedHeatmapView={setSelectedHeatmapView}
             selectedSymbolsForHighlight={selectedSymbols}
-            setAiAgentState={setAiAgentState}
-            setActiveMiniView={setActiveMiniView}
-            aiSettings={aiSettings}
-            setAiSettings={setAiSettings}
-            handleAiTriggerAnalysis={handleAiTriggerAnalysis}
-            nextAiScrapeTime={nextAiScrapeTime}
+            handleAiTriggerAnalysis={runAiAnalysis}
           />
         </section>
         <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">

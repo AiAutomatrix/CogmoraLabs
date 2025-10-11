@@ -16,8 +16,6 @@ import AllTickersScreener from './screeners/AllTickersScreener';
 import ForexHeatmapWidget from './heatmaps/ForexHeatmapWidget';
 import AllFuturesScreener from './screeners/AllFuturesScreener';
 import PaperTradingDashboard from './paper-trading/PaperTradingDashboard';
-import type { ProposeTradeTriggersOutput, AiTriggerSettings } from '@/types';
-
 
 interface MainViewsProps {
   activeView: string;
@@ -32,12 +30,7 @@ interface MainViewsProps {
   selectedHeatmapView: string;
   setSelectedHeatmapView: (view: string) => void;
   selectedSymbolsForHighlight: string[];
-  setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
-  setActiveMiniView: (view: string) => void;
-  aiSettings: AiTriggerSettings;
-  setAiSettings: (settings: AiTriggerSettings) => void;
-  handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
-  nextAiScrapeTime: number;
+  handleAiTriggerAnalysis: () => void;
 }
 
 const MainViews: FC<MainViewsProps> = ({ 
@@ -53,12 +46,7 @@ const MainViews: FC<MainViewsProps> = ({
   selectedHeatmapView,
   setSelectedHeatmapView,
   selectedSymbolsForHighlight,
-  setAiAgentState,
-  setActiveMiniView,
-  aiSettings,
-  setAiSettings,
   handleAiTriggerAnalysis,
-  nextAiScrapeTime,
 }) => {
   const BASE_CLASS = "w-full overflow-hidden";
 
@@ -124,7 +112,7 @@ const MainViews: FC<MainViewsProps> = ({
   const chartSrcDocs = useMemo(() =>
     Array.from({ length: numCharts }, (_, i) =>
       createChartSrcDoc(multiChartSymbols[i], `tv-chart-${i}`)
-    ), [numCharts, multiChartSymbols, tvWidgetBaseStyle]
+    ), [numCharts, multiChartSymbols, createChartSrcDoc]
   );
   
   const contentClassName = "flex-grow overflow-y-auto p-2 m-0 h-full";
@@ -172,10 +160,7 @@ const MainViews: FC<MainViewsProps> = ({
            selectedChartLayout={selectedChartLayout}
            setSelectedChartLayout={setSelectedChartLayout}
            selectedSymbolsForHighlight={selectedSymbolsForHighlight}
-           aiSettings={aiSettings}
-           setAiSettings={setAiSettings}
            handleAiTriggerAnalysis={handleAiTriggerAnalysis}
-           nextAiScrapeTime={nextAiScrapeTime}
         />
       </TabsContent>
       <TabsContent value="chart" className={`flex-grow overflow-hidden ${mobileContentClassName}`}>

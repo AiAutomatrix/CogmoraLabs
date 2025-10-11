@@ -23,10 +23,13 @@ import type {
   KucoinSnapshotDataWrapper,
   KucoinFuturesContract,
   AutomationConfig,
+  AiTriggerSettings,
   KucoinTicker,
   FuturesSnapshotData,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
+
 
 const INITIAL_BALANCE = 100000;
 const INITIAL_AUTOMATION_CONFIG: AutomationConfig = {
@@ -34,6 +37,14 @@ const INITIAL_AUTOMATION_CONFIG: AutomationConfig = {
   updateMode: 'one-time',
   refreshInterval: 900000, // 15 minutes
   clearExisting: true,
+};
+const INITIAL_AI_SETTINGS: AiTriggerSettings = {
+  instructions: '',
+  setSlTp: true,
+  scheduleInterval: null,
+  autoExecute: false,
+  justCreate: false,
+  justUpdate: false,
 };
 
 interface PaperTradingContextType {
@@ -89,6 +100,10 @@ interface PaperTradingContextType {
   setAutomationConfig: (config: AutomationConfig) => void;
   applyWatchlistAutomation: (config: AutomationConfig, forceScrape?: boolean) => void;
   nextScrapeTime: number;
+  aiSettings: AiTriggerSettings;
+  setAiSettings: (settings: AiTriggerSettings) => void;
+  handleAiTriggerAnalysis: (isScheduled?: boolean) => Promise<any>;
+  nextAiScrapeTime: number;
 }
 
 const PaperTradingContext = createContext<PaperTradingContextType | undefined>(
@@ -107,9 +122,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
+  
   const [automationConfig, setAutomationConfigInternal] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
   const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
 
+  const [aiSettings, setAiSettingsInternal] = useState<AiTriggerSettings>(INITIAL_AI_SETTINGS);
+  const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
@@ -123,24 +141,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const notifiedAlerts = useRef(new Set());
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // State to correctly track the previous open positions to prevent duplicate closures.
+  const aiAutomationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const [prevOpenPositions, setPrevOpenPositions] = useState<OpenPosition[]>([]);
   useEffect(() => {
     if (isLoaded) {
       setPrevOpenPositions(openPositions);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openPositions]);
+  }, [openPositions, isLoaded]);
 
-  // State for previous watchlist to show add/remove toasts
   const [prevWatchlist, setPrevWatchlist] = useState<WatchlistItem[]>([]);
   useEffect(() => {
     if (isLoaded) {
       setPrevWatchlist(watchlist);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchlist]);
+  }, [watchlist, isLoaded]);
 
 
   // Load from local storage on mount
@@ -153,12 +168,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const savedAlerts = localStorage.getItem("paperTrading_priceAlerts");
       const savedTriggers = localStorage.getItem("paperTrading_tradeTriggers");
       const savedAutomation = localStorage.getItem("paperTrading_automationConfig");
+      const savedAiSettings = localStorage.getItem("paperTrading_aiSettings");
 
       if (savedBalance) setBalance(JSON.parse(savedBalance));
       if (savedPositions) {
         const parsedPositions = JSON.parse(savedPositions);
         setOpenPositions(parsedPositions);
-        setPrevOpenPositions(parsedPositions); // Initialize prev state
+        setPrevOpenPositions(parsedPositions); 
       }
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
       if (savedWatchlist) {
@@ -171,13 +187,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (savedAutomation) {
           const config = JSON.parse(savedAutomation);
           setAutomationConfigInternal(config);
-          if(config.updateMode === 'auto-refresh') {
-            const lastScrape = localStorage.getItem('paperTrading_lastScrapeTime');
-            const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
-            const timeSinceLast = Date.now() - lastScrapeTime;
-            const remainingTime = config.refreshInterval - timeSinceLast;
-            setNextScrapeTime(Date.now() + Math.max(0, remainingTime));
-          }
+      }
+      if (savedAiSettings) {
+          const settings = JSON.parse(savedAiSettings);
+          setAiSettingsInternal(settings);
       }
 
     } catch (error) {
@@ -212,50 +225,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.setItem("paperTrading_priceAlerts", JSON.stringify(priceAlerts));
       localStorage.setItem("paperTrading_tradeTriggers", JSON.stringify(tradeTriggers));
       localStorage.setItem("paperTrading_automationConfig", JSON.stringify(automationConfig));
+      localStorage.setItem("paperTrading_aiSettings", JSON.stringify(aiSettings));
     }
-  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig]);
+  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig, aiSettings]);
   
-    // Effect for showing price alert toasts
-  useEffect(() => {
-    Object.entries(priceAlerts).forEach(([symbol, alert]) => {
-      if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
-        const watchlistItem = watchlist.find(item => item.symbol === symbol);
-        setTimeout(() => {
-          toast({
-            title: "Price Alert Triggered!",
-            description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
-          });
-        }, 0);
-        notifiedAlerts.current.add(symbol);
-      }
-    });
-  }, [priceAlerts, watchlist, toast]);
-
-    // Effect for showing watchlist add/remove toasts
-  useEffect(() => {
-      if (!isLoaded) return;
-
-      const prevSymbols = new Set(prevWatchlist.map(item => item.symbol));
-      const currentSymbols = new Set(watchlist.map(item => item.symbol));
-
-      watchlist.forEach(item => {
-          if (!prevSymbols.has(item.symbol)) {
-            setTimeout(() => {
-              toast({ title: 'Watchlist', description: `${item.symbolName} added to watchlist.` });
-            }, 0);
-          }
-      });
-
-      prevWatchlist.forEach(item => {
-          if (!currentSymbols.has(item.symbol)) {
-            setTimeout(() => {
-              toast({ title: 'Watchlist', description: `${item.symbolName} removed from watchlist.` });
-            }, 0);
-          }
-      });
-
-  }, [watchlist, isLoaded, toast, prevWatchlist]);
-
   const buy = useCallback(
     (
       symbol: string,
@@ -445,70 +418,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }, 0);
   }, [balance, toast]);
 
-  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
-    setTimeout(() => {
-      toast({
-      title: 'Trade Trigger Executed!',
-      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
-      });
-    }, 0);
-
-    const triggeredBy = `trigger:${trigger.condition}`;
-    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
-    const priceChgPct = watchlistItem?.priceChgPct;
-    const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
-
-    if (trigger.type === 'spot') {
-      buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
-    } else if (trigger.type === 'futures') {
-      if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
-      } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
-      }
-    }
-  }, [toast, buy, futuresBuy, futuresSell, watchlist]);
-  
-  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
-    let executedTriggerIds = new Set<string>();
-    let cancelSymbols = new Set<string>();
-  
-    setTradeTriggers(prevTriggers => {
-      const activeTriggers = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
-  
-      activeTriggers.forEach(trigger => {
-        if (executedTriggerIds.has(trigger.id)) return;
-        
-        const conditionMet =
-          (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
-          (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
-  
-        if (conditionMet) {
-          executeTrigger(trigger, newPrice);
-          executedTriggerIds.add(trigger.id);
-          if (trigger.cancelOthers) {
-            cancelSymbols.add(trigger.symbol);
-          }
-        }
-      });
-  
-      if (executedTriggerIds.size === 0) return prevTriggers;
-  
-      return prevTriggers.filter(t => {
-        if (executedTriggerIds.has(t.id)) return false;
-        if (cancelSymbols.has(t.symbol) && !executedTriggerIds.has(t.id)) return false;
-        return true;
-      });
-    });
-  }, [executeTrigger]);
-  
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePrice?: number) => {
+    let positionClosed = false;
     setOpenPositions(currentOpenPositions => {
-        // Check if the position still exists. If not, it was already closed.
         const positionToClose = currentOpenPositions.find(p => p.id === positionId);
         if (!positionToClose) {
             return currentOpenPositions;
         }
+
+        positionClosed = true;
 
         const exitPrice = closePrice !== undefined ? closePrice : positionToClose.currentPrice;
         let pnl = 0;
@@ -555,62 +473,303 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         return currentOpenPositions.filter(p => p.id !== positionId);
     });
+
+    return positionClosed;
   }, [toast]);
   
-  // Effect for automated closures (SL/TP/Liquidation)
-  useEffect(() => {
-    if (!isLoaded) return;
+  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
+    setTimeout(() => {
+      toast({
+      title: 'Trade Trigger Executed!',
+      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
+      });
+    }, 0);
+
+    const triggeredBy = `trigger:${trigger.condition}`;
+    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
+    const priceChgPct = watchlistItem?.priceChgPct;
+    const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
+
+    if (trigger.type === 'spot') {
+      buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
+    } else if (trigger.type === 'futures') {
+      if (trigger.action === 'long') {
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
+      } else {
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, triggeredBy, priceChgPct);
+      }
+    }
+  }, [toast, buy, futuresBuy, futuresSell, watchlist]);
+
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
+    const newTrigger: TradeTrigger = {
+      ...trigger,
+      id: crypto.randomUUID(),
+      status: 'active',
+    };
+
+    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
+    const currentPrice = watchlistItem?.currentPrice;
     
-    // Check against the true previous state before the current render cycle's updates.
-    prevOpenPositions.forEach(position => {
-      // Find the current state of this position. If it doesn't exist, it was already closed (e.g., manually).
-      const currentPositionState = openPositions.find(p => p.id === position.id);
-      if (!currentPositionState) {
-        return; // Skip if already closed.
+    let shouldExecuteImmediately = false;
+    if (currentPrice) {
+        shouldExecuteImmediately =
+            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
+            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
+    }
+
+    if (shouldExecuteImmediately) {
+        executeTrigger(newTrigger, currentPrice!);
+        if (newTrigger.cancelOthers) {
+            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
+        }
+    } else {
+        setTradeTriggers(prev => [newTrigger, ...prev]);
+        setTimeout(() => {
+          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+        }, 0);
+    }
+  }, [toast, watchlist, executeTrigger]);
+
+  const removeTradeTrigger = useCallback((triggerId: string) => {
+    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
+    setTimeout(() => {
+      toast({ title: 'Trade Trigger Removed' });
+    }, 0);
+  }, [toast]);
+  
+  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
+    let triggerSymbol = '';
+    setTradeTriggers(prev => prev.map(t => {
+      if (t.id === triggerId) {
+        triggerSymbol = t.symbolName;
+        return { ...t, ...updates };
+      }
+      return t;
+    }));
+    if (triggerSymbol) {
+        setTimeout(() => {
+            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
+        }, 0);
+    }
+  }, [toast]);
+
+  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
+    if (watchlist.length === 0) {
+      if (!isScheduled) {
+        setTimeout(() => {
+          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
+        }, 0);
+      }
+      return { analysis: "Watchlist is empty, skipping analysis.", plan: [], isLoading: false };
+    }
+
+    try {
+      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
+
+      if (aiSettings.autoExecute) {
+        let executedCount = 0;
+        response.plan.forEach(action => {
+            if (action.type === 'CREATE') {
+                addTradeTrigger(action.trigger);
+                executedCount++;
+            } else if (action.type === 'UPDATE') {
+                updateTradeTrigger(action.triggerId, action.updates);
+                executedCount++;
+            } else if (action.type === 'CANCEL') {
+                removeTradeTrigger(action.triggerId);
+                executedCount++;
+            }
+        });
+        setTimeout(() => {
+          toast({ 
+            title: 'AI Auto-Execution Complete', 
+            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
+          });
+        }, 0);
+        return { analysis: response.analysis, plan: [], isLoading: false };
+      } else {
+        return { ...response, isLoading: false };
       }
 
-      const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPositionState;
+    } catch (error) {
+      console.error("AI Trigger Analysis failed:", error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      if (!isScheduled) {
+         setTimeout(() => {
+          toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
+        }, 0);
+      }
+      return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
+    }
+  }, [watchlist, aiSettings, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, toast, tradeTriggers, balance]);
+
+  const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
+    setPriceAlerts(prev => {
+      const alert = prev[symbol];
+      if (!alert || alert.triggered) return prev;
+
+      const conditionMet = 
+        (alert.condition === 'above' && newPrice >= alert.price) ||
+        (alert.condition === 'below' && newPrice <= alert.price);
+      
+      if (conditionMet) {
+        return { ...prev, [symbol]: { ...alert, triggered: true } };
+      }
+      
+      return prev;
+    });
+  }, []);
+  
+  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
+    let executedTriggerIds = new Set<string>();
+    let cancelSymbols = new Set<string>();
+  
+    setTradeTriggers(prevTriggers => {
+      const activeTriggers = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
+  
+      activeTriggers.forEach(trigger => {
+        if (executedTriggerIds.has(trigger.id)) return;
+        
+        const conditionMet =
+          (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
+          (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+  
+        if (conditionMet) {
+          executeTrigger(trigger, newPrice);
+          executedTriggerIds.add(trigger.id);
+          if (trigger.cancelOthers) {
+            cancelSymbols.add(trigger.symbol);
+          }
+        }
+      });
+  
+      if (executedTriggerIds.size === 0) return prevTriggers;
+  
+      return prevTriggers.filter(t => {
+        if (executedTriggerIds.has(t.id)) return false;
+        if (cancelSymbols.has(t.symbol) && !executedTriggerIds.has(t.id)) return false;
+        return true;
+      });
+    });
+  }, [executeTrigger]);
+
+  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
+    let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
+
+    if (isSpot) {
+      const spotData = data as SpotSnapshotData;
+      newPrice = spotData.lastTradedPrice ?? undefined;
+      high = spotData.high ?? undefined;
+      low = spotData.low ?? undefined;
+      priceChgPct = spotData.changeRate ?? undefined;
+    } else { // Futures
+      const futuresData = data as FuturesSnapshotData; 
+      newPrice = futuresData.lastPrice ?? undefined;
+      high = futuresData.highPrice ?? undefined;
+      low = futuresData.lowPrice ?? undefined;
+      priceChgPct = futuresData.priceChgPct ?? undefined;
+    }
+    
+    if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+
+    checkPriceAlerts(symbol, newPrice);
+    checkTradeTriggers(symbol, newPrice);
+
+    setWatchlist(prev => prev.map(item =>
+        item.symbol === symbol ? {
+          ...item,
+          currentPrice: newPrice ?? item.currentPrice,
+          high: high ?? item.high,
+          low: low ?? item.low,
+          priceChgPct: priceChgPct ?? item.priceChgPct,
+          snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
+        } : item
+    ));
+
+    setOpenPositions((prevPositions) => 
+      prevPositions.map((p) => {
+        if (p.symbol === symbol) {
+          let unrealizedPnl = 0;
+          if (p.positionType === "spot") {
+            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size;
+          } else if (p.positionType === "futures") {
+            const pnlMultiplier = p.side === "long" ? 1 : -1;
+            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
+          }
+          return { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
+        }
+        return p;
+      })
+    );
+  }, [checkPriceAlerts, checkTradeTriggers]);
+  
+  useEffect(() => {
+    if (!isLoaded) return;
+  
+    const currentPositionsMap = new Map(openPositions.map(p => [p.id, p]));
+  
+    prevOpenPositions.forEach(prevPos => {
+      const currentPos = currentPositionsMap.get(prevPos.id);
+      // If position existed before but not anymore, it was closed. But we only care about automated closures here.
+      if (!currentPos) return; 
+  
+      const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPos;
       let shouldClose = false;
       let reason = '';
       let closePrice = currentPrice;
   
-      // Check for liquidation first
-      if (positionType === 'futures' && liquidationPrice !== undefined) {
-        if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
-          shouldClose = true;
-          reason = 'Position Liquidated';
-          closePrice = liquidationPrice;
-        }
+      // Check for liquidation
+      if (positionType === 'futures' && liquidationPrice !== undefined && (
+          (side === 'long' && currentPrice <= liquidationPrice) ||
+          (side === 'short' && currentPrice >= liquidationPrice))) {
+        shouldClose = true;
+        reason = 'Position Liquidated';
+        closePrice = liquidationPrice;
       }
   
+      // Check for SL/TP only if not already marked for liquidation
       if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
-  
-        // Check Stop Loss
-        if (stopLoss !== undefined) {
-          if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-            shouldClose = true;
-            reason = 'Stop Loss Hit';
-            closePrice = stopLoss;
-          }
-        }
-  
-        // Check Take Profit (only if not already closing for SL)
-        if (!shouldClose && takeProfit !== undefined) {
-          if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-            shouldClose = true;
-            reason = 'Take Profit Hit';
-            closePrice = takeProfit;
-          }
+        if (stopLoss !== undefined && (
+            ((side === 'buy' || side === 'long') && currentPrice <= stopLoss) ||
+            (side === 'short' && currentPrice >= stopLoss))) {
+          shouldClose = true;
+          reason = 'Stop Loss Hit';
+          closePrice = stopLoss;
+        } else if (takeProfit !== undefined && (
+            ((side === 'buy' || side === 'long') && currentPrice >= takeProfit) ||
+            (side === 'short' && currentPrice <= takeProfit))) {
+          shouldClose = true;
+          reason = 'Take Profit Hit';
+          closePrice = takeProfit;
         }
       }
-
+  
       if (shouldClose) {
         closePosition(id, reason, closePrice);
       }
     });
-  
   }, [openPositions, prevOpenPositions, isLoaded, closePosition]);
+
+  const setAutomationConfig = useCallback((config: AutomationConfig) => {
+    setAutomationConfigInternal(config);
+    if (config.updateMode === 'auto-refresh') {
+        localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
+        setNextScrapeTime(Date.now() + config.refreshInterval);
+        setTimeout(() => {
+          toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
+        }, 0);
+    } else {
+        setNextScrapeTime(0);
+        if (automationIntervalRef.current) {
+          clearInterval(automationIntervalRef.current);
+        }
+        setTimeout(() => {
+          toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
+        }, 0);
+    }
+  }, [toast]);
 
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
     if (forceScrape) {
@@ -673,11 +832,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
         
-        if (config.updateMode === 'auto-refresh') {
-            localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-            setNextScrapeTime(Date.now() + config.refreshInterval);
-        }
-        
         if (forceScrape) {
           setTimeout(() => {
             toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
@@ -692,70 +846,40 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
   }, [toast, futuresContracts]);
-
-  const setAutomationConfig = useCallback((config: AutomationConfig) => {
-    setAutomationConfigInternal(config);
-    if (config.updateMode === 'auto-refresh') {
-        localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-        setNextScrapeTime(Date.now() + config.refreshInterval);
-        setTimeout(() => {
-          toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
-        }, 0);
-    } else {
-        setNextScrapeTime(0);
-        if (automationIntervalRef.current) {
-          clearInterval(automationIntervalRef.current);
-        }
-        setTimeout(() => {
-          toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
-        }, 0);
-    }
-  }, [toast]);
-
-
-  // Effect for Auto-Refresh Automation
-  useEffect(() => {
-    if (automationIntervalRef.current) {
-        clearInterval(automationIntervalRef.current);
-    }
-    if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
-        
-        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
-        const timeSinceLast = Date.now() - lastScrapeTime;
-        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
-
-        const timeoutId = setTimeout(() => {
-          runAutomation();
-          automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
-        }, initialDelay);
-        
-        return () => {
-          clearTimeout(timeoutId);
-          if (automationIntervalRef.current) {
-            clearInterval(automationIntervalRef.current);
+  
+  const setAiSettings = useCallback((settings: AiTriggerSettings) => {
+      setAiSettingsInternal(settings);
+      if (settings.scheduleInterval) {
+          localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+          setNextAiScrapeTime(Date.now() + settings.scheduleInterval);
+           setTimeout(() => {
+              toast({ title: 'AI Automation Saved', description: `AI agent will run every ${settings.scheduleInterval! / 60000} minutes.` });
+          }, 0);
+      } else {
+          setNextAiScrapeTime(0);
+          if (aiAutomationIntervalRef.current) {
+            clearInterval(aiAutomationIntervalRef.current);
           }
-        };
-    }
-  }, [automationConfig, applyWatchlistAutomation]);
-
-
-  const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
-    setPriceAlerts(prev => {
-      const alert = prev[symbol];
-      if (!alert || alert.triggered) return prev;
-
-      const conditionMet = 
-        (alert.condition === 'above' && newPrice >= alert.price) ||
-        (alert.condition === 'below' && newPrice <= alert.price);
-      
-      if (conditionMet) {
-        return { ...prev, [symbol]: { ...alert, triggered: true } };
+          setTimeout(() => {
+            toast({ title: 'AI Automation Saved', description: `AI agent auto-run has been disabled.` });
+          }, 0);
       }
-      
-      return prev;
+  }, [toast]);
+  
+  useEffect(() => {
+    Object.entries(priceAlerts).forEach(([symbol, alert]) => {
+      if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
+        const watchlistItem = watchlist.find(item => item.symbol === symbol);
+        setTimeout(() => {
+          toast({
+            title: "Price Alert Triggered!",
+            description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
+          });
+        }, 0);
+        notifiedAlerts.current.add(symbol);
+      }
     });
-  }, []);
+  }, [priceAlerts, watchlist, toast]);
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
     let symbolName = '';
@@ -784,57 +908,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }, 0);
     }
   }, [toast]);
-
-  
-  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
-    let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
-
-    if (isSpot) {
-      const spotData = data as SpotSnapshotData;
-      newPrice = spotData.lastTradedPrice ?? undefined;
-      high = spotData.high ?? undefined;
-      low = spotData.low ?? undefined;
-      priceChgPct = spotData.changeRate ?? undefined;
-    } else { // Futures
-      const futuresData = data as FuturesSnapshotData; 
-      newPrice = futuresData.lastPrice ?? undefined;
-      high = futuresData.highPrice ?? undefined;
-      low = futuresData.lowPrice ?? undefined;
-      priceChgPct = futuresData.priceChgPct ?? undefined;
-    }
-    
-    if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
-
-    checkPriceAlerts(symbol, newPrice);
-    checkTradeTriggers(symbol, newPrice);
-
-    setWatchlist(prev => prev.map(item =>
-        item.symbol === symbol ? {
-          ...item,
-          currentPrice: newPrice ?? item.currentPrice,
-          high: high ?? item.high,
-          low: low ?? item.low,
-          priceChgPct: priceChgPct ?? item.priceChgPct,
-          snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
-        } : item
-    ));
-
-    setOpenPositions((prevPositions) => 
-      prevPositions.map((p) => {
-        if (p.symbol === symbol) {
-          let unrealizedPnl = 0;
-          if (p.positionType === "spot") {
-            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size;
-          } else if (p.positionType === "futures") {
-            const pnlMultiplier = p.side === "long" ? 1 : -1;
-            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
-          }
-          return { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
-        }
-        return p;
-      })
-    );
-  }, [checkPriceAlerts, checkTradeTriggers]);
   
   const connectToSpot = useCallback(
     (symbolsToSubscribe: string[]) => {
@@ -964,7 +1037,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
   
   
-  // Effect to manage Spot WebSocket connection
   useEffect(() => {
     if (!isLoaded) return;
     const requiredSubs = new Set(allSpotSymbols);
@@ -991,7 +1063,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [isLoaded, allSpotSymbols, connectToSpot]);
 
-  // Effect to manage Futures WebSocket connection
   useEffect(() => {
     if (!isLoaded) return;
     if (allFuturesSymbols.length === 0) {
@@ -1076,59 +1147,91 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }, 0);
   }, [toast]);
   
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
-    const newTrigger: TradeTrigger = {
-      ...trigger,
-      id: crypto.randomUUID(),
-      status: 'active',
-    };
-
-    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
-    const currentPrice = watchlistItem?.currentPrice;
-    
-    let shouldExecuteImmediately = false;
-    if (currentPrice) {
-        shouldExecuteImmediately =
-            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
-            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
+  useEffect(() => {
+    if (automationIntervalRef.current) {
+        clearInterval(automationIntervalRef.current);
     }
+    if (isLoaded && automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
+        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
+        
+        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
+        const timeSinceLast = Date.now() - lastScrapeTime;
+        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
 
-    if (shouldExecuteImmediately) {
-        executeTrigger(newTrigger, currentPrice!);
-        if (newTrigger.cancelOthers) {
-            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
-        }
-    } else {
-        setTradeTriggers(prev => [newTrigger, ...prev]);
-        setTimeout(() => {
-          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-        }, 0);
+        const timeoutId = setTimeout(() => {
+          runAutomation();
+          automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
+        }, initialDelay);
+        
+        return () => {
+          clearTimeout(timeoutId);
+          if (automationIntervalRef.current) {
+            clearInterval(automationIntervalRef.current);
+          }
+        };
     }
-  }, [toast, watchlist, executeTrigger]);
-
-  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
-    let triggerSymbol = '';
-    setTradeTriggers(prev => prev.map(t => {
-      if (t.id === triggerId) {
-        triggerSymbol = t.symbolName;
-        return { ...t, ...updates };
-      }
-      return t;
-    }));
-    if (triggerSymbol) {
-        setTimeout(() => {
-            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
-        }, 0);
-    }
-  }, [toast]);
-
-  const removeTradeTrigger = useCallback((triggerId: string) => {
-    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
-    setTimeout(() => {
-      toast({ title: 'Trade Trigger Removed' });
-    }, 0);
-  }, [toast]);
+  }, [isLoaded, automationConfig, applyWatchlistAutomation]);
   
+  useEffect(() => {
+    if (aiAutomationIntervalRef.current) {
+      clearInterval(aiAutomationIntervalRef.current);
+    }
+    if (isLoaded && aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
+      const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
+      
+      const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
+      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
+      const timeSinceLast = Date.now() - lastScrapeTime;
+      const initialDelay = Math.max(0, aiSettings.scheduleInterval - timeSinceLast);
+
+      const timeoutId = setTimeout(() => {
+        runScheduledAnalysis();
+        localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+        setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
+
+        aiAutomationIntervalRef.current = setInterval(() => {
+          runScheduledAnalysis();
+          localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+          setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
+        }, aiSettings.scheduleInterval!);
+      }, initialDelay);
+      
+      setNextAiScrapeTime(Date.now() + initialDelay);
+
+      return () => {
+        clearTimeout(timeoutId);
+        if (aiAutomationIntervalRef.current) {
+          clearInterval(aiAutomationIntervalRef.current);
+        }
+      };
+    } else {
+      setNextAiScrapeTime(0);
+    }
+  }, [isLoaded, aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
+  
+  useEffect(() => {
+      if (!isLoaded) return;
+
+      const prevSymbols = new Set(prevWatchlist.map(item => item.symbol));
+      const currentSymbols = new Set(watchlist.map(item => item.symbol));
+
+      watchlist.forEach(item => {
+          if (!prevSymbols.has(item.symbol)) {
+            setTimeout(() => {
+              toast({ title: 'Watchlist', description: `${item.symbolName} added to watchlist.` });
+            }, 0);
+          }
+      });
+
+      prevWatchlist.forEach(item => {
+          if (!currentSymbols.has(item.symbol)) {
+            setTimeout(() => {
+              toast({ title: 'Watchlist', description: `${item.symbolName} removed from watchlist.` });
+            }, 0);
+          }
+      });
+
+  }, [watchlist, isLoaded, toast, prevWatchlist]);
 
   return (
     <PaperTradingContext.Provider
@@ -1139,12 +1242,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist,
         priceAlerts,
         tradeTriggers,
-        toggleWatchlist,
-        addPriceAlert,
-        removePriceAlert,
-        addTradeTrigger,
-        updateTradeTrigger,
-        removeTradeTrigger,
         buy,
         futuresBuy,
         futuresSell,
@@ -1154,10 +1251,20 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         clearHistory,
         spotWsStatus,
         futuresWsStatus,
+        toggleWatchlist,
+        addPriceAlert,
+        removePriceAlert,
+        addTradeTrigger,
+        updateTradeTrigger,
+        removeTradeTrigger,
         automationConfig,
         setAutomationConfig,
         applyWatchlistAutomation,
         nextScrapeTime,
+        aiSettings,
+        setAiSettings,
+        handleAiTriggerAnalysis,
+        nextAiScrapeTime,
       }}
     >
       {children}

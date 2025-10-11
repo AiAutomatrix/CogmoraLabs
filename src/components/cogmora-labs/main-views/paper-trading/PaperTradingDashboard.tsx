@@ -36,7 +36,7 @@ import {
 import Watchlist from "./Watchlist";
 import TradeTriggersDashboard from "./TradeTriggersDashboard";
 import { PositionDetailsPopup } from "./PositionDetailsPopup";
-import type { OpenPosition, ProposeTradeTriggersOutput, AiTriggerSettings } from "@/types";
+import type { OpenPosition } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
 
 interface PaperTradingDashboardProps {
@@ -44,10 +44,7 @@ interface PaperTradingDashboardProps {
   selectedChartLayout: number;
   setSelectedChartLayout: (num: number) => void;
   selectedSymbolsForHighlight: string[];
-  aiSettings: AiTriggerSettings;
-  setAiSettings: (settings: AiTriggerSettings) => void;
-  handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
-  nextAiScrapeTime: number;
+  handleAiTriggerAnalysis: () => void;
 }
 
 export default function PaperTradingDashboard({
@@ -55,10 +52,7 @@ export default function PaperTradingDashboard({
   selectedChartLayout,
   setSelectedChartLayout,
   selectedSymbolsForHighlight,
-  aiSettings,
-  setAiSettings,
   handleAiTriggerAnalysis,
-  nextAiScrapeTime,
 }: PaperTradingDashboardProps) {
   const {
     balance,
@@ -67,6 +61,9 @@ export default function PaperTradingDashboard({
     closePosition,
     closeAllPositions,
     clearHistory,
+    aiSettings,
+    setAiSettings,
+    nextAiScrapeTime,
   } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
