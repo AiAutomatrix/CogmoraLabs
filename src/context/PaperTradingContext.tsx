@@ -122,12 +122,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
 
   const notifiedAlerts = useRef(new Set());
-  const prevWatchlistRef = useRef<WatchlistItem[]>([]);
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const openPositionsRef = useRef(openPositions);
+  const [prevWatchlist, setPrevWatchlist] = useState<WatchlistItem[]>([]);
+
+  // Correctly track previous open positions to prevent duplicate closures.
+  const [prevOpenPositions, setPrevOpenPositions] = useState<OpenPosition[]>([]);
   useEffect(() => {
-    openPositionsRef.current = openPositions;
+    setPrevOpenPositions(openPositions);
   }, [openPositions]);
 
 
@@ -143,19 +144,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const savedAutomation = localStorage.getItem("paperTrading_automationConfig");
 
       if (savedBalance) setBalance(JSON.parse(savedBalance));
-      if (savedPositions) setOpenPositions(JSON.parse(savedPositions));
+      if (savedPositions) {
+        const parsedPositions = JSON.parse(savedPositions);
+        setOpenPositions(parsedPositions);
+        setPrevOpenPositions(parsedPositions); // Initialize prev state
+      }
       if (savedHistory) setTradeHistory(JSON.parse(savedHistory));
       if (savedWatchlist) {
         const parsedWatchlist = JSON.parse(savedWatchlist);
         setWatchlist(parsedWatchlist);
-        prevWatchlistRef.current = parsedWatchlist;
+        setPrevWatchlist(parsedWatchlist);
       }
       if (savedAlerts) setPriceAlerts(JSON.parse(savedAlerts));
       if (savedTriggers) setTradeTriggers(JSON.parse(savedTriggers));
       if (savedAutomation) {
           const config = JSON.parse(savedAutomation);
           setAutomationConfigInternal(config);
-          // If it was auto-refreshing, re-initiate the timer logic
           if(config.updateMode === 'auto-refresh') {
             const lastScrape = localStorage.getItem('paperTrading_lastScrapeTime');
             const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
@@ -167,13 +171,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
-      setBalance(INITIAL_BALANCE);
-      setOpenPositions([]);
-      setTradeHistory([]);
-      setWatchlist([]);
-      setPriceAlerts({});
-      setTradeTriggers([]);
-      setAutomationConfigInternal(INITIAL_AUTOMATION_CONFIG);
     }
     
     const fetchInitialData = async () => {
@@ -218,7 +215,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
           });
         }, 0);
-        notifiedAlerts.current.add(symbol); // Mark as notified
+        notifiedAlerts.current.add(symbol);
       }
     });
   }, [priceAlerts, watchlist, toast]);
@@ -227,10 +224,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
       if (!isLoaded) return;
 
-      const prevSymbols = new Set(prevWatchlistRef.current.map(item => item.symbol));
+      const prevSymbols = new Set(prevWatchlist.map(item => item.symbol));
       const currentSymbols = new Set(watchlist.map(item => item.symbol));
 
-      // Check for added items
       watchlist.forEach(item => {
           if (!prevSymbols.has(item.symbol)) {
             setTimeout(() => {
@@ -239,8 +235,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
       });
 
-      // Check for removed items
-      prevWatchlistRef.current.forEach(item => {
+      prevWatchlist.forEach(item => {
           if (!currentSymbols.has(item.symbol)) {
             setTimeout(() => {
               toast({ title: 'Watchlist', description: `${item.symbolName} removed from watchlist.` });
@@ -248,8 +243,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
       });
 
-      prevWatchlistRef.current = watchlist;
-  }, [watchlist, isLoaded, toast]);
+      setPrevWatchlist(watchlist);
+  }, [watchlist, isLoaded, toast, prevWatchlist]);
   
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
     if (forceScrape) {
@@ -365,7 +360,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
 
         const timeoutId = setTimeout(() => {
-          runAutomation(); // Run first scrape after initial delay
+          runAutomation();
           automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
         }, initialDelay);
         
@@ -617,7 +612,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const activeTriggers = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
   
       activeTriggers.forEach(trigger => {
-        if (executedTriggerIds.has(trigger.id)) return; // Already processed
+        if (executedTriggerIds.has(trigger.id)) return;
         
         const conditionMet =
           (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
@@ -635,8 +630,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (executedTriggerIds.size === 0) return prevTriggers;
   
       return prevTriggers.filter(t => {
-        if (executedTriggerIds.has(t.id)) return false; // Remove executed
-        if (cancelSymbols.has(t.symbol) && !executedTriggerIds.has(t.id)) return false; // Remove other triggers for the same symbol
+        if (executedTriggerIds.has(t.id)) return false;
+        if (cancelSymbols.has(t.symbol) && !executedTriggerIds.has(t.id)) return false;
         return true;
       });
     });
@@ -654,7 +649,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (reason === 'Position Liquidated') {
             const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / (positionToClose.leverage || 1);
             pnl = -collateral;
-            returnedValue = 0; // The entire collateral is lost.
+            returnedValue = 0;
         } else if (positionToClose.positionType === 'spot') {
             pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
             returnedValue = positionToClose.size * exitPrice;
@@ -694,62 +689,61 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [toast]);
   
+  // Effect for automated closures (SL/TP/Liquidation)
   useEffect(() => {
-    const prevPositions = openPositionsRef.current;
-    if (!isLoaded || prevPositions === openPositions) return;
-
-    const positionsToProcess: { id: string; reason: string; price: number }[] = [];
-
-    // Check for positions that were in prev but not in current (manually closed)
+    if (!isLoaded) return;
+  
+    const positionsToClose: { id: string; reason: string; price: number }[] = [];
     const currentPositionIds = new Set(openPositions.map(p => p.id));
-    
-    prevPositions.forEach(prevPos => {
-        // If the position was just closed manually, don't check SL/TP for it.
-        if (!currentPositionIds.has(prevPos.id)) {
-            return;
+  
+    // Check for changes based on current and previous openPositions state
+    openPositions.forEach(position => {
+      const { id, details, currentPrice, side, liquidationPrice, positionType } = position;
+  
+      // Check for liquidation first
+      if (positionType === 'futures' && liquidationPrice !== undefined) {
+        if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
+          positionsToClose.push({ id, reason: 'Position Liquidated', price: liquidationPrice });
+          return; // Don't check SL/TP if liquidated
         }
-
-        const position = openPositions.find(p => p.id === prevPos.id);
-        if (!position) return;
-
-        const { id, details, currentPrice, side, liquidationPrice } = position;
-
-        // Check for liquidation first
-        if (position.positionType === 'futures' && liquidationPrice !== undefined) {
-            if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
-                positionsToProcess.push({ id, reason: 'Position Liquidated', price: liquidationPrice });
-                return;
-            }
-        }
-
-        if (!details) return;
+      }
+  
+      if (details) {
         const { stopLoss, takeProfit } = details;
-
+  
+        // Check Stop Loss
         if (stopLoss !== undefined) {
-            if ((side === 'buy' || side === 'long') && currentPrice <= stopLoss || side === 'short' && currentPrice >= stopLoss) {
-                positionsToProcess.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
-                return;
-            }
+          if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
+            positionsToClose.push({ id, reason: 'Stop Loss Hit', price: stopLoss });
+            return; // Don't check TP if SL is hit
+          }
         }
-
+  
+        // Check Take Profit
         if (takeProfit !== undefined) {
-            if ((side === 'buy' || side === 'long') && currentPrice >= takeProfit || side === 'short' && currentPrice <= takeProfit) {
-                positionsToProcess.push({ id, reason: 'Take Profit Hit', price: takeProfit });
-            }
+          if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
+            positionsToClose.push({ id, reason: 'Take Profit Hit', price: takeProfit });
+          }
         }
+      }
     });
 
-    if (positionsToProcess.length > 0) {
-        setTimeout(() => {
-            positionsToProcess.forEach(p => {
-                // Final check to ensure position hasn't been closed by another process in this cycle
-                if (openPositionsRef.current.some(pos => pos.id === p.id)) {
-                    closePosition(p.id, p.reason, p.price);
-                }
-            });
-        }, 0);
+    // This handles manual closures. If a position was in the previous state but not the current one, it was closed.
+    // The `closePosition` function already handles the history and balance, so we just need to avoid re-processing it.
+    const closedPositionIds = prevOpenPositions.filter(p => !currentPositionIds.has(p.id)).map(p => p.id);
+
+    if (positionsToClose.length > 0) {
+      setTimeout(() => {
+        positionsToClose.forEach(p => {
+          // Make sure the position wasn't manually closed in the same render cycle
+          if (openPositions.some(pos => pos.id === p.id) && !closedPositionIds.includes(p.id)) {
+            closePosition(p.id, p.reason, p.price);
+          }
+        });
+      }, 0);
     }
-}, [openPositions, isLoaded, closePosition]);
+  
+  }, [openPositions, isLoaded, closePosition, prevOpenPositions]);
 
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
@@ -1014,9 +1008,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   
   const closeAllPositions = useCallback(() => {
-    const positionsToClose = [...openPositions]; // Create a snapshot
+    const positionsToClose = [...openPositions];
     positionsToClose.forEach(p => {
-        // Pass the most up-to-date price for accurate PNL
         const currentPositionState = openPositions.find(op => op.id === p.id);
         const closePrice = currentPositionState ? currentPositionState.currentPrice : p.currentPrice;
         closePosition(p.id, 'Manual Close All', closePrice);
@@ -1082,7 +1075,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
     const currentPrice = watchlistItem?.currentPrice;
     
-    // Defer the execution check to avoid render-cycle updates
     setTimeout(() => {
         let shouldExecuteImmediately = false;
         if (currentPrice) {
