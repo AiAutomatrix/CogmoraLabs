@@ -299,7 +299,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof LiquiditySchema>;
+export type PairLiquidity = z.infer<typeof PairLiquidity>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),

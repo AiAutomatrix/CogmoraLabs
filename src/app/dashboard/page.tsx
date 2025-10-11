@@ -22,7 +22,7 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const { watchlist, addTradeTrigger, tradeTriggers, balance } = usePaperTrading();
+  const { watchlist, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, tradeTriggers, balance } = usePaperTrading();
   const { toast } = useToast();
 
   // State for AI Agent moved here
@@ -65,15 +65,31 @@ const PageContent: React.FC = () => {
     if (!isScheduled) {
       setActiveMiniView('ai_paper_trading');
     }
-    setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [] }));
+    setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [], analysis: isScheduled ? prev.analysis : '' }));
 
     try {
       const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
 
       if (aiSettings.autoExecute) {
-        // Implement auto-execution logic here if needed
-        toast({ title: 'AI Auto-Execution', description: `AI plan generated with ${response.plan.length} actions.` });
-        setAiAgentState({ ...response, isLoading: false }); // Show the plan even if auto-executing
+        let executedCount = 0;
+        response.plan.forEach(action => {
+            if (action.type === 'CREATE') {
+                addTradeTrigger(action.trigger);
+                executedCount++;
+            } else if (action.type === 'UPDATE') {
+                updateTradeTrigger(action.triggerId, action.updates);
+                executedCount++;
+            } else if (action.type === 'CANCEL') {
+                removeTradeTrigger(action.triggerId);
+                executedCount++;
+            }
+        });
+        toast({ 
+          title: 'AI Auto-Execution Complete', 
+          description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
+        });
+        // We still set the state so the user can see the analysis, but the plan will be empty as it's been "executed".
+        setAiAgentState({ analysis: response.analysis, plan: [], isLoading: false });
       } else {
         setAiAgentState({ ...response, isLoading: false });
       }
@@ -86,7 +102,7 @@ const PageContent: React.FC = () => {
       }
       toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
     }
-  }, [watchlist, aiSettings, addTradeTrigger, toast, setActiveMiniView, tradeTriggers, balance]);
+  }, [watchlist, aiSettings, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, toast, setActiveMiniView, tradeTriggers, balance]);
 
   // Effect for AI scheduling
   useEffect(() => {
@@ -130,7 +146,7 @@ const PageContent: React.FC = () => {
     // This effect now only sets the *default* mini-view when the main view changes.
     // The user is free to change the mini-view tab afterwards.
     if (activeView === 'chart') {
-      if (activeMiniView !== 'ai_paper_trading') {
+      if (activeMiniView !== 'ai_paper_trading' && activeMiniView !== 'ai_chat') {
          setActiveMiniView('tech_analysis');
       }
     } else {

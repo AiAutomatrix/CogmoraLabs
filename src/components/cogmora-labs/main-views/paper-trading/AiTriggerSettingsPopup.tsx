@@ -36,6 +36,8 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
   const [currentSetSlTp, setCurrentSetSlTp] = useState(settings.setSlTp ?? true);
   const [currentScheduleInterval, setCurrentScheduleInterval] = useState<number | null>(settings.scheduleInterval ?? null);
   const [currentAutoExecute, setCurrentAutoExecute] = useState(settings.autoExecute ?? false);
+  const [currentJustCreate, setCurrentJustCreate] = useState(settings.justCreate ?? false);
+  const [currentJustUpdate, setCurrentJustUpdate] = useState(settings.justUpdate ?? false);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +45,8 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
       setCurrentSetSlTp(settings.setSlTp ?? true);
       setCurrentScheduleInterval(settings.scheduleInterval ?? null);
       setCurrentAutoExecute(settings.autoExecute ?? false);
+      setCurrentJustCreate(settings.justCreate ?? false);
+      setCurrentJustUpdate(settings.justUpdate ?? false);
     }
   }, [isOpen, settings]);
 
@@ -52,9 +56,21 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
       setSlTp: currentSetSlTp,
       scheduleInterval: currentScheduleInterval,
       autoExecute: currentAutoExecute,
+      justCreate: currentJustCreate,
+      justUpdate: currentJustUpdate,
     });
     onOpenChange(false);
   };
+  
+  const handleJustCreateChange = (checked: boolean) => {
+    setCurrentJustCreate(checked);
+    if (checked) setCurrentJustUpdate(false);
+  }
+
+  const handleJustUpdateChange = (checked: boolean) => {
+    setCurrentJustUpdate(checked);
+    if (checked) setCurrentJustCreate(false);
+  }
   
   const scheduleMode = currentScheduleInterval === null ? 'manual' : 'scheduled';
 
@@ -89,7 +105,7 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
               <Label className="font-semibold">Scheduling</Label>
               <RadioGroup 
                 value={scheduleMode} 
-                onValueChange={(v) => setCurrentScheduleInterval(v === 'manual' ? null : 3600000)}
+                onValueChange={(v) => setCurrentScheduleInterval(v === 'manual' ? null : 1800000)}
               >
                   <div className="flex items-center space-x-2">
                       <RadioGroupItem value="manual" id="manual" />
@@ -99,12 +115,13 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
                       <RadioGroupItem value="scheduled" id="scheduled" />
                       <Label htmlFor="scheduled">Schedule every</Label>
                       <Select 
-                        value={currentScheduleInterval?.toString() ?? '3600000'} 
+                        value={currentScheduleInterval?.toString() ?? '1800000'} 
                         onValueChange={(v) => setCurrentScheduleInterval(parseInt(v, 10))}
                         disabled={scheduleMode !== 'scheduled'}
                       >
                            <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
                            <SelectContent>
+                              <SelectItem value="1800000">30 min</SelectItem>
                               <SelectItem value="3600000">1 hour</SelectItem>
                               <SelectItem value="14400000">4 hours</SelectItem>
                               <SelectItem value="21600000">6 hours</SelectItem>
@@ -117,34 +134,63 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
           </div>
 
           <Separator />
-          
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="sl-tp-switch">Generate SL/TP Levels</Label>
-              <p className="text-xs text-muted-foreground">
-                Allow the AI to automatically suggest Stop Loss and Take Profit levels.
-              </p>
+
+          <div className="space-y-4">
+             <Label className="font-semibold">Agent Behavior</Label>
+             <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                <Label htmlFor="sl-tp-switch">Generate SL/TP Levels</Label>
+                <p className="text-xs text-muted-foreground">
+                    Allow the AI to suggest Stop Loss and Take Profit levels.
+                </p>
+                </div>
+                <Switch
+                id="sl-tp-switch"
+                checked={currentSetSlTp}
+                onCheckedChange={setCurrentSetSlTp}
+                />
             </div>
-            <Switch
-              id="sl-tp-switch"
-              checked={currentSetSlTp}
-              onCheckedChange={setCurrentSetSlTp}
-            />
+             <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                <Label htmlFor="auto-execute-switch">Auto-Execute Plan</Label>
+                <p className="text-xs text-muted-foreground">
+                    Automatically approve and activate all actions in the AI's plan.
+                </p>
+                </div>
+                <Switch
+                id="auto-execute-switch"
+                checked={currentAutoExecute}
+                onCheckedChange={setCurrentAutoExecute}
+                />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                <Label htmlFor="just-create-switch">Create New Triggers Only</Label>
+                <p className="text-xs text-muted-foreground">
+                    Agent will only propose new triggers from the watchlist.
+                </p>
+                </div>
+                <Switch
+                id="just-create-switch"
+                checked={currentJustCreate}
+                onCheckedChange={handleJustCreateChange}
+                />
+            </div>
+             <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                <Label htmlFor="just-update-switch">Adjust Active Triggers Only</Label>
+                <p className="text-xs text-muted-foreground">
+                    Agent will only update or cancel existing triggers.
+                </p>
+                </div>
+                <Switch
+                id="just-update-switch"
+                checked={currentJustUpdate}
+                onCheckedChange={handleJustUpdateChange}
+                />
+            </div>
           </div>
           
-           <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="auto-execute-switch">Auto-Execute Triggers</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically approve and activate all triggers proposed by the AI.
-              </p>
-            </div>
-            <Switch
-              id="auto-execute-switch"
-              checked={currentAutoExecute}
-              onCheckedChange={setCurrentAutoExecute}
-            />
-          </div>
         </div>
 
         <DialogFooter>

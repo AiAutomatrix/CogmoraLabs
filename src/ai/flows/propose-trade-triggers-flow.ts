@@ -34,7 +34,7 @@ const createTriggerTool = ai.defineTool(
     inputSchema: AgentCreateActionSchema.pick({ trigger: true, reasoning: true }),
     outputSchema: AgentCreateActionSchema,
   },
-  async (input) => input
+  async (input) => ({ type: 'CREATE', ...input })
 );
 
 const updateTriggerTool = ai.defineTool(
@@ -93,15 +93,15 @@ Based on all this information, your task is to **formulate a plan of action**.
     *   Do not create duplicate triggers. Either update existing ones or ignore them.
     *   If creating a new trigger, use sensible target prices and varied, realistic allocation amounts.
     *   For futures, suggest reasonable leverage (2x-20x).
-    {{#if settings.setSlTp}}
+{{#if settings.setSlTp}}
     *   **IMPORTANT**: When creating or updating, you MUST also set reasonable 'stopLoss' and 'takeProfit' price levels.
-    {{/if}}
-    {{#if settings.justCreate}}
+{{/if}}
+{{#if settings.justCreate}}
     *   The user has requested to ONLY create new triggers. Do not use the update or cancel tools.
-    {{/if}}
-     {{#if settings.justUpdate}}
+{{/if}}
+{{#if settings.justUpdate}}
     *   The user has requested to ONLY adjust active triggers. Do not use the create tool.
-    {{/if}}
+{{/if}}
 
 Your final output must be a valid JSON object matching the 'AgentActionPlan' schema, containing your analysis and the array of actions in the 'plan' field.
 `,
