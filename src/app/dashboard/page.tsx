@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
-import type { ProposeTradeTriggersOutput, AiTriggerSettings, TradeTrigger } from '@/types';
+import type { AgentActionPlan, AiTriggerSettings, TradeTrigger } from '@/types';
 import { proposeTradeTriggers } from '@/ai/flows/propose-trade-triggers-flow';
 import { useToast } from '@/hooks/use-toast';
 
@@ -22,13 +22,13 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const { watchlist, addTradeTrigger, tradeTriggers } = usePaperTrading();
+  const { watchlist, addTradeTrigger, tradeTriggers, balance } = usePaperTrading();
   const { toast } = useToast();
 
   // State for AI Agent moved here
-  const [aiAgentState, setAiAgentState] = useState<ProposeTradeTriggersOutput & { isLoading: boolean }>({
+  const [aiAgentState, setAiAgentState] = useState<AgentActionPlan & { isLoading: boolean }>({
     analysis: '',
-    proposedTriggers: [],
+    plan: [],
     isLoading: false,
   });
 
@@ -37,6 +37,8 @@ const PageContent: React.FC = () => {
     setSlTp: true,
     scheduleInterval: null,
     autoExecute: false,
+    justCreate: false,
+    justUpdate: false,
   });
   
   const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
@@ -63,17 +65,15 @@ const PageContent: React.FC = () => {
     if (!isScheduled) {
       setActiveMiniView('ai_paper_trading');
     }
-    setAiAgentState(prev => ({ ...prev, isLoading: true }));
+    setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [] }));
 
     try {
-      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers });
+      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
 
       if (aiSettings.autoExecute) {
-        response.proposedTriggers.forEach((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
-          addTradeTrigger(trigger);
-        });
-        toast({ title: 'AI Auto-Execution', description: `${response.proposedTriggers.length} triggers were automatically added.` });
-        setAiAgentState({ analysis: response.analysis, proposedTriggers: [], isLoading: false });
+        // Implement auto-execution logic here if needed
+        toast({ title: 'AI Auto-Execution', description: `AI plan generated with ${response.plan.length} actions.` });
+        setAiAgentState({ ...response, isLoading: false }); // Show the plan even if auto-executing
       } else {
         setAiAgentState({ ...response, isLoading: false });
       }
@@ -82,11 +82,11 @@ const PageContent: React.FC = () => {
       console.error("AI Trigger Analysis failed:", error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       if (!isScheduled) {
-        setAiAgentState({ analysis: `An error occurred: ${errorMessage}`, proposedTriggers: [], isLoading: false });
+        setAiAgentState({ analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false });
       }
       toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
     }
-  }, [watchlist, aiSettings, addTradeTrigger, toast, setActiveMiniView, tradeTriggers]);
+  }, [watchlist, aiSettings, addTradeTrigger, toast, setActiveMiniView, tradeTriggers, balance]);
 
   // Effect for AI scheduling
   useEffect(() => {
@@ -375,5 +375,3 @@ export default function HomePage() {
     </PaperTradingProvider>
   );
 }
-
-    

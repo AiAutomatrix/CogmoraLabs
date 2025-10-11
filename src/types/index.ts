@@ -137,21 +137,52 @@ export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
 export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 
+// AI Agent Action Schemas
+export const AgentCreateActionSchema = z.object({
+  type: z.literal('CREATE'),
+  trigger: ProposedTradeTriggerSchema,
+  reasoning: z.string().describe("A brief justification for why this new trigger is being proposed."),
+});
+export const AgentUpdateActionSchema = z.object({
+  type: z.literal('UPDATE'),
+  triggerId: z.string().describe("The ID of the active trigger to update."),
+  updates: ProposedTradeTriggerSchema.partial().describe("The specific fields of the trigger to change."),
+  reasoning: z.string().describe("A brief justification for why this update is being suggested."),
+});
+export const AgentCancelActionSchema = z.object({
+  type: z.literal('CANCEL'),
+  triggerId: z.string().describe("The ID of the active trigger to cancel."),
+  reasoning: z.string().describe("A brief justification for why this cancellation is recommended."),
+});
+export const AgentActionSchema = z.union([AgentCreateActionSchema, AgentUpdateActionSchema, AgentCancelActionSchema]);
+export type AgentAction = z.infer<typeof AgentActionSchema>;
+
+export const AgentActionPlanSchema = z.object({
+  analysis: z.string().describe("The AI's overall analysis of the market, watchlist, and active triggers, explaining the strategy behind its plan."),
+  plan: z.array(AgentActionSchema).describe("An array of actions (CREATE, UPDATE, CANCEL) the AI wants to take."),
+});
+export type AgentActionPlan = z.infer<typeof AgentActionPlanSchema>;
+
+
 export const AiTriggerSettingsSchema = z.object({
   instructions: z.string().optional(),
   setSlTp: z.boolean().optional(),
   scheduleInterval: z.number().nullable().optional(), // in ms, null for manual
   autoExecute: z.boolean().optional(),
+  justCreate: z.boolean().optional(),
+  justUpdate: z.boolean().optional(),
 });
 export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
 
 export const ProposeTradeTriggersInputSchema = z.object({
   watchlist: z.array(WatchlistItemSchema),
   activeTriggers: z.array(TradeTriggerSchema),
+  balance: z.number(),
   settings: AiTriggerSettingsSchema,
 });
 export type ProposeTradeTriggersInput = z.infer<typeof ProposeTradeTriggersInputSchema>;
 
+// This is the old output schema, which will now be replaced by AgentActionPlanSchema
 export const ProposeTradeTriggersOutputSchema = z.object({
   analysis: z.string().describe("A brief, high-level summary of the overall market sentiment based on the provided symbols. Should be conversational and insightful."),
   proposedTriggers: z.array(ProposedTradeTriggerSchema).describe("An array of 3-5 diverse trade trigger objects based on the watchlist data."),
