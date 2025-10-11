@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
@@ -22,6 +23,8 @@ const PageContent: React.FC = () => {
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   
+  const { handleAiTriggerAnalysis, nextAiScrapeTime, aiSettings, setAiSettings } = usePaperTrading();
+
   // AI Agent state is now local to the page for UI purposes
   const [aiAgentState, setAiAgentState] = useState<AgentActionPlan & { isLoading: boolean }>({
     analysis: '',
@@ -30,7 +33,6 @@ const PageContent: React.FC = () => {
   });
 
   const { toast } = useToast();
-  const { handleAiTriggerAnalysis, nextAiScrapeTime } = usePaperTrading();
 
   // New state for multi-symbol selection
   const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
@@ -42,10 +44,10 @@ const PageContent: React.FC = () => {
     'BINANCE:SOLUSDT'
   ]);
   
-  const runAiAnalysis = useCallback(async () => {
+  const runAiAnalysis = useCallback(async (isScheduled = false) => {
     setActiveMiniView('ai_paper_trading');
     setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [], analysis: '' }));
-    const response = await handleAiTriggerAnalysis();
+    const response = await handleAiTriggerAnalysis(isScheduled);
     if (response) {
       setAiAgentState(response);
     }
@@ -53,13 +55,7 @@ const PageContent: React.FC = () => {
 
   useEffect(() => {
     if (activeView === 'chart') {
-      if (activeMiniView !== 'ai_paper_trading' && activeMiniView !== 'ai_chat') {
-         setActiveMiniView('tech_analysis');
-      }
-    } else {
-       if (activeMiniView === 'tech_analysis') {
-        setActiveMiniView('ai_chat');
-      }
+      setActiveMiniView('tech_analysis');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView]);
