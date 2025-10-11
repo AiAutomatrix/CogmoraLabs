@@ -140,6 +140,8 @@ export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 export const AiTriggerSettingsSchema = z.object({
   instructions: z.string().optional(),
   setSlTp: z.boolean().optional(),
+  scheduleInterval: z.number().nullable().optional(), // in ms, null for manual
+  autoExecute: z.boolean().optional(),
 });
 export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
 
@@ -265,7 +267,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof LiquiditySchema>;
+export type PairLiquidity = z.infer<typeof PairLiquidity>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),

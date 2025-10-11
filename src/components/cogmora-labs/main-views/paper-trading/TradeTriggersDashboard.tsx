@@ -22,8 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowUp, ArrowDown, XCircle, Timer, Wand2, Settings } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { proposeTradeTriggers } from '@/ai/flows/propose-trade-triggers-flow';
-import type { ProposeTradeTriggersOutput, AiTriggerSettings } from '@/types';
+import type { AiTriggerSettings } from '@/types';
 import { AiTriggerSettingsPopup } from './AiTriggerSettingsPopup';
 
 const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
@@ -49,44 +48,39 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
         return <span className="font-mono">...</span>;
     }
 
-    const minutes = Math.floor((timeLeft / 1000 / 60) % 60);
+    const hours = Math.floor((timeLeft / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((timeLeft / (1000 * 60)) % 60);
     const seconds = Math.floor((timeLeft / 1000) % 60);
+
+    const parts = [];
+    if (hours > 0) parts.push(hours.toString().padStart(2, '0'));
+    parts.push(minutes.toString().padStart(2, '0'));
+    parts.push(seconds.toString().padStart(2, '0'));
 
     return (
         <span className="font-mono">
-            {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
+            {parts.join(':')}
         </span>
     );
 };
 
 
-export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniView, aiSettings, setAiSettings }: {
-    setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
-    setActiveMiniView: (view: string) => void;
+export default function TradeTriggersDashboard({
+    aiSettings,
+    setAiSettings,
+    handleAiTriggerAnalysis,
+    nextAiScrapeTime,
+}: {
     aiSettings: AiTriggerSettings;
     setAiSettings: (settings: AiTriggerSettings) => void;
+    handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
+    nextAiScrapeTime: number;
 }) {
-  const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime, watchlist } = usePaperTrading();
+  const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime: nextWatchlistScrapeTime } = usePaperTrading();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const isAutomationActive = automationConfig.updateMode === 'auto-refresh';
-
-  const handleAiTriggerAnalysis = async () => {
-    if (watchlist.length === 0) {
-        alert("Please add items to your watchlist first.");
-        return;
-    }
-    setActiveMiniView('ai_paper_trading');
-    setAiAgentState({ analysis: '', proposedTriggers: [], isLoading: true });
-
-    try {
-        const response = await proposeTradeTriggers({ watchlist, settings: aiSettings });
-        setAiAgentState({ ...response, isLoading: false });
-    } catch (error) {
-        console.error("AI Trigger Analysis failed:", error);
-        setAiAgentState({ analysis: 'An error occurred while analyzing the watchlist.', proposedTriggers: [], isLoading: false });
-    }
-  };
+  const isWatchlistAutomationActive = automationConfig.updateMode === 'auto-refresh';
+  const isAiAutomationActive = !!aiSettings.scheduleInterval;
 
   const formatPrice = (price: number) => {
     if (!price || isNaN(price)) return "$0.00";
@@ -104,15 +98,15 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
     <Card>
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
-            <CardTitle>Active Triggers</CardTitle>
+            <CardTitle>Active Triggers & Automations</CardTitle>
             <CardDescription>
-            Conditional orders and automations waiting to execute.
+            Conditional orders and scheduled automations.
             </CardDescription>
         </div>
         <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis}>
+            <Button variant="outline" size="sm" onClick={() => handleAiTriggerAnalysis(false)}>
                 <Wand2 className="mr-2 h-4 w-4" />
-                AI Trigger Analysis
+                Run AI Now
             </Button>
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsSettingsOpen(true)}>
                 <Settings className="h-4 w-4" />
@@ -132,7 +126,30 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isAutomationActive && (
+              {isAiAutomationActive && (
+                 <TableRow>
+                    <TableCell className="font-medium">
+                        <div className="flex items-center">
+                            <Wand2 className="h-4 w-4 mr-2 text-purple-400"/>
+                            AI Trigger Analysis
+                        </div>
+                    </TableCell>
+                    <TableCell>
+                        <Badge variant="outline">Scheduled</Badge>
+                    </TableCell>
+                    <TableCell>
+                        <Badge variant="secondary">Analyze</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                        <div className="flex items-center justify-end">
+                            <Timer className="h-4 w-4 mr-2 text-muted-foreground"/>
+                            <CountdownTimer nextScrapeTime={nextAiScrapeTime} />
+                        </div>
+                    </TableCell>
+                    <TableCell className="text-center">-</TableCell>
+                </TableRow>
+              )}
+              {isWatchlistAutomationActive && (
                  <TableRow>
                     <TableCell className="font-medium">
                         <div className="flex items-center">
@@ -149,13 +166,14 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
                     <TableCell className="text-right">
                         <div className="flex items-center justify-end">
                             <Timer className="h-4 w-4 mr-2 text-muted-foreground"/>
-                            <CountdownTimer nextScrapeTime={nextScrapeTime} />
+                            <CountdownTimer nextScrapeTime={nextWatchlistScrapeTime} />
                         </div>
                     </TableCell>
                     <TableCell className="text-center">-</TableCell>
                 </TableRow>
               )}
-              {tradeTriggers.length > 0 && isAutomationActive && <TableRow><TableCell colSpan={5} className="p-0"><Separator /></TableCell></TableRow>}
+              
+              {tradeTriggers.length > 0 && (isWatchlistAutomationActive || isAiAutomationActive) && <TableRow><TableCell colSpan={5} className="p-0"><Separator /></TableCell></TableRow>}
 
               {tradeTriggers.map((trigger) => (
                   <TableRow key={trigger.id}>
@@ -187,7 +205,7 @@ export default function TradeTriggersDashboard({ setAiAgentState, setActiveMiniV
                   </TableRow>
               ))}
 
-              {tradeTriggers.length === 0 && !isAutomationActive && (
+              {tradeTriggers.length === 0 && !isWatchlistAutomationActive && !isAiAutomationActive && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center h-24">
                     No active triggers or automations.

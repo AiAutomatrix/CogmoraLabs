@@ -44,10 +44,10 @@ interface PaperTradingDashboardProps {
   selectedChartLayout: number;
   setSelectedChartLayout: (num: number) => void;
   selectedSymbolsForHighlight: string[];
-  setAiAgentState: (state: ProposeTradeTriggersOutput & { isLoading: boolean }) => void;
-  setActiveMiniView: (view: string) => void;
   aiSettings: AiTriggerSettings;
   setAiSettings: (settings: AiTriggerSettings) => void;
+  handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
+  nextAiScrapeTime: number;
 }
 
 export default function PaperTradingDashboard({
@@ -55,10 +55,10 @@ export default function PaperTradingDashboard({
   selectedChartLayout,
   setSelectedChartLayout,
   selectedSymbolsForHighlight,
-  setAiAgentState,
-  setActiveMiniView,
   aiSettings,
   setAiSettings,
+  handleAiTriggerAnalysis,
+  nextAiScrapeTime,
 }: PaperTradingDashboardProps) {
   const {
     balance,
@@ -361,10 +361,10 @@ export default function PaperTradingDashboard({
         </TabsContent>
         <TabsContent value="triggers">
             <TradeTriggersDashboard 
-              setAiAgentState={setAiAgentState} 
-              setActiveMiniView={setActiveMiniView}
               aiSettings={aiSettings}
               setAiSettings={setAiSettings}
+              handleAiTriggerAnalysis={handleAiTriggerAnalysis}
+              nextAiScrapeTime={nextAiScrapeTime}
             />
         </TabsContent>
         <TabsContent value="watchlist">

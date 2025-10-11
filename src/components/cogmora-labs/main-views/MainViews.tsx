@@ -36,6 +36,8 @@ interface MainViewsProps {
   setActiveMiniView: (view: string) => void;
   aiSettings: AiTriggerSettings;
   setAiSettings: (settings: AiTriggerSettings) => void;
+  handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
+  nextAiScrapeTime: number;
 }
 
 const MainViews: FC<MainViewsProps> = ({ 
@@ -55,6 +57,8 @@ const MainViews: FC<MainViewsProps> = ({
   setActiveMiniView,
   aiSettings,
   setAiSettings,
+  handleAiTriggerAnalysis,
+  nextAiScrapeTime,
 }) => {
   const BASE_CLASS = "w-full overflow-hidden";
 
@@ -168,10 +172,10 @@ const MainViews: FC<MainViewsProps> = ({
            selectedChartLayout={selectedChartLayout}
            setSelectedChartLayout={setSelectedChartLayout}
            selectedSymbolsForHighlight={selectedSymbolsForHighlight}
-           setAiAgentState={setAiAgentState}
-           setActiveMiniView={setActiveMiniView}
            aiSettings={aiSettings}
            setAiSettings={setAiSettings}
+           handleAiTriggerAnalysis={handleAiTriggerAnalysis}
+           nextAiScrapeTime={nextAiScrapeTime}
         />
       </TabsContent>
       <TabsContent value="chart" className={`flex-grow overflow-hidden ${mobileContentClassName}`}>
