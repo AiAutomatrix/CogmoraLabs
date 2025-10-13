@@ -105,7 +105,7 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
               <Label className="font-semibold">Scheduling</Label>
               <RadioGroup 
                 value={scheduleMode} 
-                onValueChange={(v) => setCurrentScheduleInterval(v === 'manual' ? null : 1800000)}
+                onValueChange={(v) => setCurrentScheduleInterval(v === 'manual' ? null : 900000)}
               >
                   <div className="flex items-center space-x-2">
                       <RadioGroupItem value="manual" id="manual" />
@@ -115,12 +115,13 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
                       <RadioGroupItem value="scheduled" id="scheduled" />
                       <Label htmlFor="scheduled">Schedule every</Label>
                       <Select 
-                        value={currentScheduleInterval?.toString() ?? '1800000'} 
+                        value={currentScheduleInterval?.toString() ?? '900000'} 
                         onValueChange={(v) => setCurrentScheduleInterval(parseInt(v, 10))}
                         disabled={scheduleMode !== 'scheduled'}
                       >
                            <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
                            <SelectContent>
+                              <SelectItem value="900000">15 min</SelectItem>
                               <SelectItem value="1800000">30 min</SelectItem>
                               <SelectItem value="3600000">1 hour</SelectItem>
                               <SelectItem value="14400000">4 hours</SelectItem>
