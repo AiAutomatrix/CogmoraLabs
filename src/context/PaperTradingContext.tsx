@@ -217,13 +217,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
     
-    const totalPositionValue = openPositions.reduce((acc, pos) => {
-      if (pos.positionType === "futures") {
-        return acc + (pos.size * pos.averageEntryPrice) / (pos.leverage || 1);
-      }
-      return acc + pos.size * pos.currentPrice;
-    }, 0);
-
     const equity = balance + totalUnrealizedPNL;
 
     const totalRealizedPNL = tradeHistory
@@ -464,7 +457,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
+  const executeTrigger = (trigger: TradeTrigger, currentPrice: number) => {
     setTimeout(() => {
       toast({
       title: 'Trade Trigger Executed!',
@@ -485,7 +478,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
       }
     }
-  }, [toast, buy, futuresBuy, futuresSell, watchlist]);
+  };
 
   const checkTradeTriggers = (symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
@@ -520,7 +513,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
+  const processUpdate = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
     let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
 
     if (isSpot) {
@@ -568,7 +561,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [checkPriceAlerts, checkTradeTriggers, executeTrigger]);
+  };
 
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
@@ -689,7 +682,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist, 
         settings: aiSettings, 
         activeTriggers: tradeTriggers, 
-        openPositions: openPositions, // Pass open positions
+        openPositions: openPositions,
         accountMetrics: {
           balance,
           ...accountMetrics
@@ -1086,7 +1079,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: "Spot Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
       }, 0);
     }
-  }, [processUpdate, toast]);
+  }, [toast]);
   
   const connectToFutures = useCallback(async (symbolsToSubscribe: string[]) => {
     setFuturesWsStatus("fetching_token");
@@ -1131,6 +1124,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
       ws.onerror = () => {
         setFuturesWsStatus("error");
+        setTimeout(() => {
+          toast({ title: "Futures WebSocket Error", description: "Connection failed. Futures prices may not update.", variant: "destructive" });
+        }, 0);
         ws.close();
       };
   
@@ -1138,7 +1134,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setFuturesWsStatus("error");
       console.error("Futures Connection failed", error);
     }
-  }, [processUpdate]);
+  }, [toast]);
 
   const spotPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
   const futuresPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'futures').map(p => p.symbol), [openPositions]);
