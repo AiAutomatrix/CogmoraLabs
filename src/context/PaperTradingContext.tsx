@@ -29,6 +29,7 @@ import type {
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
+import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
 
 
 const INITIAL_BALANCE = 100000;
@@ -420,10 +421,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
       }, 0);
   }, [balance, toast]);
+  
+  const checkPriceAlerts = (symbol: string, newPrice: number) => {
+    const alert = priceAlerts[symbol];
+    if (!alert || alert.triggered) return;
 
-  // =================================================================
-  // LEVEL 2: EXECUTION & CLOSING LOGIC (DEPEND ON LEVEL 1)
-  // =================================================================
+    const conditionMet =
+      (alert.condition === 'above' && newPrice >= alert.price) ||
+      (alert.condition === 'below' && newPrice <= alert.price);
+
+    if (conditionMet) {
+      setPriceAlerts(prev => ({
+        ...prev,
+        [symbol]: { ...alert, triggered: true },
+      }));
+    }
+  };
 
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     setTimeout(() => {
@@ -447,182 +460,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
   }, [toast, buy, futuresBuy, futuresSell, watchlist]);
-
-  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
-    setOpenPositions(currentOpenPositions => {
-        const positionToClose = currentOpenPositions.find(p => p.id === positionId);
-        if (!positionToClose) {
-            return currentOpenPositions;
-        }
-
-        const exitPrice = closePriceParam ?? positionToClose.currentPrice;
-        if(exitPrice === undefined) return currentOpenPositions; 
-
-        let pnl = 0;
-        let returnedValue = 0;
-
-        if (reason === 'Position Liquidated' && positionToClose.positionType === 'futures') {
-            const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / (positionToClose.leverage || 1);
-            pnl = -collateral;
-            returnedValue = 0; // Collateral is lost
-        } else if (positionToClose.positionType === 'spot') {
-            pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
-            returnedValue = positionToClose.size * exitPrice;
-        } else if (positionToClose.positionType === 'futures') {
-            const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
-            pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
-            const leverage = positionToClose.leverage ?? 1;
-            const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
-            returnedValue = collateral + pnl;
-        }
-
-        setBalance(bal => bal + returnedValue);
-        
-        setTradeHistory(th => {
-            const closingTrade: PaperTrade = {
-                id: crypto.randomUUID(),
-                positionId: positionToClose.id,
-                positionType: positionToClose.positionType,
-                symbol: positionToClose.symbol,
-                symbolName: positionToClose.symbolName,
-                size: positionToClose.size,
-                price: exitPrice,
-                side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
-                timestamp: Date.now(),
-                status: 'closed',
-                pnl,
-                leverage: positionToClose.leverage,
-            };
-            return [closingTrade, ...th];
-        });
-        
-        setTimeout(() => {
-          toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
-        }, 0);
-
-        return currentOpenPositions.filter(p => p.id !== positionId);
-    });
-
-  }, [toast]);
-
-  // =================================================================
-  // LEVEL 3: HIGHER-LEVEL MANAGEMENT FUNCTIONS (DEPEND ON LEVEL 2)
-  // =================================================================
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
-    const newTrigger: TradeTrigger = {
-      ...trigger,
-      id: crypto.randomUUID(),
-      status: 'active',
-    };
-
-    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
-    const currentPrice = watchlistItem?.currentPrice;
-    
-    let shouldExecuteImmediately = false;
-    if (currentPrice) {
-        shouldExecuteImmediately =
-            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
-            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
-    }
-
-    if (shouldExecuteImmediately) {
-        executeTrigger(newTrigger, currentPrice!);
-        if (newTrigger.cancelOthers) {
-            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
-        }
-    } else {
-        setTradeTriggers(prev => [newTrigger, ...prev]);
-        setTimeout(() => {
-          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-        }, 0);
-    }
-  }, [toast, watchlist, executeTrigger]);
-
-  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
-    let triggerSymbol = '';
-    setTradeTriggers(prev => prev.map(t => {
-      if (t.id === triggerId) {
-        triggerSymbol = t.symbolName;
-        return { ...t, ...updates };
-      }
-      return t;
-    }));
-    if (triggerSymbol) {
-        setTimeout(() => {
-            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
-        }, 0);
-    }
-  }, [toast]);
-
-  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
-    if (watchlist.length === 0) {
-      if (!isScheduled) {
-        setTimeout(() => {
-          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
-        }, 0);
-      }
-      return { analysis: "Watchlist is empty, skipping analysis.", plan: [], isLoading: false };
-    }
-
-    try {
-      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
-
-      if (aiSettings.autoExecute) {
-        let executedCount = 0;
-        response.plan.forEach(action => {
-            if (action.type === 'CREATE') {
-                addTradeTrigger(action.trigger);
-                executedCount++;
-            } else if (action.type === 'UPDATE') {
-                updateTradeTrigger(action.triggerId, action.updates);
-                executedCount++;
-            } else if (action.type === 'CANCEL') {
-                removeTradeTrigger(action.triggerId);
-                executedCount++;
-            }
-        });
-        setTimeout(() => {
-          toast({ 
-            title: 'AI Auto-Execution Complete', 
-            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
-          });
-        }, 0);
-        return { analysis: response.analysis, plan: [], isLoading: false };
-      } else {
-        return { ...response, isLoading: false };
-      }
-
-    } catch (error) {
-      console.error("AI Trigger Analysis failed:", error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-      if (!isScheduled) {
-         setTimeout(() => {
-          toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
-        }, 0);
-      }
-      return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
-    }
-  }, [watchlist, aiSettings, tradeTriggers, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
-
-  // =================================================================
-  // PRICE PROCESSING AND CHECKS (STABLE, NO USECALLBACK NEEDED)
-  // =================================================================
-
-  const checkPriceAlerts = (symbol: string, newPrice: number) => {
-    const alert = priceAlerts[symbol];
-    if (!alert || alert.triggered) return;
-
-    const conditionMet =
-      (alert.condition === 'above' && newPrice >= alert.price) ||
-      (alert.condition === 'below' && newPrice <= alert.price);
-
-    if (conditionMet) {
-      setPriceAlerts(prev => ({
-        ...prev,
-        [symbol]: { ...alert, triggered: true },
-      }));
-    }
-  };
 
   const checkTradeTriggers = (symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
@@ -706,12 +543,163 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [priceAlerts, executeTrigger]); 
+  }, [priceAlerts, executeTrigger]); // Removed checkPriceAlerts and checkTradeTriggers from deps
 
-  // =================================================================
-  // OTHER CALLBACKS AND EFFECTS
-  // =================================================================
+
+  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
+    setOpenPositions(currentOpenPositions => {
+        const positionToClose = currentOpenPositions.find(p => p.id === positionId);
+        if (!positionToClose) {
+            return currentOpenPositions;
+        }
+
+        const exitPrice = closePriceParam ?? positionToClose.currentPrice ?? 0;
+        if(exitPrice === 0) return currentOpenPositions; 
+
+        let pnl = 0;
+        let returnedValue = 0;
+
+        if (reason === 'Position Liquidated' && positionToClose.positionType === 'futures') {
+            const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / (positionToClose.leverage || 1);
+            pnl = -collateral;
+            returnedValue = 0; // Collateral is lost
+        } else if (positionToClose.positionType === 'spot') {
+            pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size;
+            returnedValue = positionToClose.size * exitPrice;
+        } else if (positionToClose.positionType === 'futures') {
+            const pnlMultiplier = positionToClose.side === 'long' ? 1 : -1;
+            pnl = (exitPrice - positionToClose.averageEntryPrice) * positionToClose.size * pnlMultiplier;
+            const leverage = positionToClose.leverage ?? 1;
+            const collateral = (positionToClose.size * positionToClose.averageEntryPrice) / leverage;
+            returnedValue = collateral + pnl;
+        }
+
+        setBalance(bal => bal + returnedValue);
+        
+        setTradeHistory(th => {
+            const closingTrade: PaperTrade = {
+                id: crypto.randomUUID(),
+                positionId: positionToClose.id,
+                positionType: positionToClose.positionType,
+                symbol: positionToClose.symbol,
+                symbolName: positionToClose.symbolName,
+                size: positionToClose.size,
+                price: exitPrice,
+                side: positionToClose.positionType === 'futures' ? (positionToClose.side === 'long' ? 'sell' : 'buy') : 'sell',
+                timestamp: Date.now(),
+                status: 'closed',
+                pnl,
+                leverage: positionToClose.leverage,
+            };
+            return [closingTrade, ...th];
+        });
+        
+        setTimeout(() => {
+          toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+        }, 0);
+
+        return currentOpenPositions.filter(p => p.id !== positionId);
+    });
+
+  }, [toast]);
   
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
+    const newTrigger: TradeTrigger = {
+      ...trigger,
+      id: crypto.randomUUID(),
+      status: 'active',
+    };
+
+    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
+    const currentPrice = watchlistItem?.currentPrice;
+    
+    let shouldExecuteImmediately = false;
+    if (currentPrice) {
+        shouldExecuteImmediately =
+            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
+            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
+    }
+
+    if (shouldExecuteImmediately && currentPrice) {
+        executeTrigger(newTrigger, currentPrice);
+        if (newTrigger.cancelOthers) {
+            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
+        }
+    } else {
+        setTradeTriggers(prev => [newTrigger, ...prev]);
+        setTimeout(() => {
+          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+        }, 0);
+    }
+  }, [toast, watchlist, executeTrigger]);
+
+  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
+    let triggerSymbol = '';
+    setTradeTriggers(prev => prev.map(t => {
+      if (t.id === triggerId) {
+        triggerSymbol = t.symbolName;
+        return { ...t, ...updates };
+      }
+      return t;
+    }));
+    if (triggerSymbol) {
+        setTimeout(() => {
+            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
+        }, 0);
+    }
+  }, [toast]);
+
+  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
+    if (watchlist.length === 0) {
+      if (!isScheduled) {
+        setTimeout(() => {
+          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
+        }, 0);
+      }
+      return { analysis: "Watchlist is empty, skipping analysis.", plan: [], isLoading: false };
+    }
+
+    try {
+      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
+
+      if (aiSettings.autoExecute) {
+        let executedCount = 0;
+        response.plan.forEach(action => {
+            if (action.type === 'CREATE') {
+                addTradeTrigger(action.trigger);
+                executedCount++;
+            } else if (action.type === 'UPDATE') {
+                updateTradeTrigger(action.triggerId, action.updates);
+                executedCount++;
+            } else if (action.type === 'CANCEL') {
+                removeTradeTrigger(action.triggerId);
+                executedCount++;
+            }
+        });
+        setTimeout(() => {
+          toast({ 
+            title: 'AI Auto-Execution Complete', 
+            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
+          });
+        }, 0);
+        return { analysis: response.analysis, plan: [], isLoading: false };
+      } else {
+        return { ...response, isLoading: false };
+      }
+
+    } catch (error) {
+      console.error("AI Trigger Analysis failed:", error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      if (!isScheduled) {
+         setTimeout(() => {
+          toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
+        }, 0);
+      }
+      return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
+    }
+  }, [watchlist, aiSettings, tradeTriggers, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
+
+
   // Auto-close positions on SL/TP or Liquidation
   useEffect(() => {
     if (!isLoaded) return;
@@ -738,7 +726,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
         
-        if (typeof stopLoss === 'number') {
+        if (typeof stopLoss === 'number' && stopLoss !== 0) {
             if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
                 shouldClose = true;
                 reason = 'Stop Loss Hit';
@@ -746,7 +734,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
         
-        if (!shouldClose && typeof takeProfit === 'number') {
+        if (!shouldClose && typeof takeProfit === 'number' && takeProfit !== 0) {
              if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
                 shouldClose = true;
                 reason = 'Take Profit Hit';
@@ -810,7 +798,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-        const spotResponse = await fetch(`${window.location.origin}/api/kucoin-tickers`);
+        const spotResponse = await fetch('/api/kucoin-tickers');
         const spotData = await spotResponse.json();
         const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
         
@@ -998,7 +986,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const connectToSpot = useCallback(
     (symbolsToSubscribe: string[]) => {
       setSpotWsStatus("fetching_token");
-      fetch(`${window.location.origin}/api/kucoin-ws-token`, { method: 'POST' }).then(res => res.json()).then((tokenData: KucoinTokenResponse) => {
+      getSpotWsToken().then((tokenData: KucoinTokenResponse) => {
         if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
 
         const { token, instanceServers } = tokenData.data;
@@ -1060,7 +1048,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const connectToFutures = useCallback(
     (symbolsToSubscribe: string[]) => {
       setFuturesWsStatus("fetching_token");
-      fetch(`${window.location.origin}/api/kucoin-futures-ws-token`, { method: "POST" }).then(res => res.json()).then((tokenData: KucoinTokenResponse) => {
+      getFuturesWsToken().then((tokenData: KucoinTokenResponse) => {
         if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
 
         const { token, instanceServers } = tokenData.data;
@@ -1105,6 +1093,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       }).catch(error => {
         setFuturesWsStatus("error");
+        console.error("Futures Connection failed", error);
       });
     },
     [processUpdate]
@@ -1281,9 +1270,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
-
-    
-
-    
