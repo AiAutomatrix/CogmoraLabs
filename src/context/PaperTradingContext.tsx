@@ -25,6 +25,7 @@ import type {
   AiTriggerSettings,
   KucoinTicker,
   FuturesSnapshotData,
+  AgentActionPlan,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
@@ -141,7 +142,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
 
-  const notifiedAlerts = useRef(new Set());
+  const notifiedAlerts = useRef(new Set<string>());
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const aiAutomationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -480,7 +481,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [buy, futuresBuy, futuresSell, toast, watchlist]);
 
-  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
+  const checkTradeTriggers = (symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
     let cancelSymbols = new Set<string>();
 
@@ -511,7 +512,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return true;
       });
     });
-  }, [executeTrigger]);
+  };
 
   const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
     let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
@@ -561,7 +562,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [checkTradeTriggers]);
+  }, [checkTradeTriggers, executeTrigger]); // Dependencies reduced
 
   const processUpdateRef = useRef(processUpdate);
   useEffect(() => {
@@ -672,7 +673,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
 
-  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
+  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false): Promise<AgentActionPlan & {isLoading: boolean}> => {
     if (watchlist.length === 0) {
       if (!isScheduled) {
         setTimeout(() => {
@@ -1159,53 +1160,49 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   useEffect(() => {
     if (!isLoaded) return;
-    const requiredSubs = new Set(allSpotSymbols);
-    
-    if (requiredSubs.size === 0) {
-        if (spotWs.current) spotWs.current.close();
-        return;
-    }
-
-    if (!spotWs.current || spotWs.current.readyState === WebSocket.CLOSED) {
-        connectToSpot(Array.from(requiredSubs));
-        return;
-    }
-
-    if (spotWs.current.readyState === WebSocket.OPEN) {
+    const symbolsToSub = Array.from(new Set(allSpotSymbols));
+    if (symbolsToSub.length > 0) {
+      if (!spotWs.current || spotWs.current.readyState === WebSocket.CLOSED) {
+        connectToSpot(symbolsToSub);
+      } else if (spotWs.current.readyState === WebSocket.OPEN) {
         const currentSubs = spotSubscriptionsRef.current;
-        const symbolsToUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
-        const symbolsToSub = [...requiredSubs].filter(s => !currentSubs.has(s));
+        const requiredSubs = new Set(symbolsToSub);
+        const toUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
+        const toSub = [...requiredSubs].filter(s => !currentSubs.has(s));
 
-        symbolsToUnsub.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`})));
-        symbolsToSub.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true })));
+        toUnsub.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`})));
+        toSub.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true })));
         
         spotSubscriptionsRef.current = requiredSubs;
+      }
+    } else {
+      if (spotWs.current) {
+        spotWs.current.close();
+      }
     }
   }, [isLoaded, allSpotSymbols, connectToSpot]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    const requiredSubs = new Set(allFuturesSymbols);
-
-    if (requiredSubs.size === 0) {
-        if (futuresWs.current) futuresWs.current.close();
-        return;
-    }
-
-    if (!futuresWs.current || futuresWs.current.readyState === WebSocket.CLOSED) {
-        connectToFutures(Array.from(requiredSubs));
-        return;
-    }
-
-    if (futuresWs.current.readyState === WebSocket.OPEN) {
+    const symbolsToSub = Array.from(new Set(allFuturesSymbols));
+    if (symbolsToSub.length > 0) {
+      if (!futuresWs.current || futuresWs.current.readyState === WebSocket.CLOSED) {
+        connectToFutures(symbolsToSub);
+      } else if (futuresWs.current.readyState === WebSocket.OPEN) {
         const currentSubs = futuresSubscriptionsRef.current;
-        const symbolsToUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
-        const symbolsToSub = [...requiredSubs].filter(s => !currentSubs.has(s));
-
-        symbolsToUnsub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/contractMarket/snapshot:${symbol}`})));
-        symbolsToSub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/contractMarket/snapshot:${symbol}`, response: true })));
-
+        const requiredSubs = new Set(symbolsToSub);
+        const toUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
+        const toSub = [...requiredSubs].filter(s => !currentSubs.has(s));
+        
+        toUnsub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/contractMarket/snapshot:${symbol}`})));
+        toSub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/contractMarket/snapshot:${symbol}`, response: true })));
+        
         futuresSubscriptionsRef.current = requiredSubs;
+      }
+    } else {
+      if (futuresWs.current) {
+        futuresWs.current.close();
+      }
     }
   }, [isLoaded, allFuturesSymbols, connectToFutures]);
   
@@ -1316,5 +1313,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
