@@ -213,7 +213,25 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig, aiSettings]);
   
   // =================================================================
-  // Core Trading Functions (Lowest Level Dependencies)
+  // DEPENDENCY-FREE FUNCTIONS
+  // =================================================================
+  
+  const removeTradeTrigger = useCallback((triggerId: string) => {
+    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
+    setTimeout(() => {
+      toast({ title: 'Trade Trigger Removed' });
+    }, 0);
+  }, [toast]);
+  
+  const clearHistory = useCallback(() => {
+    setTradeHistory([]);
+    setTimeout(() => {
+      toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
+    }, 0);
+  }, [toast]);
+
+  // =================================================================
+  // LEVEL 1 DEPENDENCIES (buy, futuresBuy, futuresSell)
   // =================================================================
   const buy = useCallback(
     (
@@ -405,16 +423,40 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [balance, toast]);
 
   // =================================================================
-  // Position and Trigger Management Functions
+  // LEVEL 2 DEPENDENCIES (functions using level 1)
   // =================================================================
-  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
+  
+  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
+    setTimeout(() => {
+      toast({
+      title: 'Trade Trigger Executed!',
+      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
+      });
+    }, 0);
+
+    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
+    const priceChgPct = watchlistItem?.priceChgPct;
+    const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
+
+    if (trigger.type === 'spot') {
+      buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
+    } else if (trigger.type === 'futures') {
+      if (trigger.action === 'long') {
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
+      } else {
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
+      }
+    }
+  }, [toast, buy, futuresBuy, futuresSell, watchlist]);
+
+  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePrice?: number) => {
     setOpenPositions(currentOpenPositions => {
         const positionToClose = currentOpenPositions.find(p => p.id === positionId);
         if (!positionToClose) {
             return currentOpenPositions;
         }
 
-        const exitPrice = closePriceParam ?? positionToClose.currentPrice ?? 0;
+        const exitPrice = closePrice ?? positionToClose.currentPrice ?? 0;
         if(exitPrice === 0) return currentOpenPositions; 
 
         let pnl = 0;
@@ -463,37 +505,108 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
 
   }, [toast]);
-  
-  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
-    setTimeout(() => {
-      toast({
-      title: 'Trade Trigger Executed!',
-      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
-      });
-    }, 0);
+
+  // =================================================================
+  // LEVEL 3 AND HIGHER-LEVEL FUNCTIONS
+  // =================================================================
+
+  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
+    let triggerSymbol = '';
+    setTradeTriggers(prev => prev.map(t => {
+      if (t.id === triggerId) {
+        triggerSymbol = t.symbolName;
+        return { ...t, ...updates };
+      }
+      return t;
+    }));
+    if (triggerSymbol) {
+        setTimeout(() => {
+            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
+        }, 0);
+    }
+  }, [toast]);
+
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
+    const newTrigger: TradeTrigger = {
+      ...trigger,
+      id: crypto.randomUUID(),
+      status: 'active',
+    };
 
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
-    const priceChgPct = watchlistItem?.priceChgPct;
-    const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
-
-    if (trigger.type === 'spot') {
-      buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
-    } else if (trigger.type === 'futures') {
-      if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
-      } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
-      }
+    const currentPrice = watchlistItem?.currentPrice;
+    
+    let shouldExecuteImmediately = false;
+    if (currentPrice) {
+        shouldExecuteImmediately =
+            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
+            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
     }
-  }, [toast, buy, futuresBuy, futuresSell, watchlist]);
 
-  const removeTradeTrigger = useCallback((triggerId: string) => {
-    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
-    setTimeout(() => {
-      toast({ title: 'Trade Trigger Removed' });
-    }, 0);
-  }, [toast]);
+    if (shouldExecuteImmediately) {
+        executeTrigger(newTrigger, currentPrice!);
+        if (newTrigger.cancelOthers) {
+            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
+        }
+    } else {
+        setTradeTriggers(prev => [newTrigger, ...prev]);
+        setTimeout(() => {
+          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+        }, 0);
+    }
+  }, [toast, watchlist, executeTrigger]);
+
+  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
+    if (watchlist.length === 0) {
+      if (!isScheduled) {
+        setTimeout(() => {
+          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
+        }, 0);
+      }
+      return { analysis: "Watchlist is empty, skipping analysis.", plan: [], isLoading: false };
+    }
+
+    try {
+      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
+
+      if (aiSettings.autoExecute) {
+        let executedCount = 0;
+        response.plan.forEach(action => {
+            if (action.type === 'CREATE') {
+                addTradeTrigger(action.trigger);
+                executedCount++;
+            } else if (action.type === 'UPDATE') {
+                updateTradeTrigger(action.triggerId, action.updates);
+                executedCount++;
+            } else if (action.type === 'CANCEL') {
+                removeTradeTrigger(action.triggerId);
+                executedCount++;
+            }
+        });
+        setTimeout(() => {
+          toast({ 
+            title: 'AI Auto-Execution Complete', 
+            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
+          });
+        }, 0);
+        return { analysis: response.analysis, plan: [], isLoading: false };
+      } else {
+        return { ...response, isLoading: false };
+      }
+
+    } catch (error) {
+      console.error("AI Trigger Analysis failed:", error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      if (!isScheduled) {
+         setTimeout(() => {
+          toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
+        }, 0);
+      }
+      return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
+    }
+  }, [watchlist, aiSettings, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, toast, tradeTriggers, balance]);
   
+  // Plain functions inside the provider
   const checkPriceAlerts = (symbol: string, newPrice: number) => {
     setPriceAlerts(prev => {
       const alert = prev[symbol];
@@ -592,107 +705,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [executeTrigger, watchlist]);
+  }, []); // Dependencies are removed as checkPriceAlerts and checkTradeTriggers are now stable
+
 
   // =================================================================
-  // Higher-Level Context Functions
+  // OTHER CALLBACKS AND EFFECTS
   // =================================================================
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
-    const newTrigger: TradeTrigger = {
-      ...trigger,
-      id: crypto.randomUUID(),
-      status: 'active',
-    };
 
-    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
-    const currentPrice = watchlistItem?.currentPrice;
-    
-    let shouldExecuteImmediately = false;
-    if (currentPrice) {
-        shouldExecuteImmediately =
-            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
-            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
-    }
-
-    if (shouldExecuteImmediately) {
-        executeTrigger(newTrigger, currentPrice!);
-        if (newTrigger.cancelOthers) {
-            setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
-        }
-    } else {
-        setTradeTriggers(prev => [newTrigger, ...prev]);
-        setTimeout(() => {
-          toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-        }, 0);
-    }
-  }, [toast, watchlist, executeTrigger]);
-
-  const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
-    let triggerSymbol = '';
-    setTradeTriggers(prev => prev.map(t => {
-      if (t.id === triggerId) {
-        triggerSymbol = t.symbolName;
-        return { ...t, ...updates };
-      }
-      return t;
-    }));
-    if (triggerSymbol) {
-        setTimeout(() => {
-            toast({ title: 'Trigger Updated', description: `Trigger for ${triggerSymbol} has been updated.` });
-        }, 0);
-    }
-  }, [toast]);
-  
-  const handleAiTriggerAnalysis = useCallback(async (isScheduled = false) => {
-    if (watchlist.length === 0) {
-      if (!isScheduled) {
-        setTimeout(() => {
-          toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
-        }, 0);
-      }
-      return { analysis: "Watchlist is empty, skipping analysis.", plan: [], isLoading: false };
-    }
-
-    try {
-      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
-
-      if (aiSettings.autoExecute) {
-        let executedCount = 0;
-        response.plan.forEach(action => {
-            if (action.type === 'CREATE') {
-                addTradeTrigger(action.trigger);
-                executedCount++;
-            } else if (action.type === 'UPDATE') {
-                updateTradeTrigger(action.triggerId, action.updates);
-                executedCount++;
-            } else if (action.type === 'CANCEL') {
-                removeTradeTrigger(action.triggerId);
-                executedCount++;
-            }
-        });
-        setTimeout(() => {
-          toast({ 
-            title: 'AI Auto-Execution Complete', 
-            description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
-          });
-        }, 0);
-        return { analysis: response.analysis, plan: [], isLoading: false };
-      } else {
-        return { ...response, isLoading: false };
-      }
-
-    } catch (error) {
-      console.error("AI Trigger Analysis failed:", error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-      if (!isScheduled) {
-         setTimeout(() => {
-          toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
-        }, 0);
-      }
-      return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
-    }
-  }, [watchlist, aiSettings, addTradeTrigger, removeTradeTrigger, updateTradeTrigger, toast, tradeTriggers, balance]);
-  
   useEffect(() => {
       if (!isLoaded) return;
       
@@ -700,12 +719,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPos;
         
         if (currentPrice === undefined) return;
-
+    
         let shouldClose = false;
         let reason = '';
-        let closePrice: number = currentPrice;
+        let closePrice: number | undefined = undefined;
     
-        if (positionType === 'futures' && liquidationPrice !== undefined) {
+        if (positionType === 'futures' && typeof liquidationPrice === 'number') {
           if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
             shouldClose = true;
             reason = 'Position Liquidated';
@@ -715,18 +734,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     
         if (!shouldClose && details) {
           const { stopLoss, takeProfit } = details;
-          if (stopLoss !== undefined && ((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
+          if (typeof stopLoss === 'number' && ((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
             shouldClose = true;
             reason = 'Stop Loss Hit';
             closePrice = stopLoss;
-          } else if (takeProfit !== undefined && ((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
+          } else if (typeof takeProfit === 'number' && ((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
             shouldClose = true;
             reason = 'Take Profit Hit';
             closePrice = takeProfit;
           }
         }
     
-        if (shouldClose) {
+        if (shouldClose && typeof closePrice === 'number') {
           closePosition(id, reason, closePrice);
         }
       });
@@ -1158,13 +1177,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [openPositions, closePosition]);
 
-  const clearHistory = useCallback(() => {
-    setTradeHistory([]);
-    setTimeout(() => {
-      toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
-    }, 0);
-  }, [toast]);
-
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
     setPriceAlerts(prev => ({ ...prev, [symbol]: newAlert }));
@@ -1259,5 +1271,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     
