@@ -457,7 +457,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const executeTrigger = (trigger: TradeTrigger, currentPrice: number) => {
+  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     setTimeout(() => {
       toast({
       title: 'Trade Trigger Executed!',
@@ -478,9 +478,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
       }
     }
-  };
+  }, [buy, futuresBuy, futuresSell, toast, watchlist]);
 
-  const checkTradeTriggers = (symbol: string, newPrice: number) => {
+  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
     let cancelSymbols = new Set<string>();
 
@@ -511,9 +511,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return true;
       });
     });
-  };
+  }, [executeTrigger]);
 
-  const processUpdate = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
+  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
     let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
 
     if (isSpot) {
@@ -561,7 +561,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  };
+  }, [checkTradeTriggers]);
+
+  const processUpdateRef = useRef(processUpdate);
+  useEffect(() => {
+    processUpdateRef.current = processUpdate;
+  }, [processUpdate]);
 
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
@@ -949,9 +954,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
       
       const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
-      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : Date.now();
+      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : 0;
       const timeSinceLast = Date.now() - lastScrapeTime;
-      const initialDelay = Math.max(0, aiSettings.scheduleInterval - timeSinceLast);
+      const initialDelay = timeSinceLast > aiSettings.scheduleInterval ? 0 : aiSettings.scheduleInterval - timeSinceLast;
 
       const timeoutId = setTimeout(() => {
         runScheduledAnalysis();
@@ -1053,7 +1058,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (message.type === "message" && message.subject === "trade.snapshot") {
           const wrapper = message.data as KucoinSnapshotDataWrapper;
           const symbol = message.topic.split(":")[1];
-          processUpdate(symbol, true, wrapper.data);
+          processUpdateRef.current(symbol, true, wrapper.data);
         }
       };
   
@@ -1111,7 +1116,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       ws.onmessage = (event: MessageEvent) => {
         const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
         if (message.type === "message" && message.subject === 'snapshot.24h') {
-          processUpdate(message.data.symbol, false, message.data as any);
+          processUpdateRef.current(message.data.symbol, false, message.data as any);
         }
       };
   
@@ -1122,7 +1127,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         futuresSubscriptionsRef.current.clear();
       };
   
-      ws.onerror = () => {
+      ws.onerror = (e) => {
+        console.error("Futures WS Error", e);
         setFuturesWsStatus("error");
         setTimeout(() => {
           toast({ title: "Futures WebSocket Error", description: "Connection failed. Futures prices may not update.", variant: "destructive" });
@@ -1131,8 +1137,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
   
     } catch (error) {
-      setFuturesWsStatus("error");
       console.error("Futures Connection failed", error);
+      setFuturesWsStatus("error");
+      setTimeout(() => {
+        toast({ title: "Futures Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
+      }, 0);
     }
   }, [toast]);
 

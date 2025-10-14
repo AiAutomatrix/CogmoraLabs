@@ -44,20 +44,19 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
             return;
         }
 
-        const updateTimer = () => {
+        const interval = setInterval(() => {
             const newTimeLeft = nextScrapeTime - Date.now();
             if (newTimeLeft <= 0) {
                 setTimeLeft(0);
+                clearInterval(interval);
             } else {
                 setTimeLeft(newTimeLeft);
             }
-        };
-        
-        updateTimer();
-        const interval = setInterval(updateTimer, 1000);
+        }, 1000);
 
         return () => clearInterval(interval);
     }, [nextScrapeTime]);
+
 
     if (timeLeft <= 0) {
         return null;
