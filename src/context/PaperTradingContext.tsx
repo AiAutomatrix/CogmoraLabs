@@ -748,7 +748,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       let reason = '';
       let closePrice: number | undefined = undefined;
       
-      // Check for liquidation first for futures
       if (positionType === 'futures' && typeof liquidationPrice === 'number' && liquidationPrice > 0) {
         if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
           shouldClose = true;
@@ -757,7 +756,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
       }
 
-      // Check for SL/TP if not already marked for liquidation
       if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
 
@@ -1089,59 +1087,60 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const connectToFutures = useCallback(async (symbolsToSubscribe: string[]) => {
     setFuturesWsStatus("fetching_token");
     try {
-      const tokenData = await getFuturesWsToken();
-      if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
-  
-      const { token, instanceServers } = tokenData.data;
-      const connectId = `cogmora-futures-${Date.now()}`;
-      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
-  
-      setFuturesWsStatus("connecting");
-      const ws = new WebSocket(wsUrl);
-      futuresWs.current = ws;
-  
-      ws.onopen = () => {
-        setFuturesWsStatus("connected");
-        if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-        futuresPingIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
-        }, instanceServers[0].pingInterval / 2);
-  
-        symbolsToSubscribe.forEach((symbol) => {
-          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/contractMarket/snapshot:${symbol}`, response: true }));
-        });
-        futuresSubscriptionsRef.current = new Set(symbolsToSubscribe);
-      };
-  
-      ws.onmessage = (event: MessageEvent) => {
-        const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-        if (message.type === "message" && message.subject === 'snapshot.24h') {
-          processUpdateRef.current(message.data.symbol, false, message.data as any);
-        }
-      };
-  
-      ws.onclose = () => {
-        setFuturesWsStatus("disconnected");
-        if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-        futuresWs.current = null;
-        futuresSubscriptionsRef.current.clear();
-      };
-  
-      ws.onerror = (e) => {
-        console.error("Futures WS Error", e);
+        const tokenData = await getFuturesWsToken();
+        if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
+
+        const { token, instanceServers } = tokenData.data;
+        const connectId = `cogmora-futures-${Date.now()}`;
+        const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
+
+        setFuturesWsStatus("connecting");
+        const ws = new WebSocket(wsUrl);
+        futuresWs.current = ws;
+
+        ws.onopen = () => {
+            setFuturesWsStatus("connected");
+            if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
+            futuresPingIntervalRef.current = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
+            }, instanceServers[0].pingInterval / 2);
+
+            symbolsToSubscribe.forEach((symbol) => {
+                ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/contractMarket/snapshot:${symbol}`, response: true }));
+            });
+            futuresSubscriptionsRef.current = new Set(symbolsToSubscribe);
+        };
+
+        ws.onmessage = (event: MessageEvent) => {
+            const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
+            if (message.type === "message" && message.subject === 'snapshot.24h') {
+                processUpdateRef.current(message.data.symbol, false, message.data as any);
+            }
+        };
+
+        ws.onclose = () => {
+            setFuturesWsStatus("disconnected");
+            if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
+            futuresWs.current = null;
+            futuresSubscriptionsRef.current.clear();
+        };
+
+        ws.onerror = (e) => {
+            console.error("Futures WS Error", e);
+            setFuturesWsStatus("error");
+            setTimeout(() => {
+                const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
+                toast({ title: "Futures websocket error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
+            }, 0);
+            if (ws) ws.close();
+        };
+
+    } catch (error) {
+        console.error("Futures Connection failed", error);
         setFuturesWsStatus("error");
         setTimeout(() => {
-          toast({ title: "Futures WebSocket Error", description: "Connection failed. Futures prices may not update.", variant: "destructive" });
+            toast({ title: "Futures Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
         }, 0);
-        ws.close();
-      };
-  
-    } catch (error) {
-      console.error("Futures Connection failed", error);
-      setFuturesWsStatus("error");
-      setTimeout(() => {
-        toast({ title: "Futures Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
-      }, 0);
     }
   }, [toast]);
 
@@ -1317,3 +1316,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
