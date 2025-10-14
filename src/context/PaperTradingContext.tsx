@@ -13,7 +13,6 @@ import React, {
 import type {
   OpenPosition,
   PaperTrade,
-  KucoinTokenResponse,
   IncomingKucoinWebSocketMessage,
   IncomingKucoinFuturesWebSocketMessage,
   WatchlistItem,
@@ -46,6 +45,7 @@ const INITIAL_AI_SETTINGS: AiTriggerSettings = {
   autoExecute: false,
   justCreate: false,
   justUpdate: false,
+  manageOpenPositions: false,
 };
 
 interface PaperTradingContextType {
@@ -568,7 +568,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [executeTrigger]);
+  }, [checkPriceAlerts, checkTradeTriggers, executeTrigger]);
 
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
@@ -689,6 +689,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist, 
         settings: aiSettings, 
         activeTriggers: tradeTriggers, 
+        openPositions: openPositions, // Pass open positions
         accountMetrics: {
           balance,
           ...accountMetrics
@@ -706,6 +707,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 executedCount++;
             } else if (action.type === 'CANCEL') {
                 removeTradeTrigger(action.triggerId);
+                executedCount++;
+            } else if (action.type === 'UPDATE_OPEN_POSITION') {
+                updatePositionSlTp(action.positionId, action.updates.stopLoss, action.updates.takeProfit);
                 executedCount++;
             }
         });
@@ -730,7 +734,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
-  }, [watchlist, aiSettings, tradeTriggers, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
+  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
 
 
   // Auto-close positions on SL/TP or Liquidation

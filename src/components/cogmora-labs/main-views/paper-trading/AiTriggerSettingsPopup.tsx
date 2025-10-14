@@ -38,6 +38,7 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
   const [currentAutoExecute, setCurrentAutoExecute] = useState(settings.autoExecute ?? false);
   const [currentJustCreate, setCurrentJustCreate] = useState(settings.justCreate ?? false);
   const [currentJustUpdate, setCurrentJustUpdate] = useState(settings.justUpdate ?? false);
+  const [currentManageOpenPositions, setCurrentManageOpenPositions] = useState(settings.manageOpenPositions ?? false);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +48,7 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
       setCurrentAutoExecute(settings.autoExecute ?? false);
       setCurrentJustCreate(settings.justCreate ?? false);
       setCurrentJustUpdate(settings.justUpdate ?? false);
+      setCurrentManageOpenPositions(settings.manageOpenPositions ?? false);
     }
   }, [isOpen, settings]);
 
@@ -58,6 +60,7 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
       autoExecute: currentAutoExecute,
       justCreate: currentJustCreate,
       justUpdate: currentJustUpdate,
+      manageOpenPositions: currentManageOpenPositions,
     });
     onOpenChange(false);
   };
@@ -140,9 +143,22 @@ export const AiTriggerSettingsPopup: React.FC<AiTriggerSettingsPopupProps> = ({
              <Label className="font-semibold">Agent Behavior</Label>
              <div className="flex items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
+                <Label htmlFor="manage-open-positions">Manage Open Positions</Label>
+                <p className="text-xs text-muted-foreground">
+                    Allow the AI to suggest SL/TP changes for open positions.
+                </p>
+                </div>
+                <Switch
+                id="manage-open-positions"
+                checked={currentManageOpenPositions}
+                onCheckedChange={setCurrentManageOpenPositions}
+                />
+            </div>
+             <div className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
                 <Label htmlFor="sl-tp-switch">Generate SL/TP Levels</Label>
                 <p className="text-xs text-muted-foreground">
-                    Allow the AI to suggest Stop Loss and Take Profit levels.
+                    Allow the AI to suggest Stop Loss and Take Profit levels for new triggers.
                 </p>
                 </div>
                 <Switch

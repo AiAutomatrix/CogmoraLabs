@@ -154,7 +154,21 @@ export const AgentCancelActionSchema = z.object({
   triggerId: z.string().describe("The ID of the active trigger to cancel."),
   reasoning: z.string().describe("A brief justification for why this cancellation is recommended."),
 });
-export const AgentActionSchema = z.union([AgentCreateActionSchema, AgentUpdateActionSchema, AgentCancelActionSchema]);
+export const AgentUpdateOpenPositionActionSchema = z.object({
+  type: z.literal('UPDATE_OPEN_POSITION'),
+  positionId: z.string().describe("The ID of the open position to update."),
+  updates: z.object({
+    stopLoss: z.number().optional(),
+    takeProfit: z.number().optional(),
+  }).describe("The new Stop Loss and/or Take Profit levels."),
+  reasoning: z.string().describe("A brief justification for why this position update is being suggested."),
+});
+export const AgentActionSchema = z.union([
+  AgentCreateActionSchema, 
+  AgentUpdateActionSchema, 
+  AgentCancelActionSchema,
+  AgentUpdateOpenPositionActionSchema,
+]);
 export type AgentAction = z.infer<typeof AgentActionSchema>;
 
 export const AgentActionPlanSchema = z.object({
@@ -171,6 +185,7 @@ export const AiTriggerSettingsSchema = z.object({
   autoExecute: z.boolean().optional(),
   justCreate: z.boolean().optional(),
   justUpdate: z.boolean().optional(),
+  manageOpenPositions: z.boolean().optional(), // New setting
 });
 export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
 
@@ -185,6 +200,7 @@ const AccountMetricsSchema = z.object({
 export const ProposeTradeTriggersInputSchema = z.object({
   watchlist: z.array(WatchlistItemSchema),
   activeTriggers: z.array(TradeTriggerSchema),
+  openPositions: z.array(OpenPositionSchema), // New field
   accountMetrics: AccountMetricsSchema,
   settings: AiTriggerSettingsSchema,
 });
@@ -300,7 +316,7 @@ export type PairVolume = z.infer<typeof VolumeSchema>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
+export type PairPriceChange = z.infer<typeof PairPriceChange>;
 
 export const LiquiditySchema = z.object({
   usd: z.number().optional().nullable(),
