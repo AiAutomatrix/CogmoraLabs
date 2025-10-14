@@ -28,14 +28,17 @@ The main view is managed by the `src/components/cogmora-labs/main-views/MainView
 
 The mini view, or sidebar, is managed by `src/components/cogmora-labs/mini-widgets/MiniWidgets.tsx`. It also uses a `Tabs` component to switch between:
 
-- **Technical Analysis**: Displays the `TradingViewTechAnalysisWidget`, providing technical indicators for the currently selected symbol.
-- **AI Chat**: Embeds a **Botpress Webchat** instance, allowing users to interact with an AI assistant.
+- **Technical Analysis**: Displays the `TradingViewTechAnalysisWidget`, providing technical indicators for the currently selected symbol. When the user switches to the 'Chart' view in the main panel, this tab becomes the default active tab in the mini view.
+- **AI Chat**: Embeds a **Botpress Webchat** instance, allowing users to interact with a general-purpose AI assistant.
+- **AI Agent**: A dedicated chat interface (`AiPaperTradingChat.tsx`) for interacting with the advanced paper trading AI. This is where the AI's "plan of action" is displayed for user approval.
 
 ## State Management and Data Flow
 
-- **Root State**: Primary state, including the `activeSymbol` and chart layout, is managed in the `HomePage` component (`src/app/dashboard/page.tsx`).
-- **Paper Trading Engine**: All paper trading state (balance, positions, history, watchlist, triggers, alerts) is managed by the `PaperTradingContext`. This client-side system uses React Context and persists its state to the browser's `localStorage`.
-- **Live Data via WebSockets**: The `PaperTradingContext` establishes and manages direct WebSocket connections to KuCoin's spot and futures feeds to provide real-time price updates for open positions and the watchlist. The screeners (`AllTickersScreener`, `AllFuturesScreener`) also use their own WebSocket hooks.
+- **Root UI State**: Primary UI state, including the `activeSymbol` and chart layout, is managed in the `HomePage` component (`src/app/dashboard/page.tsx`).
+- **Core Engine (`PaperTradingContext.tsx`):** This is the most critical part of the application. It's a client-side system that manages all paper trading state (balance, positions, history, watchlist, triggers, alerts, and automation settings for both the watchlist and AI agent).
+    -   **Data Persistence**: It serializes its entire state to the browser's `localStorage`, ensuring data continuity across sessions.
+    -   **Live Data via WebSockets**: It establishes and manages direct WebSocket connections to KuCoin's spot and futures feeds to provide real-time price updates for all relevant symbols.
 - **Symbol & View Propagation**: The `activeSymbol`, selected view, and chart layout states are passed down as props from `dashboard/page.tsx` to the `MainViews` and `MiniWidgets` components. Callbacks like `onSymbolSelect` allow child components (screeners, watchlist) to update the active symbol globally.
 - **API Routes**: The KuCoin screeners use Next.js API Routes (`src/app/api/...`) as proxies to the external KuCoin APIs for fetching initial data and WebSocket connection tokens.
-- **Server Actions**: The `DexScreenerContent` component uses Server Actions to fetch data from the DexScreener API.
+- **Server Actions**: The `DexScreenerContent` component uses Server Actions (`src/app/actions/dexScreenerActions.ts`) to fetch data from the DexScreener API.
+- **AI Flows**: The AI Agent and chat functionalities are powered by Genkit flows defined in `src/ai/flows/`. These are called as server actions from the relevant components.

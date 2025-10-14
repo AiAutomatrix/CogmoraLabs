@@ -1,6 +1,6 @@
 # Paper Trading System Documentation
 
-This document outlines the architecture and functionality of the paper trading feature within the Cogmora Labs application. It enables users to simulate both spot and leveraged futures cryptocurrency trades using live market data from KuCoin without risking real money.
+This document outlines the architecture and functionality of the comprehensive paper trading feature within the Cogmora Labs application. It enables users to simulate both spot and leveraged futures cryptocurrency trades using live market data from KuCoin without risking real money.
 
 ## Core Architecture: The `PaperTradingContext`
 
@@ -8,10 +8,11 @@ The entire paper trading engine is a self-contained, client-side system built us
 
 - **`PaperTradingContext.tsx`**: This file is the heart and brain of the entire system. It is a React Context provider that manages:
   -   **Virtual Account**: Tracks the user's cash `balance`. New users start with a default of **$100,000**.
-  -   **State Management**: Holds the state for `openPositions` (spot & futures), `tradeHistory`, the `watchlist`, `priceAlerts`, `tradeTriggers`, and the `automationConfig`.
+  -   **State Management**: Holds the state for `openPositions` (spot & futures), `tradeHistory`, the `watchlist`, `priceAlerts`, and `tradeTriggers`.
+  -   **Automation Configuration**: Manages `automationConfig` for the watchlist scraper and `aiSettings` for the AI Trading Agent, including their scheduled execution timers.
   -   **Trade Execution**: Contains the core logic for all trade functions: `buy`, `futuresBuy`, `futuresSell`, and `closePosition`.
   -   **WebSocket Connections**: Manages live WebSocket connections to KuCoin for both spot and futures price feeds, ensuring real-time data is piped directly into the state.
-- **Local Storage Persistence**: The entire state of the paper trading account (balance, positions, history, watchlist, etc.) is automatically serialized and saved to the browser's `localStorage` whenever it changes.
+- **Local Storage Persistence**: The entire state of the paper trading account—including balance, positions, history, watchlist, and all automation settings—is automatically serialized and saved to the browser's `localStorage` whenever it changes.
 
 ## Real-Time Data Flow via WebSockets
 
@@ -41,8 +42,9 @@ To provide a live trading experience, the system establishes and maintains direc
 
 - **Price Alerts**: Users can set price targets on watchlist items. The context checks these alerts on every price update and fires a toast notification when a target is hit.
 - **Trade Triggers**: Users can create conditional orders (e.g., "Buy 100 USD of BTC if price drops below $65,000"). These are stored in the context and executed automatically when the condition is met by the WebSocket price feed. Active triggers are displayed on the "Triggers" tab.
-- **Watchlist Automation**: Users can configure rules in the `AutomateWatchlistPopup` to automatically scrape the KuCoin screeners and populate the watchlist based on criteria like "Top 10 by Volume." Active automations with a countdown timer also appear on the "Triggers" tab.
-- **Stop Loss / Take Profit**: SL/TP levels can be attached to any open position. The context continuously monitors these and will automatically close the position if a level is breached.
+- **Stop Loss / Take Profit**: SL/TP price levels can be attached to any open position. The context continuously monitors these and will automatically close the position if a level is breached.
+- **Watchlist Automation**: Users can configure rules in the `AutomateWatchlistPopup` to automatically scrape the KuCoin screeners and populate the watchlist based on criteria like "Top 10 by Volume." This can be a one-time action or a scheduled auto-refresh. The countdown timer appears on the "Triggers" tab.
+- **AI Agent Automation**: Users can configure the AI Paper Trading Agent to run on a schedule. The countdown timer for the next analysis run also appears on the "Triggers" tab.
 
 ## Component Relationships
 
