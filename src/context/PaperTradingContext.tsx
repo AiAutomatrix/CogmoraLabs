@@ -224,7 +224,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return acc + pos.size * pos.currentPrice;
     }, 0);
 
-    const equity = balance + totalPositionValue + totalUnrealizedPNL;
+    const equity = balance + totalUnrealizedPNL;
 
     const totalRealizedPNL = tradeHistory
       .filter((t) => t.status === "closed")
@@ -237,8 +237,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     return {
       equity,
-      unrealizedPnl: totalUnrealizedPNL,
       realizedPnl: totalRealizedPNL,
+      unrealizedPnl: totalUnrealizedPNL,
       winRate,
     };
   }, [openPositions, balance, tradeHistory]);
@@ -449,19 +449,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [balance, toast]);
   
   const checkPriceAlerts = (symbol: string, newPrice: number) => {
-    const alert = priceAlerts[symbol];
-    if (!alert || alert.triggered) return;
+    setPriceAlerts(prev => {
+      const alert = prev[symbol];
+      if (!alert || alert.triggered) return prev;
 
-    const conditionMet =
-      (alert.condition === 'above' && newPrice >= alert.price) ||
-      (alert.condition === 'below' && newPrice <= alert.price);
+      const conditionMet =
+        (alert.condition === 'above' && newPrice >= alert.price) ||
+        (alert.condition === 'below' && newPrice <= alert.price);
 
-    if (conditionMet) {
-      setPriceAlerts(prev => ({
-        ...prev,
-        [symbol]: { ...alert, triggered: true },
-      }));
-    }
+      if (conditionMet) {
+        return { ...prev, [symbol]: { ...alert, triggered: true }};
+      }
+      return prev;
+    });
   };
 
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
@@ -568,7 +568,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [priceAlerts, executeTrigger, checkPriceAlerts, checkTradeTriggers]);
+  }, [executeTrigger]);
 
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
@@ -741,32 +741,42 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPos;
 
       if (currentPrice === undefined) return;
-
+      
       let shouldClose = false;
       let reason = '';
       let closePrice: number | undefined = undefined;
-
-      if (positionType === 'futures' && typeof liquidationPrice === 'number') {
+      
+      // Check for liquidation first for futures
+      if (positionType === 'futures' && typeof liquidationPrice === 'number' && liquidationPrice > 0) {
         if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
           shouldClose = true;
           reason = 'Position Liquidated';
           closePrice = liquidationPrice;
         }
       }
-      
+
+      // Check for SL/TP if not already marked for liquidation
       if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
-        
-        if (typeof stopLoss === 'number') {
-          if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-            shouldClose = true;
-            reason = 'Stop Loss Hit';
-            closePrice = stopLoss;
-          }
+
+        if (typeof stopLoss === 'number' && stopLoss > 0) {
+            if ( (side === 'buy' || side === 'long') && currentPrice <= stopLoss ) {
+                shouldClose = true;
+                reason = 'Stop Loss Hit';
+                closePrice = stopLoss;
+            } else if ( side === 'short' && currentPrice >= stopLoss ) {
+                shouldClose = true;
+                reason = 'Stop Loss Hit';
+                closePrice = stopLoss;
+            }
         }
         
-        if (!shouldClose && typeof takeProfit === 'number') {
-           if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
+        if (!shouldClose && typeof takeProfit === 'number' && takeProfit > 0) {
+           if ( (side === 'buy' || side === 'long') && currentPrice >= takeProfit ) {
+              shouldClose = true;
+              reason = 'Take Profit Hit';
+              closePrice = takeProfit;
+          } else if ( side === 'short' && currentPrice <= takeProfit ) {
               shouldClose = true;
               reason = 'Take Profit Hit';
               closePrice = takeProfit;
