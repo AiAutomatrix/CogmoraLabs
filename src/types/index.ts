@@ -174,10 +174,18 @@ export const AiTriggerSettingsSchema = z.object({
 });
 export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
 
+const AccountMetricsSchema = z.object({
+  balance: z.number().describe("The user's available cash balance."),
+  equity: z.number().describe("The total value of the account (balance + positions value + unrealized P&L)."),
+  realizedPnl: z.number().describe("The sum of all profit and loss from closed trades."),
+  unrealizedPnl: z.number().describe("The current floating profit and loss from all open positions."),
+  winRate: z.number().describe("The percentage of closed trades that were profitable."),
+});
+
 export const ProposeTradeTriggersInputSchema = z.object({
   watchlist: z.array(WatchlistItemSchema),
   activeTriggers: z.array(TradeTriggerSchema),
-  balance: z.number(),
+  accountMetrics: AccountMetricsSchema,
   settings: AiTriggerSettingsSchema,
 });
 export type ProposeTradeTriggersInput = z.infer<typeof ProposeTradeTriggersInputSchema>;

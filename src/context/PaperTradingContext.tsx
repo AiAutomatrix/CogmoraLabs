@@ -55,6 +55,7 @@ interface PaperTradingContextType {
   watchlist: WatchlistItem[];
   priceAlerts: Record<string, PriceAlert>;
   tradeTriggers: TradeTrigger[];
+  equity: number; // Added for AI context
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
@@ -213,9 +214,37 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig, aiSettings]);
   
-  // =================================================================
-  // LEVEL 0: CORE UTILITY FUNCTIONS (NO DEPENDENCIES)
-  // =================================================================
+  const accountMetrics = useMemo(() => {
+    const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
+    
+    const totalPositionValue = openPositions.reduce((acc, pos) => {
+      if (pos.positionType === "futures") {
+        return acc + (pos.size * pos.averageEntryPrice) / (pos.leverage || 1);
+      }
+      return acc + pos.size * pos.currentPrice;
+    }, 0);
+
+    const equity = balance + totalPositionValue + totalUnrealizedPNL;
+
+    const totalRealizedPNL = tradeHistory
+      .filter((t) => t.status === "closed")
+      .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
+
+    const winTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
+    const losingTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
+    const totalClosedTrades = winTrades + losingTrades;
+    const winRate = totalClosedTrades > 0 ? (winTrades / totalClosedTrades) * 100 : 0;
+
+    return {
+      equity,
+      unrealizedPnl: totalUnrealizedPNL,
+      realizedPnl: totalRealizedPNL,
+      winRate,
+    };
+  }, [openPositions, balance, tradeHistory]);
+
+  const { equity } = accountMetrics;
+
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
     setTimeout(() => {
@@ -230,9 +259,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }, 0);
   }, [toast]);
 
-  // =================================================================
-  // LEVEL 1: CORE TRADING FUNCTIONS (DEPEND ON LEVEL 0)
-  // =================================================================
   const buy = useCallback(
     (
       symbol: string,
@@ -465,7 +491,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     let executedTriggerIds = new Set<string>();
     let cancelSymbols = new Set<string>();
 
-    // Important: Use the functional update form of setTradeTriggers to get the latest state
     setTradeTriggers(prevTriggers => {
       const activeTriggersForSymbol = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
 
@@ -543,7 +568,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [priceAlerts, executeTrigger]); // Removed checkPriceAlerts and checkTradeTriggers from deps
+  }, [priceAlerts, executeTrigger, checkPriceAlerts, checkTradeTriggers]);
 
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
@@ -660,7 +685,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-      const response = await proposeTradeTriggers({ watchlist, settings: aiSettings, activeTriggers: tradeTriggers, balance });
+      const response = await proposeTradeTriggers({ 
+        watchlist, 
+        settings: aiSettings, 
+        activeTriggers: tradeTriggers, 
+        accountMetrics: {
+          balance,
+          ...accountMetrics
+        }
+      });
 
       if (aiSettings.autoExecute) {
         let executedCount = 0;
@@ -697,7 +730,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
-  }, [watchlist, aiSettings, tradeTriggers, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
+  }, [watchlist, aiSettings, tradeTriggers, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
 
 
   // Auto-close positions on SL/TP or Liquidation
@@ -713,7 +746,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       let reason = '';
       let closePrice: number | undefined = undefined;
 
-      // Check for Liquidation first
       if (positionType === 'futures' && typeof liquidationPrice === 'number') {
         if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
           shouldClose = true;
@@ -721,25 +753,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           closePrice = liquidationPrice;
         }
       }
-
-      // Check for SL/TP if not already marked for liquidation
+      
       if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
         
-        if (typeof stopLoss === 'number' && stopLoss !== 0) {
-            if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
-                shouldClose = true;
-                reason = 'Stop Loss Hit';
-                closePrice = stopLoss;
-            }
+        if (typeof stopLoss === 'number') {
+          if (((side === 'buy' || side === 'long') && currentPrice <= stopLoss) || (side === 'short' && currentPrice >= stopLoss)) {
+            shouldClose = true;
+            reason = 'Stop Loss Hit';
+            closePrice = stopLoss;
+          }
         }
         
-        if (!shouldClose && typeof takeProfit === 'number' && takeProfit !== 0) {
-             if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
-                shouldClose = true;
-                reason = 'Take Profit Hit';
-                closePrice = takeProfit;
-            }
+        if (!shouldClose && typeof takeProfit === 'number') {
+           if (((side === 'buy' || side === 'long') && currentPrice >= takeProfit) || (side === 'short' && currentPrice <= takeProfit)) {
+              shouldClose = true;
+              reason = 'Take Profit Hit';
+              closePrice = takeProfit;
+          }
         }
       }
     
@@ -983,121 +1014,117 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
   
-  const connectToSpot = useCallback(
-    (symbolsToSubscribe: string[]) => {
-      setSpotWsStatus("fetching_token");
-      getSpotWsToken().then((tokenData: KucoinTokenResponse) => {
-        if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
-
-        const { token, instanceServers } = tokenData.data;
-        const connectId = `cogmora-spot-${Date.now()}`;
-        const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
-
-        setSpotWsStatus("connecting");
-        const ws = new WebSocket(wsUrl);
-        spotWs.current = ws;
-
-        ws.onopen = () => {
-          setSpotWsStatus("connected");
-          if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-          spotPingIntervalRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
-          }, instanceServers[0].pingInterval / 2);
-
-          symbolsToSubscribe.forEach((symbol) => {
-             ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
-          });
-          spotSubscriptionsRef.current = new Set(symbolsToSubscribe);
-        };
-
-        ws.onmessage = (event: MessageEvent) => {
-          const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
-          if (message.type === "message" && message.subject === "trade.snapshot") {
-            const wrapper = message.data as KucoinSnapshotDataWrapper;
-            const symbol = message.topic.split(":")[1];
-            processUpdate(symbol, true, wrapper.data);
-          }
-        };
-
-        ws.onclose = () => {
-          setSpotWsStatus("disconnected");
-          if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-          spotWs.current = null;
-          spotSubscriptionsRef.current.clear();
-        };
-
-        ws.onerror = (e) => {
-          console.error("Spot WS Error", e);
-          setSpotWsStatus("error");
-          setTimeout(() => {
-            toast({ title: "Spot WebSocket Error", description: "Connection failed. Watchlist prices may not update.", variant: "destructive" });
-          }, 0);
-          ws.close();
-        };
-      }).catch(error => {
-        console.error("Spot Connection failed", error);
+  const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
+    setSpotWsStatus("fetching_token");
+    try {
+      const tokenData = await getSpotWsToken();
+      if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
+  
+      const { token, instanceServers } = tokenData.data;
+      const connectId = `cogmora-spot-${Date.now()}`;
+      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
+  
+      setSpotWsStatus("connecting");
+      const ws = new WebSocket(wsUrl);
+      spotWs.current = ws;
+  
+      ws.onopen = () => {
+        setSpotWsStatus("connected");
+        if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
+        spotPingIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
+        }, instanceServers[0].pingInterval / 2);
+  
+        symbolsToSubscribe.forEach((symbol) => {
+          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
+        });
+        spotSubscriptionsRef.current = new Set(symbolsToSubscribe);
+      };
+  
+      ws.onmessage = (event: MessageEvent) => {
+        const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
+        if (message.type === "message" && message.subject === "trade.snapshot") {
+          const wrapper = message.data as KucoinSnapshotDataWrapper;
+          const symbol = message.topic.split(":")[1];
+          processUpdate(symbol, true, wrapper.data);
+        }
+      };
+  
+      ws.onclose = () => {
+        setSpotWsStatus("disconnected");
+        if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
+        spotWs.current = null;
+        spotSubscriptionsRef.current.clear();
+      };
+  
+      ws.onerror = (e) => {
+        console.error("Spot WS Error", e);
         setSpotWsStatus("error");
         setTimeout(() => {
-          toast({ title: "Spot Connection Failed", description: error.message || "Could not get a connection token.", variant: "destructive" });
+          toast({ title: "Spot WebSocket Error", description: "Connection failed. Watchlist prices may not update.", variant: "destructive" });
         }, 0);
-      });
-    },
-    [processUpdate, toast]
-  );
+        ws.close();
+      };
+    } catch (error) {
+      console.error("Spot Connection failed", error);
+      setSpotWsStatus("error");
+      setTimeout(() => {
+        toast({ title: "Spot Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
+      }, 0);
+    }
+  }, [processUpdate, toast]);
   
-  const connectToFutures = useCallback(
-    (symbolsToSubscribe: string[]) => {
-      setFuturesWsStatus("fetching_token");
-      getFuturesWsToken().then((tokenData: KucoinTokenResponse) => {
-        if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
-
-        const { token, instanceServers } = tokenData.data;
-        const connectId = `cogmora-futures-${Date.now()}`;
-        const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
-
-        setFuturesWsStatus("connecting");
-        const ws = new WebSocket(wsUrl);
-        futuresWs.current = ws;
-
-        ws.onopen = () => {
-          setFuturesWsStatus("connected");
-          if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-          futuresPingIntervalRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
-          }, instanceServers[0].pingInterval / 2);
-
-          symbolsToSubscribe.forEach((symbol) => {
-            ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/contractMarket/snapshot:${symbol}`, response: true }));
-          });
-          futuresSubscriptionsRef.current = new Set(symbolsToSubscribe);
-        };
-
-        ws.onmessage = (event: MessageEvent) => {
-          const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-          if (message.type === "message" && message.subject === 'snapshot.24h') {
-            processUpdate(message.data.symbol, false, message.data as any);
-          }
-        };
-
-        ws.onclose = () => {
-          setFuturesWsStatus("disconnected");
-          if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-          futuresWs.current = null;
-          futuresSubscriptionsRef.current.clear();
-        };
-
-        ws.onerror = () => {
-          setFuturesWsStatus("error");
-          ws.close();
-        };
-
-      }).catch(error => {
+  const connectToFutures = useCallback(async (symbolsToSubscribe: string[]) => {
+    setFuturesWsStatus("fetching_token");
+    try {
+      const tokenData = await getFuturesWsToken();
+      if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
+  
+      const { token, instanceServers } = tokenData.data;
+      const connectId = `cogmora-futures-${Date.now()}`;
+      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
+  
+      setFuturesWsStatus("connecting");
+      const ws = new WebSocket(wsUrl);
+      futuresWs.current = ws;
+  
+      ws.onopen = () => {
+        setFuturesWsStatus("connected");
+        if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
+        futuresPingIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
+        }, instanceServers[0].pingInterval / 2);
+  
+        symbolsToSubscribe.forEach((symbol) => {
+          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/contractMarket/snapshot:${symbol}`, response: true }));
+        });
+        futuresSubscriptionsRef.current = new Set(symbolsToSubscribe);
+      };
+  
+      ws.onmessage = (event: MessageEvent) => {
+        const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
+        if (message.type === "message" && message.subject === 'snapshot.24h') {
+          processUpdate(message.data.symbol, false, message.data as any);
+        }
+      };
+  
+      ws.onclose = () => {
+        setFuturesWsStatus("disconnected");
+        if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
+        futuresWs.current = null;
+        futuresSubscriptionsRef.current.clear();
+      };
+  
+      ws.onerror = () => {
         setFuturesWsStatus("error");
-        console.error("Futures Connection failed", error);
-      });
-    },
-    [processUpdate]
-  );
+        ws.close();
+      };
+  
+    } catch (error) {
+      setFuturesWsStatus("error");
+      console.error("Futures Connection failed", error);
+    }
+  }, [processUpdate]);
 
   const spotPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
   const futuresPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'futures').map(p => p.symbol), [openPositions]);
@@ -1233,6 +1260,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist,
         priceAlerts,
         tradeTriggers,
+        equity,
         buy,
         futuresBuy,
         futuresSell,

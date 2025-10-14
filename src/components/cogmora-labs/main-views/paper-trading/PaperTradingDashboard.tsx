@@ -64,23 +64,12 @@ export default function PaperTradingDashboard({
     aiSettings,
     setAiSettings,
     nextAiScrapeTime,
+    equity,
   } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
   const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
-
-  const totalPositionValue = useMemo(
-    () =>
-      openPositions.reduce((acc, pos) => {
-        if (pos.positionType === "futures") {
-          // For futures, value is based on collateral, not current price * size
-          return acc + (pos.size * pos.averageEntryPrice) / (pos.leverage || 1);
-        }
-        return acc + pos.size * pos.currentPrice;
-      }, 0),
-    [openPositions]
-  );
 
   const totalUnrealizedPNL = useMemo(
     () => openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0),
@@ -94,8 +83,6 @@ export default function PaperTradingDashboard({
         .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0),
     [tradeHistory]
   );
-
-  const equity = balance + totalPositionValue + totalUnrealizedPNL;
 
   const winTrades = tradeHistory.filter(
     (t) => t.status === "closed" && t.pnl !== undefined && t.pnl > 0
