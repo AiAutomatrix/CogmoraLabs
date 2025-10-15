@@ -1,16 +1,16 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, Edit, FilePlus, Trash2, ShieldCheck } from 'lucide-react';
-import type { AgentActionPlan, AgentAction, ProposedTradeTrigger, TradeTrigger, OpenPosition } from '@/types';
-import { Separator } from '@/components/ui/separator';
+import { ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, Edit, FilePlus, Trash2, ShieldCheck, History } from 'lucide-react';
+import type { AgentAction, AgentActionPlan, AiActionExecutionLog, OpenPosition, ProposedTradeTrigger, TradeTrigger } from '@/types';
+import { AiExecutionLogsPopup } from './AiExecutionLogsPopup';
 
 interface AiPaperTradingChatProps {
     agentState: AgentActionPlan & { isLoading: boolean };
@@ -18,10 +18,14 @@ interface AiPaperTradingChatProps {
 }
 
 const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, setAgentState }) => {
-    const { addTradeTrigger, removeTradeTrigger, updateTradeTrigger, updatePositionSlTp } = usePaperTrading();
+    const { addTradeTrigger, removeTradeTrigger, updateTradeTrigger, updatePositionSlTp, logAiAction, lastAiActionPlan } = usePaperTrading();
     const { analysis, plan, isLoading } = agentState;
+    const [isLogsOpen, setIsLogsOpen] = useState(false);
+
+    const activePlan = isLoading ? { analysis: '', plan: [] } : (plan.length > 0 ? agentState : lastAiActionPlan);
 
     const handleApprove = (action: AgentAction) => {
+        logAiAction(action);
         if (action.type === 'CREATE') {
             addTradeTrigger(action.trigger);
         } else if (action.type === 'UPDATE') {
@@ -160,44 +164,55 @@ const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, set
         );
     }
     
-    if (!analysis && (!plan || plan.length === 0)) {
+    if (!activePlan.analysis && (!activePlan.plan || activePlan.plan.length === 0)) {
          return (
             <div className="flex flex-col items-center justify-center h-full text-center p-4">
                 <CardTitle className="text-lg mb-2">Paper Trading AI Agent</CardTitle>
+                 <Button variant="outline" size="sm" onClick={() => setIsLogsOpen(true)} className="mb-4">
+                    <History className="h-4 w-4 mr-2" />
+                    View Execution Logs
+                </Button>
                 <p className="text-sm text-muted-foreground">
                     Click the "Run AI Now" button in the 'Triggers' tab on the main dashboard. The agent will analyze your account and propose a plan here.
                 </p>
+                <AiExecutionLogsPopup isOpen={isLogsOpen} onOpenChange={setIsLogsOpen} />
             </div>
         );
     }
 
     return (
+        <>
         <ScrollArea className="h-full w-full">
             <div className="p-4 space-y-6">
-                {analysis && (
+                {activePlan.analysis && (
                     <Card>
-                        <CardHeader className="p-3">
+                        <CardHeader className="p-3 flex-row items-center justify-between">
                             <CardTitle className="text-base">Agent Analysis</CardTitle>
+                             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setIsLogsOpen(true)}>
+                                <History className="h-4 w-4" />
+                            </Button>
                         </CardHeader>
                         <CardContent className="p-3 pt-0">
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{analysis}</p>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{activePlan.analysis}</p>
                         </CardContent>
                     </Card>
                 )}
 
-                {plan && plan.length > 0 && (
+                {activePlan.plan && activePlan.plan.length > 0 && (
                     <div>
                         <h3 className="text-base font-semibold mb-2">Proposed Plan of Action</h3>
                         <div className="space-y-3">
-                            {plan.map(renderActionCard)}
+                            {activePlan.plan.map(renderActionCard)}
                         </div>
                     </div>
                 )}
-                 {plan && plan.length === 0 && analysis && (
+                 {activePlan.plan && activePlan.plan.length === 0 && activePlan.analysis && (
                     <p className="text-sm text-muted-foreground text-center py-4">All proposed actions have been completed.</p>
                 )}
             </div>
         </ScrollArea>
+        <AiExecutionLogsPopup isOpen={isLogsOpen} onOpenChange={setIsLogsOpen} />
+        </>
     );
 };
 

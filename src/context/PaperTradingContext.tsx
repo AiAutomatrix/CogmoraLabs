@@ -26,6 +26,8 @@ import type {
   KucoinTicker,
   FuturesSnapshotData,
   AgentActionPlan,
+  AgentAction,
+  AiActionExecutionLog,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
@@ -56,6 +58,8 @@ interface PaperTradingContextType {
   watchlist: WatchlistItem[];
   priceAlerts: Record<string, PriceAlert>;
   tradeTriggers: TradeTrigger[];
+  aiActionLogs: AiActionExecutionLog[];
+  lastAiActionPlan: AgentActionPlan | null;
   equity: number; // Added for AI context
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
@@ -107,6 +111,7 @@ interface PaperTradingContextType {
   setAiSettings: (settings: AiTriggerSettings) => void;
   handleAiTriggerAnalysis: (isScheduled?: boolean) => Promise<any>;
   nextAiScrapeTime: number;
+  logAiAction: (action: AgentAction) => void;
 }
 
 const PaperTradingContext = createContext<PaperTradingContextType | undefined>(
@@ -131,6 +136,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const [aiSettings, setAiSettingsInternal] = useState<AiTriggerSettings>(INITIAL_AI_SETTINGS);
   const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
+  const [lastAiActionPlan, setLastAiActionPlan] = useState<AgentActionPlan | null>(null);
+  const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
+
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
@@ -161,6 +169,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const savedTriggers = localStorage.getItem("paperTrading_tradeTriggers");
       const savedAutomation = localStorage.getItem("paperTrading_automationConfig");
       const savedAiSettings = localStorage.getItem("paperTrading_aiSettings");
+      const savedAiPlan = localStorage.getItem("paperTrading_lastAiActionPlan");
+      const savedAiLogs = localStorage.getItem("paperTrading_aiActionLogs");
 
       if (savedBalance) setBalance(JSON.parse(savedBalance));
       if (savedPositions) {
@@ -182,6 +192,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const settings = JSON.parse(savedAiSettings);
           setAiSettingsInternal(settings);
       }
+      if (savedAiPlan) setLastAiActionPlan(JSON.parse(savedAiPlan));
+      if (savedAiLogs) setAiActionLogs(JSON.parse(savedAiLogs));
 
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -216,8 +228,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       localStorage.setItem("paperTrading_tradeTriggers", JSON.stringify(tradeTriggers));
       localStorage.setItem("paperTrading_automationConfig", JSON.stringify(automationConfig));
       localStorage.setItem("paperTrading_aiSettings", JSON.stringify(aiSettings));
+      localStorage.setItem("paperTrading_lastAiActionPlan", JSON.stringify(lastAiActionPlan));
+      localStorage.setItem("paperTrading_aiActionLogs", JSON.stringify(aiActionLogs));
     }
-  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig, aiSettings]);
+  }, [balance, openPositions, tradeHistory, isLoaded, watchlist, priceAlerts, tradeTriggers, automationConfig, aiSettings, lastAiActionPlan, aiActionLogs]);
   
   const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
@@ -677,14 +691,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
 
+  const logAiAction = useCallback((action: AgentAction) => {
+    setAiActionLogs(prev => [...prev, { ...action, executedAt: Date.now() }]);
+  }, []);
+
   const handleAiTriggerAnalysis = useCallback(async (isScheduled = false): Promise<AgentActionPlan & {isLoading: boolean}> => {
     if (watchlist.length === 0) {
+      const msg = "Watchlist is empty, skipping analysis.";
       if (!isScheduled) {
         setTimeout(() => {
           toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
         }, 0);
       }
-      return { analysis: "Watchlist is empty, skipping analysis.", plan: [], isLoading: false };
+      return { analysis: msg, plan: [], isLoading: false };
     }
 
     try {
@@ -698,10 +717,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           ...accountMetrics
         }
       });
+      
+      setLastAiActionPlan(response);
 
       if (aiSettings.autoExecute) {
         let executedCount = 0;
         response.plan.forEach(action => {
+            logAiAction(action);
             if (action.type === 'CREATE') {
                 addTradeTrigger(action.trigger);
                 executedCount++;
@@ -722,6 +744,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
           });
         }, 0);
+        // Clear the plan after auto-execution
+        setLastAiActionPlan(prev => prev ? { ...prev, plan: [] } : null);
         return { analysis: response.analysis, plan: [], isLoading: false };
       } else {
         return { ...response, isLoading: false };
@@ -737,7 +761,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
-  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger]);
+  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction]);
 
 
   // Auto-close positions on SL/TP or Liquidation
@@ -1074,10 +1098,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             setSpotWsStatus("error");
             if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
             
-            // Only reconnect if there are symbols to subscribe to
             if (spotSubscriptionsRef.current.size > 0) {
               spotReconnectAttempts.current++;
-              const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); // Exponential backoff up to 30s
+              const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); 
               spotReconnectTimeoutRef.current = setTimeout(() => {
                   connectToSpot(Array.from(spotSubscriptionsRef.current));
               }, delay);
@@ -1147,7 +1170,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             setFuturesWsStatus("error");
             if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
 
-            // Only reconnect if there are symbols to subscribe to
             if (futuresSubscriptionsRef.current.size > 0) {
               futuresReconnectAttempts.current++;
               const delay = Math.min(1000 * (2 ** futuresReconnectAttempts.current), 30000); // Exponential backoff up to 30s
@@ -1197,7 +1219,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           wsRef: React.MutableRefObject<WebSocket | null>,
           allSymbols: string[],
           subscriptionsRef: React.MutableRefObject<Set<string>>,
-          connectFn: (symbols: string[]) => void
+          connectFn: (symbols: string[]) => void,
+          type: 'spot' | 'futures'
       ) => {
           const currentSubs = subscriptionsRef.current;
           const desiredSubs = new Set(allSymbols);
@@ -1222,20 +1245,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
               const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
 
+              const topicPrefix = type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
+
               toAdd.forEach(symbol => {
-                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: wsRef === spotWs ? `/market/snapshot:${symbol}` : `/contractMarket/snapshot:${symbol}`, response: true }));
+                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `${topicPrefix}${symbol}`, response: true }));
               });
 
               toRemove.forEach(symbol => {
-                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: wsRef === spotWs ? `/market/snapshot:${symbol}` : `/contractMarket/snapshot:${symbol}`, response: true }));
+                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
               });
               
               subscriptionsRef.current = desiredSubs;
           }
       };
 
-      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot);
-      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures);
+      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot, 'spot');
+      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures, 'futures');
       
   }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
@@ -1308,6 +1333,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         watchlist,
         priceAlerts,
         tradeTriggers,
+        aiActionLogs,
+        lastAiActionPlan,
         equity,
         buy,
         futuresBuy,
@@ -1332,6 +1359,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setAiSettings,
         handleAiTriggerAnalysis,
         nextAiScrapeTime,
+        logAiAction,
       }}
     >
       {children}
@@ -1346,4 +1374,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
