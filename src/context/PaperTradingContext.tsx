@@ -136,11 +136,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const spotSubscriptionsRef = useRef<Set<string>>(new Set());
+  const spotReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const spotReconnectAttempts = useRef(0);
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
+  const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const futuresReconnectAttempts = useRef(0);
 
   const notifiedAlerts = useRef(new Set<string>());
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -562,7 +566,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, [checkTradeTriggers, executeTrigger]); // Dependencies reduced
+  }, []); // Empty dependency array, functions inside are either pure or use state setters
 
   const processUpdateRef = useRef(processUpdate);
   useEffect(() => {
@@ -759,7 +763,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       if (!shouldClose && details) {
         const { stopLoss, takeProfit } = details;
-
         if (typeof stopLoss === 'number' && stopLoss > 0) {
             if ( (side === 'buy' || side === 'long') && currentPrice <= stopLoss ) {
                 shouldClose = true;
@@ -1026,70 +1029,79 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
+    if (spotWs.current) spotWs.current.close();
     setSpotWsStatus("fetching_token");
     try {
-      const tokenData = await getSpotWsToken();
-      if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
-  
-      const { token, instanceServers } = tokenData.data;
-      const connectId = `cogmora-spot-${Date.now()}`;
-      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
-  
-      setSpotWsStatus("connecting");
-      const ws = new WebSocket(wsUrl);
-      spotWs.current = ws;
-  
-      ws.onopen = () => {
-        setSpotWsStatus("connected");
-        if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-        spotPingIntervalRef.current = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
-        }, instanceServers[0].pingInterval / 2);
-  
-        symbolsToSubscribe.forEach((symbol) => {
-          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
-        });
-        spotSubscriptionsRef.current = new Set(symbolsToSubscribe);
-      };
-  
-      ws.onmessage = (event: MessageEvent) => {
-        const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
-        if (message.type === "message" && message.subject === "trade.snapshot") {
-          const wrapper = message.data as KucoinSnapshotDataWrapper;
-          const symbol = message.topic.split(":")[1];
-          processUpdateRef.current(symbol, true, wrapper.data);
-        }
-      };
-  
-      ws.onclose = () => {
-        setSpotWsStatus("disconnected");
-        if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-        spotWs.current = null;
-        spotSubscriptionsRef.current.clear();
-      };
-  
-      ws.onerror = (e) => {
-        console.error("Spot WS Error", e);
-        setSpotWsStatus("error");
-        setTimeout(() => {
-          toast({ title: "Spot WebSocket Error", description: "Connection failed. Watchlist prices may not update.", variant: "destructive" });
-        }, 0);
-        ws.close();
-      };
+        const tokenData = await getSpotWsToken();
+        if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
+
+        spotReconnectAttempts.current = 0;
+        if (spotReconnectTimeoutRef.current) clearTimeout(spotReconnectTimeoutRef.current);
+
+        const { token, instanceServers } = tokenData.data;
+        const connectId = `cogmora-spot-${Date.now()}`;
+        const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=${connectId}`;
+
+        setSpotWsStatus("connecting");
+        const ws = new WebSocket(wsUrl);
+        spotWs.current = ws;
+
+        ws.onopen = () => {
+            setSpotWsStatus("connected");
+            if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
+            spotPingIntervalRef.current = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
+            }, instanceServers[0].pingInterval / 2);
+
+            symbolsToSubscribe.forEach((symbol) => {
+                ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
+            });
+            spotSubscriptionsRef.current = new Set(symbolsToSubscribe);
+        };
+
+        ws.onmessage = (event: MessageEvent) => {
+            const message: IncomingKucoinWebSocketMessage = JSON.parse(event.data);
+            if (message.type === "message" && message.subject === "trade.snapshot") {
+                const wrapper = message.data as KucoinSnapshotDataWrapper;
+                const symbol = message.topic.split(":")[1];
+                processUpdateRef.current(symbol, true, wrapper.data);
+            }
+        };
+
+        const handleCloseOrError = (event: Event | CloseEvent) => {
+            const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
+            console.error("Spot WS Error/Close:", errorMessage);
+            setSpotWsStatus("error");
+
+            if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
+            spotWs.current = null;
+            spotSubscriptionsRef.current.clear();
+            
+            spotReconnectAttempts.current++;
+            const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); // Exponential backoff up to 30s
+            spotReconnectTimeoutRef.current = setTimeout(() => {
+                connectToSpot(symbolsToSubscribe);
+            }, delay);
+        };
+
+        ws.onclose = handleCloseOrError;
+        ws.onerror = handleCloseOrError;
+
     } catch (error) {
-      console.error("Spot Connection failed", error);
-      setSpotWsStatus("error");
-      setTimeout(() => {
-        toast({ title: "Spot Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
-      }, 0);
+        console.error("Spot Connection failed", error);
+        setSpotWsStatus("error");
     }
-  }, [toast]);
+  }, []); // Should be stable
   
   const connectToFutures = useCallback(async (symbolsToSubscribe: string[]) => {
+    if (futuresWs.current) futuresWs.current.close();
     setFuturesWsStatus("fetching_token");
     try {
         const tokenData = await getFuturesWsToken();
         if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
+
+        futuresReconnectAttempts.current = 0;
+        if (futuresReconnectTimeoutRef.current) clearTimeout(futuresReconnectTimeoutRef.current);
 
         const { token, instanceServers } = tokenData.data;
         const connectId = `cogmora-futures-${Date.now()}`;
@@ -1119,31 +1131,30 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         };
 
-        ws.onclose = () => {
-            setFuturesWsStatus("disconnected");
+        const handleCloseOrError = (event: Event | CloseEvent) => {
+            const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
+            console.error("Futures WS Error/Close:", errorMessage);
+            setFuturesWsStatus("error");
+
             if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
             futuresWs.current = null;
             futuresSubscriptionsRef.current.clear();
+            
+            futuresReconnectAttempts.current++;
+            const delay = Math.min(1000 * (2 ** futuresReconnectAttempts.current), 30000); // Exponential backoff up to 30s
+            futuresReconnectTimeoutRef.current = setTimeout(() => {
+                connectToFutures(symbolsToSubscribe);
+            }, delay);
         };
 
-        ws.onerror = (e) => {
-            console.error("Futures WS Error", e);
-            setFuturesWsStatus("error");
-            setTimeout(() => {
-                const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
-                toast({ title: "Futures websocket error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
-            }, 0);
-            if (ws) ws.close();
-        };
+        ws.onclose = handleCloseOrError;
+        ws.onerror = handleCloseOrError;
 
     } catch (error) {
         console.error("Futures Connection failed", error);
         setFuturesWsStatus("error");
-        setTimeout(() => {
-            toast({ title: "Futures Connection Failed", description: error instanceof Error ? error.message : "Could not get a connection token.", variant: "destructive" });
-        }, 0);
     }
-  }, [toast]);
+  }, []); // Should be stable
 
   const spotPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
   const futuresPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'futures').map(p => p.symbol), [openPositions]);
@@ -1158,53 +1169,27 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
   
   
+  // Main connection management effect
   useEffect(() => {
     if (!isLoaded) return;
-    const symbolsToSub = Array.from(new Set(allSpotSymbols));
-    if (symbolsToSub.length > 0) {
-      if (!spotWs.current || spotWs.current.readyState === WebSocket.CLOSED) {
-        connectToSpot(symbolsToSub);
-      } else if (spotWs.current.readyState === WebSocket.OPEN) {
-        const currentSubs = spotSubscriptionsRef.current;
-        const requiredSubs = new Set(symbolsToSub);
-        const toUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
-        const toSub = [...requiredSubs].filter(s => !currentSubs.has(s));
-
-        toUnsub.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}`})));
-        toSub.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}`, response: true })));
-        
-        spotSubscriptionsRef.current = requiredSubs;
-      }
-    } else {
-      if (spotWs.current) {
+    
+    // Spot connection management
+    if (allSpotSymbols.length > 0 && (!spotWs.current || spotWs.current.readyState === WebSocket.CLOSED)) {
+        connectToSpot(allSpotSymbols);
+    } else if (allSpotSymbols.length === 0 && spotWs.current) {
+        if (spotReconnectTimeoutRef.current) clearTimeout(spotReconnectTimeoutRef.current);
         spotWs.current.close();
-      }
     }
-  }, [isLoaded, allSpotSymbols, connectToSpot]);
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    const symbolsToSub = Array.from(new Set(allFuturesSymbols));
-    if (symbolsToSub.length > 0) {
-      if (!futuresWs.current || futuresWs.current.readyState === WebSocket.CLOSED) {
-        connectToFutures(symbolsToSub);
-      } else if (futuresWs.current.readyState === WebSocket.OPEN) {
-        const currentSubs = futuresSubscriptionsRef.current;
-        const requiredSubs = new Set(symbolsToSub);
-        const toUnsub = [...currentSubs].filter(s => !requiredSubs.has(s));
-        const toSub = [...requiredSubs].filter(s => !currentSubs.has(s));
-        
-        toUnsub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/contractMarket/snapshot:${symbol}`})));
-        toSub.forEach(symbol => futuresWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/contractMarket/snapshot:${symbol}`, response: true })));
-        
-        futuresSubscriptionsRef.current = requiredSubs;
-      }
-    } else {
-      if (futuresWs.current) {
+    // Futures connection management
+    if (allFuturesSymbols.length > 0 && (!futuresWs.current || futuresWs.current.readyState === WebSocket.CLOSED)) {
+        connectToFutures(allFuturesSymbols);
+    } else if (allFuturesSymbols.length === 0 && futuresWs.current) {
+        if (futuresReconnectTimeoutRef.current) clearTimeout(futuresReconnectTimeoutRef.current);
         futuresWs.current.close();
-      }
     }
-  }, [isLoaded, allFuturesSymbols, connectToFutures]);
+    
+  }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
   
   const closeAllPositions = useCallback(() => {
