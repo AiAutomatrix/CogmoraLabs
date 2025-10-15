@@ -101,6 +101,7 @@ interface PaperTradingContextType {
   updatePositionSlTp: (positionId: string, sl?: number, tp?: number) => void;
   closeAllPositions: () => void;
   clearHistory: () => void;
+  clearAiActionLogs: () => void;
   spotWsStatus: string;
   futuresWsStatus: string;
   automationConfig: AutomationConfig;
@@ -112,6 +113,7 @@ interface PaperTradingContextType {
   handleAiTriggerAnalysis: (isScheduled?: boolean) => Promise<any>;
   nextAiScrapeTime: number;
   logAiAction: (action: AgentAction) => void;
+  removeActionFromPlan: (action: AgentAction) => void;
 }
 
 const PaperTradingContext = createContext<PaperTradingContextType | undefined>(
@@ -268,6 +270,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setTradeHistory([]);
     setTimeout(() => {
       toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
+    }, 0);
+  }, [toast]);
+
+  const clearAiActionLogs = useCallback(() => {
+    setAiActionLogs([]);
+    setTimeout(() => {
+      toast({ title: "AI Logs Cleared", description: "Your AI agent execution logs have been cleared." });
     }, 0);
   }, [toast]);
 
@@ -532,60 +541,59 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [executeTrigger]);
 
-  const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
-    let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
-
-    if (isSpot) {
-      const spotData = data as SpotSnapshotData;
-      newPrice = spotData.lastTradedPrice ?? undefined;
-      high = spotData.high ?? undefined;
-      low = spotData.low ?? undefined;
-      priceChgPct = spotData.changeRate ?? undefined;
-    } else { // Futures
-      const futuresData = data as FuturesSnapshotData; 
-      newPrice = futuresData.lastPrice ?? undefined;
-      high = futuresData.highPrice ?? undefined;
-      low = futuresData.lowPrice ?? undefined;
-      priceChgPct = futuresData.priceChgPct ?? undefined;
-    }
-    
-    if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
-
-    checkPriceAlerts(symbol, newPrice);
-    checkTradeTriggers(symbol, newPrice);
-
-    setWatchlist(prev => prev.map(item =>
-        item.symbol === symbol ? {
-          ...item,
-          currentPrice: newPrice ?? item.currentPrice,
-          high: high ?? item.high,
-          low: low ?? item.low,
-          priceChgPct: priceChgPct ?? item.priceChgPct,
-          snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
-        } : item
-    ));
-
-    setOpenPositions((prevPositions) => 
-      prevPositions.map((p) => {
-        if (p.symbol === symbol) {
-          let unrealizedPnl = 0;
-          if (p.positionType === "spot") {
-            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size;
-          } else if (p.positionType === "futures") {
-            const pnlMultiplier = p.side === "long" ? 1 : -1;
-            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
-          }
-          return { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
-        }
-        return p;
-      })
-    );
-  }, [checkPriceAlerts, checkTradeTriggers]); 
-
-  const processUpdateRef = useRef(processUpdate);
+  const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
+  
   useEffect(() => {
-    processUpdateRef.current = processUpdate;
-  }, [processUpdate]);
+    processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
+      let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
+  
+      if (isSpot) {
+        const spotData = data as SpotSnapshotData;
+        newPrice = spotData.lastTradedPrice ?? undefined;
+        high = spotData.high ?? undefined;
+        low = spotData.low ?? undefined;
+        priceChgPct = spotData.changeRate ?? undefined;
+      } else { // Futures
+        const futuresData = data as FuturesSnapshotData; 
+        newPrice = futuresData.lastPrice ?? undefined;
+        high = futuresData.highPrice ?? undefined;
+        low = futuresData.lowPrice ?? undefined;
+        priceChgPct = futuresData.priceChgPct ?? undefined;
+      }
+      
+      if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+  
+      checkPriceAlerts(symbol, newPrice);
+      checkTradeTriggers(symbol, newPrice);
+  
+      setWatchlist(prev => prev.map(item =>
+          item.symbol === symbol ? {
+            ...item,
+            currentPrice: newPrice ?? item.currentPrice,
+            high: high ?? item.high,
+            low: low ?? item.low,
+            priceChgPct: priceChgPct ?? item.priceChgPct,
+            snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
+          } : item
+      ));
+  
+      setOpenPositions((prevPositions) => 
+        prevPositions.map((p) => {
+          if (p.symbol === symbol) {
+            let unrealizedPnl = 0;
+            if (p.positionType === "spot") {
+              unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size;
+            } else if (p.positionType === "futures") {
+              const pnlMultiplier = p.side === "long" ? 1 : -1;
+              unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
+            }
+            return { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
+          }
+          return p;
+        })
+      );
+    }
+  }, [checkPriceAlerts, checkTradeTriggers]);
 
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
@@ -693,6 +701,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const logAiAction = useCallback((action: AgentAction) => {
     setAiActionLogs(prev => [...prev, { ...action, executedAt: Date.now() }]);
+  }, []);
+  
+  const removeActionFromPlan = useCallback((actionToRemove: AgentAction) => {
+    setLastAiActionPlan(prevPlan => {
+      if (!prevPlan) return null;
+      const newPlan = prevPlan.plan.filter(action => JSON.stringify(action) !== JSON.stringify(actionToRemove));
+      return {
+        ...prevPlan,
+        plan: newPlan,
+      };
+    });
   }, []);
 
   const handleAiTriggerAnalysis = useCallback(async (isScheduled = false): Promise<AgentActionPlan & {isLoading: boolean}> => {
@@ -1052,7 +1071,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
   
-  const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
+  const connectToSpot = useCallback(async () => {
+    // This function is memoized with an empty dependency array
+    // so it's only created once.
     if (spotWs.current) spotWs.current.close();
     setSpotWsStatus("fetching_token");
     try {
@@ -1077,10 +1098,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
             }, instanceServers[0].pingInterval / 2);
 
-            symbolsToSubscribe.forEach((symbol) => {
+            Array.from(spotSubscriptionsRef.current).forEach((symbol) => {
                 ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
             });
-            spotSubscriptionsRef.current = new Set(symbolsToSubscribe);
         };
 
         ws.onmessage = (event: MessageEvent) => {
@@ -1094,7 +1114,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         const handleCloseOrError = (event: Event | CloseEvent) => {
             const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
-            console.error("Spot WS Error/Close:", errorMessage);
             setSpotWsStatus("error");
             if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
             
@@ -1102,7 +1121,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               spotReconnectAttempts.current++;
               const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); 
               spotReconnectTimeoutRef.current = setTimeout(() => {
-                  connectToSpot(Array.from(spotSubscriptionsRef.current));
+                  connectToSpot();
               }, delay);
             } else {
                if (spotWs.current) {
@@ -1117,7 +1136,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onerror = handleCloseOrError;
 
     } catch (error) {
-        console.error("Spot Connection failed", error);
         setSpotWsStatus("error");
         const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
         setTimeout(() => {
@@ -1126,7 +1144,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
   
-  const connectToFutures = useCallback(async (symbolsToSubscribe: string[]) => {
+  const connectToFutures = useCallback(async () => {
+    // This function is also memoized with an empty dependency array.
     if (futuresWs.current) futuresWs.current.close();
     setFuturesWsStatus("fetching_token");
     try {
@@ -1151,10 +1170,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
             }, instanceServers[0].pingInterval / 2);
 
-            symbolsToSubscribe.forEach((symbol) => {
+            Array.from(futuresSubscriptionsRef.current).forEach((symbol) => {
                 ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/contractMarket/snapshot:${symbol}`, response: true }));
             });
-            futuresSubscriptionsRef.current = new Set(symbolsToSubscribe);
         };
 
         ws.onmessage = (event: MessageEvent) => {
@@ -1166,7 +1184,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         const handleCloseOrError = (event: Event | CloseEvent) => {
             const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
-            console.error("Futures WS Error/Close:", errorMessage);
             setFuturesWsStatus("error");
             if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
 
@@ -1174,7 +1191,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               futuresReconnectAttempts.current++;
               const delay = Math.min(1000 * (2 ** futuresReconnectAttempts.current), 30000); // Exponential backoff up to 30s
               futuresReconnectTimeoutRef.current = setTimeout(() => {
-                  connectToFutures(Array.from(futuresSubscriptionsRef.current));
+                  connectToFutures();
               }, delay);
             } else {
                if (futuresWs.current) {
@@ -1189,7 +1206,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         ws.onerror = handleCloseOrError;
 
     } catch (error) {
-        console.error("Futures Connection failed", error);
         setFuturesWsStatus("error");
         const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
         setTimeout(() => {
@@ -1219,7 +1235,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           wsRef: React.MutableRefObject<WebSocket | null>,
           allSymbols: string[],
           subscriptionsRef: React.MutableRefObject<Set<string>>,
-          connectFn: (symbols: string[]) => void,
+          connectFn: () => void,
           type: 'spot' | 'futures'
       ) => {
           const currentSubs = subscriptionsRef.current;
@@ -1229,6 +1245,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           if (desiredSubs.size === 0) {
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                   wsRef.current.close();
+                  wsRef.current = null; // Important to nullify after close
               }
               subscriptionsRef.current.clear();
               return;
@@ -1236,7 +1253,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
           // If symbols are needed and connection is not active, establish it.
           if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
-              connectFn(allSymbols);
+              subscriptionsRef.current = desiredSubs; // Set desired subs before connecting
+              connectFn();
               return;
           }
 
@@ -1343,6 +1361,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         updatePositionSlTp,
         closeAllPositions,
         clearHistory,
+        clearAiActionLogs,
         spotWsStatus,
         futuresWsStatus,
         toggleWatchlist,
@@ -1360,6 +1379,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         handleAiTriggerAnalysis,
         nextAiScrapeTime,
         logAiAction,
+        removeActionFromPlan,
       }}
     >
       {children}

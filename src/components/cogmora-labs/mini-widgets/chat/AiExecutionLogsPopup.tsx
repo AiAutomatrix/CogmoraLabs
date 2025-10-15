@@ -31,7 +31,7 @@ export const AiExecutionLogsPopup: React.FC<AiExecutionLogsPopupProps> = ({ isOp
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: price < 0.1 ? 8 : 4 }).format(price);
   };
 
-  const renderActionDetails = (action: AgentAction) => {
+  const renderActionDetails = (action: AgentAction & { executedAt: number }) => {
     let title, Icon, badgeText, badgeVariant: "default" | "destructive" | "secondary";
     let triggerDetails: Partial<TradeTrigger> | Partial<OpenPosition> = {};
     let positionDetails: Partial<OpenPosition> = {};
