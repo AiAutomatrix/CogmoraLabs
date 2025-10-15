@@ -446,7 +446,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }, 0);
   }, [balance, toast]);
   
-  const checkPriceAlerts = (symbol: string, newPrice: number) => {
+  const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
     setPriceAlerts(prev => {
       const alert = prev[symbol];
       if (!alert || alert.triggered) return prev;
@@ -460,7 +460,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return prev;
     });
-  };
+  }, []);
 
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     setTimeout(() => {
@@ -485,7 +485,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [buy, futuresBuy, futuresSell, toast, watchlist]);
 
-  const checkTradeTriggers = (symbol: string, newPrice: number) => {
+  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
     let executedTriggerIds = new Set<string>();
     let cancelSymbols = new Set<string>();
 
@@ -516,7 +516,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return true;
       });
     });
-  };
+  }, [executeTrigger]);
 
   const processUpdate = useCallback((symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
     let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
@@ -566,7 +566,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return p;
       })
     );
-  }, []); // Empty dependency array, functions inside are either pure or use state setters
+  }, [checkPriceAlerts, checkTradeTriggers]); 
 
   const processUpdateRef = useRef(processUpdate);
   useEffect(() => {
@@ -1072,16 +1072,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
             console.error("Spot WS Error/Close:", errorMessage);
             setSpotWsStatus("error");
-
             if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-            spotWs.current = null;
-            spotSubscriptionsRef.current.clear();
             
-            spotReconnectAttempts.current++;
-            const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); // Exponential backoff up to 30s
-            spotReconnectTimeoutRef.current = setTimeout(() => {
-                connectToSpot(symbolsToSubscribe);
-            }, delay);
+            // Only reconnect if there are symbols to subscribe to
+            if (spotSubscriptionsRef.current.size > 0) {
+              spotReconnectAttempts.current++;
+              const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); // Exponential backoff up to 30s
+              spotReconnectTimeoutRef.current = setTimeout(() => {
+                  connectToSpot(Array.from(spotSubscriptionsRef.current));
+              }, delay);
+            } else {
+               if (spotWs.current) {
+                    spotWs.current.close();
+                    spotWs.current = null;
+                }
+                spotSubscriptionsRef.current.clear();
+            }
         };
 
         ws.onclose = handleCloseOrError;
@@ -1090,8 +1096,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error) {
         console.error("Spot Connection failed", error);
         setSpotWsStatus("error");
+        const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
+        setTimeout(() => {
+          toast({ title: "Spot WebSocket Error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
+        }, 0);
     }
-  }, []); // Should be stable
+  }, [toast]);
   
   const connectToFutures = useCallback(async (symbolsToSubscribe: string[]) => {
     if (futuresWs.current) futuresWs.current.close();
@@ -1135,16 +1145,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
             console.error("Futures WS Error/Close:", errorMessage);
             setFuturesWsStatus("error");
-
             if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-            futuresWs.current = null;
-            futuresSubscriptionsRef.current.clear();
-            
-            futuresReconnectAttempts.current++;
-            const delay = Math.min(1000 * (2 ** futuresReconnectAttempts.current), 30000); // Exponential backoff up to 30s
-            futuresReconnectTimeoutRef.current = setTimeout(() => {
-                connectToFutures(symbolsToSubscribe);
-            }, delay);
+
+            // Only reconnect if there are symbols to subscribe to
+            if (futuresSubscriptionsRef.current.size > 0) {
+              futuresReconnectAttempts.current++;
+              const delay = Math.min(1000 * (2 ** futuresReconnectAttempts.current), 30000); // Exponential backoff up to 30s
+              futuresReconnectTimeoutRef.current = setTimeout(() => {
+                  connectToFutures(Array.from(futuresSubscriptionsRef.current));
+              }, delay);
+            } else {
+               if (futuresWs.current) {
+                    futuresWs.current.close();
+                    futuresWs.current = null;
+                }
+                futuresSubscriptionsRef.current.clear();
+            }
         };
 
         ws.onclose = handleCloseOrError;
@@ -1153,8 +1169,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } catch (error) {
         console.error("Futures Connection failed", error);
         setFuturesWsStatus("error");
+        const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
+        setTimeout(() => {
+          toast({ title: "Futures WebSocket Error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
+        }, 0);
     }
-  }, []); // Should be stable
+  }, [toast]);
 
   const spotPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
   const futuresPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'futures').map(p => p.symbol), [openPositions]);
@@ -1169,26 +1189,54 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
   
   
-  // Main connection management effect
+  // Main connection management effect for dynamic subscriptions
   useEffect(() => {
-    if (!isLoaded) return;
-    
-    // Spot connection management
-    if (allSpotSymbols.length > 0 && (!spotWs.current || spotWs.current.readyState === WebSocket.CLOSED)) {
-        connectToSpot(allSpotSymbols);
-    } else if (allSpotSymbols.length === 0 && spotWs.current) {
-        if (spotReconnectTimeoutRef.current) clearTimeout(spotReconnectTimeoutRef.current);
-        spotWs.current.close();
-    }
+      if (!isLoaded) return;
 
-    // Futures connection management
-    if (allFuturesSymbols.length > 0 && (!futuresWs.current || futuresWs.current.readyState === WebSocket.CLOSED)) {
-        connectToFutures(allFuturesSymbols);
-    } else if (allFuturesSymbols.length === 0 && futuresWs.current) {
-        if (futuresReconnectTimeoutRef.current) clearTimeout(futuresReconnectTimeoutRef.current);
-        futuresWs.current.close();
-    }
-    
+      const manageSubscriptions = (
+          wsRef: React.MutableRefObject<WebSocket | null>,
+          allSymbols: string[],
+          subscriptionsRef: React.MutableRefObject<Set<string>>,
+          connectFn: (symbols: string[]) => void
+      ) => {
+          const currentSubs = subscriptionsRef.current;
+          const desiredSubs = new Set(allSymbols);
+
+          // If no symbols are needed and connection is active, close it.
+          if (desiredSubs.size === 0) {
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                  wsRef.current.close();
+              }
+              subscriptionsRef.current.clear();
+              return;
+          }
+
+          // If symbols are needed and connection is not active, establish it.
+          if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
+              connectFn(allSymbols);
+              return;
+          }
+
+          // If connection is open, manage individual subscriptions
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
+              const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
+
+              toAdd.forEach(symbol => {
+                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: wsRef === spotWs ? `/market/snapshot:${symbol}` : `/contractMarket/snapshot:${symbol}`, response: true }));
+              });
+
+              toRemove.forEach(symbol => {
+                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: wsRef === spotWs ? `/market/snapshot:${symbol}` : `/contractMarket/snapshot:${symbol}`, response: true }));
+              });
+              
+              subscriptionsRef.current = desiredSubs;
+          }
+      };
+
+      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot);
+      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures);
+      
   }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
   
@@ -1298,3 +1346,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
