@@ -559,7 +559,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc]);
-
+  
+  const formatPrice = (price?: number) => {
+    if (price === undefined || isNaN(price)) return "N/A";
+    const options: Intl.NumberFormatOptions = {
+        style: "currency",
+        currency: "USD",
+    };
+    if (Math.abs(price) < 1) {
+        options.minimumFractionDigits = 2;
+        options.maximumFractionDigits = 8;
+    } else {
+        options.minimumFractionDigits = 2;
+        options.maximumFractionDigits = 4;
+    }
+    return price.toLocaleString('en-US', options);
+  };
+  
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     toast({
       title: 'Trade Trigger Executed!',
@@ -582,89 +598,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [buy, futuresBuy, futuresSell, toast, watchlist]);
   
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
-  
-    useEffect(() => {
-        processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
-            let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
-        
-            if (isSpot) {
-                const spotData = data as SpotSnapshotData;
-                newPrice = spotData.lastTradedPrice ?? undefined;
-                high = spotData.high ?? undefined;
-                low = spotData.low ?? undefined;
-                priceChgPct = spotData.changeRate ?? undefined;
-            } else { // Futures
-                const futuresData = data as FuturesSnapshotData; 
-                newPrice = futuresData.lastPrice ?? undefined;
-                high = futuresData.highPrice ?? undefined;
-                low = futuresData.lowPrice ?? undefined;
-                priceChgPct = futuresData.priceChgPct ?? undefined;
-            }
-            
-            if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
-        
-            setWatchlist(prev => prev.map(item =>
-                item.symbol === symbol ? {
-                    ...item,
-                    currentPrice: newPrice ?? item.currentPrice,
-                    high: high ?? item.high,
-                    low: low ?? item.low,
-                    priceChgPct: priceChgPct ?? item.priceChgPct,
-                    snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
-                } : item
-            ));
-        
-            setOpenPositions((prevPositions) => 
-                prevPositions.map((p) => {
-                    if (p.symbol === symbol) {
-                        let unrealizedPnl = 0;
-                        if (p.positionType === "spot") {
-                            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size;
-                        } else if (p.positionType === "futures") {
-                            const pnlMultiplier = p.side === "long" ? 1 : -1;
-                            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
-                        }
-                        return { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
-                    }
-                    return p;
-                })
-            );
-
-            setPriceAlerts(prevAlerts => {
-                const alert = prevAlerts[symbol];
-                if (alert && !alert.triggered) {
-                    const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
-                    if (conditionMet) {
-                        if (!alert.notified) {
-                            toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
-                        }
-                        return { ...prevAlerts, [symbol]: { ...alert, triggered: true, notified: true } };
-                    }
-                }
-                return prevAlerts;
-            });
-    
-            setTradeTriggers(prevTriggers => {
-                const executedTriggerIds = new Set<string>();
-                const triggersToKeep = [...prevTriggers];
-    
-                triggersToKeep.forEach(trigger => {
-                    if (trigger.symbol === symbol && trigger.status === 'active') {
-                        const conditionMet = (trigger.condition === 'above' && newPrice >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
-                        if (conditionMet) {
-                            executeTrigger(trigger, newPrice!);
-                            executedTriggerIds.add(trigger.id);
-                        }
-                    }
-                });
-    
-                if (executedTriggerIds.size > 0) {
-                    return triggersToKeep.filter(t => !executedTriggerIds.has(t.id));
-                }
-                return triggersToKeep;
-            });
-        }
-    }, [toast, executeTrigger]);
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number): PaperTrade | undefined => {
     let positionToClose: OpenPosition | null = null;
@@ -718,8 +651,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         timestamp: Date.now(),
         status: 'closed',
         pnl,
-        ...(positionToClose.positionType === 'futures' && { leverage: positionToClose.leverage }),
     };
+
+    if (positionToClose.positionType === 'futures' && positionToClose.leverage) {
+        closingTrade.leverage = positionToClose.leverage;
+    }
 
     setTradeHistory(th => [closingTrade, ...th]);
     saveSubcollectionDoc('tradeHistory', closingTrade.id, closingTrade);
@@ -729,6 +665,139 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return closingTrade;
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc]);
   
+    useEffect(() => {
+        processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
+            let newPrice: number | undefined, high: number | undefined, low: number | undefined, priceChgPct: number | undefined;
+        
+            if (isSpot) {
+                const spotData = data as SpotSnapshotData;
+                newPrice = spotData.lastTradedPrice ?? undefined;
+                high = spotData.high ?? undefined;
+                low = spotData.low ?? undefined;
+                priceChgPct = spotData.changeRate ?? undefined;
+            } else { // Futures
+                const futuresData = data as FuturesSnapshotData; 
+                newPrice = futuresData.lastPrice ?? undefined;
+                high = futuresData.highPrice ?? undefined;
+                low = futuresData.lowPrice ?? undefined;
+                priceChgPct = futuresData.priceChgPct ?? undefined;
+            }
+            
+            if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+        
+            setWatchlist(prev => prev.map(item =>
+                item.symbol === symbol ? {
+                    ...item,
+                    currentPrice: newPrice ?? item.currentPrice,
+                    high: high ?? item.high,
+                    low: low ?? item.low,
+                    priceChgPct: priceChgPct ?? item.priceChgPct,
+                    snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
+                } : item
+            ));
+        
+            setOpenPositions((prevPositions) => 
+                prevPositions.map((p) => {
+                    if (p.symbol === symbol) {
+                        let unrealizedPnl = 0;
+                        if (p.positionType === "spot") {
+                            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size;
+                        } else if (p.positionType === "futures") {
+                            const pnlMultiplier = p.side === "long" ? 1 : -1;
+                            unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * pnlMultiplier;
+                        }
+                        const updatedPosition = { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
+                        
+                        // SL/TP and Liquidation Check
+                        let shouldClose = false;
+                        let reason = '';
+                        let closePrice: number | undefined = undefined;
+
+                        const { details, liquidationPrice, side, positionType } = updatedPosition;
+
+                        if (positionType === 'futures' && typeof liquidationPrice === 'number' && liquidationPrice > 0) {
+                            if ((side === 'long' && newPrice <= liquidationPrice) || (side === 'short' && newPrice >= liquidationPrice)) {
+                                shouldClose = true;
+                                reason = 'Position Liquidated';
+                                closePrice = liquidationPrice;
+                            }
+                        }
+
+                        if (!shouldClose && details) {
+                            const { stopLoss, takeProfit } = details;
+                            if (typeof stopLoss === 'number' && stopLoss > 0) {
+                                if ((side === 'buy' || side === 'long') && newPrice <= stopLoss) {
+                                    shouldClose = true;
+                                    reason = 'Stop Loss Hit';
+                                    closePrice = stopLoss;
+                                } else if (side === 'short' && newPrice >= stopLoss) {
+                                    shouldClose = true;
+                                    reason = 'Stop Loss Hit';
+                                    closePrice = stopLoss;
+                                }
+                            }
+
+                            if (!shouldClose && typeof takeProfit === 'number' && takeProfit > 0) {
+                                if ((side === 'buy' || side === 'long') && newPrice >= takeProfit) {
+                                    shouldClose = true;
+                                    reason = 'Take Profit Hit';
+                                    closePrice = takeProfit;
+                                } else if (side === 'short' && newPrice <= takeProfit) {
+                                    shouldClose = true;
+                                    reason = 'Take Profit Hit';
+                                    closePrice = takeProfit;
+                                }
+                            }
+                        }
+
+                        if (shouldClose && closePrice !== undefined) {
+                            closePosition(updatedPosition.id, reason, closePrice);
+                            return null; // Position will be removed
+                        }
+                        
+                        return updatedPosition;
+
+                    }
+                    return p;
+                }).filter(p => p !== null) as OpenPosition[]
+            );
+
+            setPriceAlerts(prevAlerts => {
+                const alert = prevAlerts[symbol];
+                if (alert && !alert.triggered) {
+                    const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
+                    if (conditionMet) {
+                        if (!alert.notified) {
+                            toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
+                        }
+                        return { ...prevAlerts, [symbol]: { ...alert, triggered: true, notified: true } };
+                    }
+                }
+                return prevAlerts;
+            });
+    
+            setTradeTriggers(prevTriggers => {
+                const executedTriggerIds = new Set<string>();
+                const triggersToKeep = [...prevTriggers];
+    
+                triggersToKeep.forEach(trigger => {
+                    if (trigger.symbol === symbol && trigger.status === 'active') {
+                        const conditionMet = (trigger.condition === 'above' && newPrice >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+                        if (conditionMet) {
+                            executeTrigger(trigger, newPrice!);
+                            executedTriggerIds.add(trigger.id);
+                        }
+                    }
+                });
+    
+                if (executedTriggerIds.size > 0) {
+                    return triggersToKeep.filter(t => !executedTriggerIds.has(t.id));
+                }
+                return triggersToKeep;
+            });
+        }
+    }, [toast, executeTrigger, closePosition]);
+
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -870,60 +939,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
   }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
-
-  // Effect for checking SL/TP and Liquidations
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    openPositions.forEach(currentPos => {
-      const { id, details, currentPrice, side, liquidationPrice, positionType } = currentPos;
-
-      if (currentPrice === undefined) return;
-      
-      let shouldClose = false;
-      let reason = '';
-      let closePrice: number | undefined = undefined;
-      
-      if (positionType === 'futures' && typeof liquidationPrice === 'number' && liquidationPrice > 0) {
-        if ((side === 'long' && currentPrice <= liquidationPrice) || (side === 'short' && currentPrice >= liquidationPrice)) {
-          shouldClose = true;
-          reason = 'Position Liquidated';
-          closePrice = liquidationPrice;
-        }
-      }
-
-      if (!shouldClose && details) {
-        const { stopLoss, takeProfit } = details;
-        if (typeof stopLoss === 'number' && stopLoss > 0) {
-            if ( (side === 'buy' || side === 'long') && currentPrice <= stopLoss ) {
-                shouldClose = true;
-                reason = 'Stop Loss Hit';
-                closePrice = stopLoss;
-            } else if ( side === 'short' && currentPrice >= stopLoss ) {
-                shouldClose = true;
-                reason = 'Stop Loss Hit';
-                closePrice = stopLoss;
-            }
-        }
-        
-        if (!shouldClose && typeof takeProfit === 'number' && takeProfit > 0) {
-           if ( (side === 'buy' || side === 'long') && currentPrice >= takeProfit ) {
-              shouldClose = true;
-              reason = 'Take Profit Hit';
-              closePrice = takeProfit;
-          } else if ( side === 'short' && currentPrice <= takeProfit ) {
-              shouldClose = true;
-              reason = 'Take Profit Hit';
-              closePrice = takeProfit;
-          }
-        }
-      }
-    
-      if (shouldClose && closePrice !== undefined) {
-        closePosition(id, reason, closePrice);
-      }
-    });
-  }, [openPositions, isLoaded, closePosition]);
   
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     setAutomationConfigInternal(config);
@@ -1294,7 +1309,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allFuturesSymbols = useMemo(() => {
     const symbols = new Set<string>();
     openPositions.forEach(p => p.positionType === 'futures' && symbols.add(p.symbol));
-    watchlist.forEach(w => w.type === 'futures' && symbols.add(p.symbol));
+    watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'futures' && symbols.add(t.symbol));
     return Array.from(symbols);
   }, [openPositions, watchlist, tradeTriggers]);
@@ -1393,22 +1408,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: 'Watchlist', description: `${symbolName} added to watchlist.` });
     }
   }, [futuresContracts, toast, saveSubcollectionDoc, deleteSubcollectionDoc, watchlist]);
-  
-  const formatPrice = (price?: number) => {
-    if (price === undefined || isNaN(price)) return "N/A";
-    const options: Intl.NumberFormatOptions = {
-        style: "currency",
-        currency: "USD",
-    };
-    if (Math.abs(price) < 1) {
-        options.minimumFractionDigits = 2;
-        options.maximumFractionDigits = 8;
-    } else {
-        options.minimumFractionDigits = 2;
-        options.maximumFractionDigits = 4;
-    }
-    return price.toLocaleString('en-US', options);
-  };
 
   return (
     <PaperTradingContext.Provider
@@ -1463,6 +1462,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
 
     
