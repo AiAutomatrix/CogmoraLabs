@@ -681,41 +681,50 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
 
-        const alert = priceAlerts[symbol];
-        if (alert && !alert.triggered) {
-            const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
-            if (conditionMet) {
-                setPriceAlerts(prev => {
-                    const updatedAlert = { ...prev[symbol], triggered: true, notified: true };
-                    saveSubcollectionDoc('priceAlerts', symbol, updatedAlert);
-                    return { ...prev, [symbol]: updatedAlert };
-                });
-                toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
-            }
-        }
-        
-        const executedTriggerIds = new Set<string>();
-        tradeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol && trigger.status === 'active') {
-                const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
+        // Use a functional update for price alerts to get the latest state
+        setPriceAlerts(currentPriceAlerts => {
+            const alert = currentPriceAlerts[symbol];
+            if (alert && !alert.triggered) {
+                const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
                 if (conditionMet) {
-                    executeTrigger(trigger, newPrice!);
-                    executedTriggerIds.add(trigger.id);
-                    if (trigger.cancelOthers) {
-                        tradeTriggers.forEach(otherTrigger => {
-                            if (otherTrigger.symbol === trigger.symbol && otherTrigger.id !== trigger.id) {
-                                executedTriggerIds.add(otherTrigger.id);
-                            }
-                        });
-                    }
+                    const updatedAlert = { ...alert, triggered: true, notified: true };
+                    saveSubcollectionDoc('priceAlerts', symbol, updatedAlert);
+                    toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
+                    return { ...currentPriceAlerts, [symbol]: updatedAlert };
                 }
             }
+            return currentPriceAlerts; // No change
         });
+        
+        const executedTriggerIds = new Set<string>();
+        // Use a functional update to get the latest tradeTriggers state
+        setTradeTriggers(currentTradeTriggers => {
+            const activeTriggers = currentTradeTriggers.filter(trigger => {
+                if (trigger.symbol === symbol && trigger.status === 'active') {
+                    const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
+                    if (conditionMet) {
+                        executeTrigger(trigger, newPrice!);
+                        executedTriggerIds.add(trigger.id);
+                        if (trigger.cancelOthers) {
+                            currentTradeTriggers.forEach(otherTrigger => {
+                                if (otherTrigger.symbol === trigger.symbol && otherTrigger.id !== trigger.id) {
+                                    executedTriggerIds.add(otherTrigger.id);
+                                }
+                            });
+                        }
+                        return false; // Remove this trigger
+                    }
+                }
+                return true; // Keep this trigger
+            });
 
-        if (executedTriggerIds.size > 0) {
-            executedTriggerIds.forEach(id => deleteSubcollectionDoc('tradeTriggers', id));
-            setTradeTriggers(prev => prev.filter(t => !executedTriggerIds.has(t.id)));
-        }
+            // After checking, if any triggers were executed, delete them from Firestore
+            if (executedTriggerIds.size > 0) {
+                executedTriggerIds.forEach(id => deleteSubcollectionDoc('tradeTriggers', id));
+            }
+            
+            return activeTriggers;
+        });
 
         setWatchlist(prev => prev.map(item =>
             item.symbol === symbol ? {
@@ -744,7 +753,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             return updatedPosition;
         }));
     };
-}, [priceAlerts, tradeTriggers, toast, executeTrigger, closePosition, saveSubcollectionDoc, deleteSubcollectionDoc]);
+}, [toast, executeTrigger, closePosition, saveSubcollectionDoc, deleteSubcollectionDoc]);
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
