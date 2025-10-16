@@ -313,13 +313,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setOpenPositions(prev =>
       prev.map(pos => {
         if (pos.id === positionId) {
+          const newDetails: OpenPositionDetails = { ...pos.details };
+          if (sl !== undefined) newDetails.stopLoss = sl;
+          if (tp !== undefined) newDetails.takeProfit = tp;
+          
           positionToUpdate = {
             ...pos,
-            details: {
-              ...pos.details,
-              stopLoss: sl,
-              takeProfit: tp,
-            }
+            details: newDetails
           };
           return positionToUpdate;
         }
@@ -399,16 +399,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               existing.size = totalSize;
               
               const newDetails: OpenPositionDetails = { ...existing.details, triggeredBy };
-              if (stopLoss) newDetails.stopLoss = stopLoss;
-              if (takeProfit) newDetails.takeProfit = takeProfit;
+               if (stopLoss !== undefined) newDetails.stopLoss = stopLoss;
+               if (takeProfit !== undefined) newDetails.takeProfit = takeProfit;
               existing.details = newDetails;
 
               saveSubcollectionDoc('openPositions', existing.id, existing);
               return updatedPositions;
           } else {
               const details: OpenPositionDetails = { triggeredBy };
-              if (stopLoss) details.stopLoss = stopLoss;
-              if (takeProfit) details.takeProfit = takeProfit;
+              if (stopLoss !== undefined) details.stopLoss = stopLoss;
+              if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
               newPosition = {
                   id: crypto.randomUUID(),
@@ -471,8 +471,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
 
       const details: OpenPositionDetails = { triggeredBy };
-      if (stopLoss) details.stopLoss = stopLoss;
-      if (takeProfit) details.takeProfit = takeProfit;
+      if (stopLoss !== undefined) details.stopLoss = stopLoss;
+      if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -534,8 +534,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
 
       const details: OpenPositionDetails = { triggeredBy };
-      if (stopLoss) details.stopLoss = stopLoss;
-      if (takeProfit) details.takeProfit = takeProfit;
+      if (stopLoss !== undefined) details.stopLoss = stopLoss;
+      if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -676,110 +676,111 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc]);
   
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
-useEffect(() => {
-  processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
-    let newPrice: number | undefined, priceChgPct: number | undefined;
+    useEffect(() => {
+    processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
+        let newPrice: number | undefined, priceChgPct: number | undefined;
 
-    if (isSpot) {
-      const spotData = data as SpotSnapshotData;
-      newPrice = spotData.lastTradedPrice ?? undefined;
-      priceChgPct = spotData.changeRate ?? undefined;
-    } else {
-      const futuresData = data as FuturesSnapshotData;
-      newPrice = futuresData.lastPrice ?? undefined;
-      priceChgPct = futuresData.priceChgPct ?? undefined;
-    }
-
-    if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
-
-    setPriceAlerts(prevAlerts => {
-      const alert = prevAlerts[symbol];
-      if (alert && !alert.triggered) {
-        const conditionMet = (alert.condition === 'above' && newPrice! >= alert.price) || (alert.condition === 'below' && newPrice! <= alert.price);
-        if (conditionMet) {
-          if (!alert.notified) {
-            toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
-          }
-          const newAlertState = { ...alert, triggered: true, notified: true };
-          saveSubcollectionDoc('priceAlerts', symbol, newAlertState);
-          return { ...prevAlerts, [symbol]: newAlertState };
+        if (isSpot) {
+            const spotData = data as SpotSnapshotData;
+            newPrice = spotData.lastTradedPrice ?? undefined;
+            priceChgPct = spotData.changeRate ?? undefined;
+        } else {
+            const futuresData = data as FuturesSnapshotData;
+            newPrice = futuresData.lastPrice ?? undefined;
+            priceChgPct = futuresData.priceChgPct ?? undefined;
         }
-      }
-      return prevAlerts;
-    });
 
-    setTradeTriggers(prevTriggers => {
-      const executedTriggerIds = new Set<string>();
-      prevTriggers.forEach(trigger => {
-        if (trigger.symbol === symbol && trigger.status === 'active') {
-          const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
-          if (conditionMet) {
-            executeTrigger(trigger, newPrice!);
-            executedTriggerIds.add(trigger.id);
-          }
-        }
-      });
+        if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
 
-      if (executedTriggerIds.size > 0) {
-        if (userContextDocRef && firestore) {
-          const batch = writeBatch(firestore);
-          executedTriggerIds.forEach(id => {
-            const triggerToDelete = prevTriggers.find(t => t.id === id);
-            if (triggerToDelete?.cancelOthers) {
-              prevTriggers.forEach(t => {
-                if (t.symbol === triggerToDelete.symbol && !executedTriggerIds.has(t.id)) {
-                  batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id));
-                  executedTriggerIds.add(t.id);
-                }
-              });
+        // Check for Price Alerts
+        const alert = priceAlerts[symbol];
+        if (alert && !alert.triggered) {
+            const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
+            if (conditionMet) {
+                setPriceAlerts(prev => {
+                    const updatedAlert = { ...prev[symbol], triggered: true, notified: true };
+                    saveSubcollectionDoc('priceAlerts', symbol, updatedAlert);
+                    return { ...prev, [symbol]: updatedAlert };
+                });
+                toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
             }
-            batch.delete(doc(userContextDocRef, 'tradeTriggers', id));
-          });
-          batch.commit().catch(error => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: collection(userContextDocRef, 'tradeTriggers').path,
-              operation: 'write',
-            }));
-          });
         }
-        return prevTriggers.filter(t => !executedTriggerIds.has(t.id));
-      }
-      return prevTriggers;
-    });
+        
+        // Check for Trade Triggers
+        const executedTriggerIds = new Set<string>();
+        tradeTriggers.forEach(trigger => {
+            if (trigger.symbol === symbol && trigger.status === 'active') {
+                const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
+                if (conditionMet) {
+                    executeTrigger(trigger, newPrice!);
+                    executedTriggerIds.add(trigger.id);
+                }
+            }
+        });
 
-    setWatchlist(prev => prev.map(item =>
-      item.symbol === symbol ? {
-        ...item,
-        currentPrice: newPrice ?? item.currentPrice,
-        priceChgPct: priceChgPct ?? item.priceChgPct,
-        snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
-      } : item
-    ));
+        if (executedTriggerIds.size > 0) {
+            setTradeTriggers(prev => {
+                const triggersToKeep = prev.filter(t => !executedTriggerIds.has(t.id));
+                const triggersToDelete = prev.filter(t => executedTriggerIds.has(t.id));
 
-    setOpenPositions(prevPositions =>
-      prevPositions.map(p => {
-        if (p.symbol !== symbol) return p;
-        const unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1);
-        const updatedPosition = { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
+                if (userContextDocRef && firestore) {
+                    const batch = writeBatch(firestore);
+                    triggersToDelete.forEach(trigger => {
+                        batch.delete(doc(userContextDocRef, 'tradeTriggers', trigger.id));
+                        if (trigger.cancelOthers) {
+                            prev.forEach(t => {
+                                if (t.symbol === trigger.symbol && t.id !== trigger.id) {
+                                    batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id));
+                                }
+                            });
+                        }
+                    });
+                    batch.commit().catch(error => {
+                        errorEmitter.emit('permission-error', new FirestorePermissionError({
+                            path: collection(userContextDocRef, 'tradeTriggers').path,
+                            operation: 'write',
+                        }));
+                    });
+                }
+                
+                const symbolsToClear = new Set(triggersToDelete.filter(t => t.cancelOthers).map(t => t.symbol));
+                return triggersToKeep.filter(t => !symbolsToClear.has(t.symbol) || executedTriggerIds.has(t.id));
+            });
+        }
 
-        const { details, liquidationPrice, side } = updatedPosition;
-        if (liquidationPrice && ((side === 'long' && newPrice! <= liquidationPrice) || (side === 'short' && newPrice! >= liquidationPrice))) {
-          setTimeout(() => closePosition(updatedPosition.id, 'Position Liquidated', liquidationPrice), 0);
-          return null;
-        }
-        if (details?.stopLoss && ((side !== 'short' && newPrice! <= details.stopLoss) || (side === 'short' && newPrice! >= details.stopLoss))) {
-          setTimeout(() => closePosition(updatedPosition.id, 'Stop Loss Hit', details.stopLoss), 0);
-          return null;
-        }
-        if (details?.takeProfit && ((side !== 'short' && newPrice! >= details.takeProfit) || (side === 'short' && newPrice! <= details.takeProfit))) {
-          setTimeout(() => closePosition(updatedPosition.id, 'Take Profit Hit', details.takeProfit), 0);
-          return null;
-        }
-        return updatedPosition;
-      }).filter(p => p !== null) as OpenPosition[]
-    );
-  };
-}, [toast, executeTrigger, closePosition, saveSubcollectionDoc, deleteSubcollectionDoc, userContextDocRef, firestore]);
+
+        setWatchlist(prev => prev.map(item =>
+            item.symbol === symbol ? {
+                ...item,
+                currentPrice: newPrice ?? item.currentPrice,
+                priceChgPct: priceChgPct ?? item.priceChgPct,
+                snapshotData: (isSpot && item.type === 'spot') ? (data as SpotSnapshotData) : item.snapshotData,
+            } : item
+        ));
+
+        setOpenPositions(prevPositions => prevPositions.map(p => {
+            if (p.symbol !== symbol) return p;
+            
+            const unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1);
+            const updatedPosition = { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
+
+            const { details, liquidationPrice, side } = updatedPosition;
+            if (liquidationPrice && ((side === 'long' && newPrice! <= liquidationPrice) || (side === 'short' && newPrice! >= liquidationPrice))) {
+                setTimeout(() => closePosition(updatedPosition.id, 'Position Liquidated', liquidationPrice), 0);
+                return null;
+            }
+            if (details?.stopLoss && ((side !== 'short' && newPrice! <= details.stopLoss) || (side === 'short' && newPrice! >= details.stopLoss))) {
+                setTimeout(() => closePosition(updatedPosition.id, 'Stop Loss Hit', details.stopLoss), 0);
+                return null;
+            }
+            if (details?.takeProfit && ((side !== 'short' && newPrice! >= details.takeProfit) || (side === 'short' && newPrice! <= details.takeProfit))) {
+                setTimeout(() => closePosition(updatedPosition.id, 'Take Profit Hit', details.takeProfit), 0);
+                return null;
+            }
+            return updatedPosition;
+        }).filter(p => p !== null) as OpenPosition[]);
+    };
+}, [priceAlerts, tradeTriggers, toast, executeTrigger, closePosition, saveSubcollectionDoc, userContextDocRef, firestore]);
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -1263,6 +1264,7 @@ useEffect(() => {
 
   const closeAllPositions = useCallback(() => {
     openPositions.forEach(p => {
+        // Use setTimeout to schedule each close action asynchronously
         setTimeout(() => closePosition(p.id, 'Close All'), 0);
     });
   }, [openPositions, closePosition]);
