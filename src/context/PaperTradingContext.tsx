@@ -18,9 +18,8 @@ import {
   writeBatch,
   deleteDoc,
   getDocs,
-  onSnapshot,
 } from 'firebase/firestore';
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import type {
   OpenPosition,
   PaperTrade,
@@ -215,7 +214,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           alertsSnap.forEach(d => { alerts[d.id] = d.data() as PriceAlert; });
           setPriceAlerts(alerts);
         } else {
-          // If no context exists, create it with initial values
           const initialContext: FirestorePaperTradingContext = {
             balance: INITIAL_BALANCE,
             automationConfig: INITIAL_AUTOMATION_CONFIG,
@@ -393,8 +391,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               const newAverageEntry = totalValue / totalSize;
 
               const details: OpenPositionDetails = { ...existingPosition.details, triggeredBy };
-              if (stopLoss) details.stopLoss = stopLoss;
-              if (takeProfit) details.takeProfit = takeProfit;
+              if (stopLoss !== undefined) details.stopLoss = stopLoss;
+              if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
               updatedPositions[existingPositionIndex] = {
                 ...existingPosition,
@@ -433,7 +431,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       const newTrade: PaperTrade = {
         id: crypto.randomUUID(),
-        positionId: existingPosition ? existingPosition.id : 'N/A', // Needs a robust way to get new position ID
+        positionId: existingPosition ? existingPosition.id : 'N/A',
         positionType: 'spot',
         symbol,
         symbolName,
@@ -683,7 +681,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
 
-        // Check for Price Alerts
         const alert = priceAlerts[symbol];
         if (alert && !alert.triggered) {
             const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
@@ -748,6 +745,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }));
     };
 }, [priceAlerts, tradeTriggers, toast, executeTrigger, closePosition, saveSubcollectionDoc, deleteSubcollectionDoc]);
+
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -769,14 +767,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         executeTrigger(newTrigger, currentPrice);
         if (newTrigger.cancelOthers && userContextDocRef && firestore) {
           const triggersToDelete = tradeTriggers.filter(t => t.symbol === newTrigger.symbol);
-          const batch = writeBatch(firestore);
-          triggersToDelete.forEach(t => batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id)));
-          batch.commit().catch(error => {
-              errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: userContextDocRef.path,
-                operation: 'write',
-              }));
-          });
+          triggersToDelete.forEach(t => deleteSubcollectionDoc('tradeTriggers', t.id));
           setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
         }
     } else {
@@ -784,7 +775,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         saveSubcollectionDoc('tradeTriggers', newTrigger.id, newTrigger);
         toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
     }
-  }, [toast, watchlist, executeTrigger, saveSubcollectionDoc, tradeTriggers, firestore, userContextDocRef]);
+  }, [toast, watchlist, executeTrigger, saveSubcollectionDoc, tradeTriggers, firestore, userContextDocRef, deleteSubcollectionDoc]);
 
   const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
     let triggerToUpdate: TradeTrigger | null = null;
@@ -1336,3 +1327,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
