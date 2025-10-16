@@ -1386,28 +1386,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [pendingWatchlist, watchlist, userContextDocRef, firestore]);
 
   const closeAllPositions = useCallback(() => {
-    if (!userContextDocRef || !firestore) return;
-    const batch = writeBatch(firestore);
-    
     openPositions.forEach(p => {
-        const closePrice = p.currentPrice;
-        if(closePrice !== undefined) {
-          const closingTrade = closePosition(p.id, 'Manual Close All', closePrice);
-          if (closingTrade) {
-            batch.set(doc(userContextDocRef, 'tradeHistory', closingTrade.id), closingTrade);
-            batch.delete(doc(userContextDocRef, 'openPositions', p.id));
-          }
-        }
+        closePosition(p.id, 'Manual Close All');
     });
-
-    batch.commit().catch(error => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userContextDocRef.path, // Path of parent doc for batch
-        operation: 'write',
-      }));
-    });
-
-  }, [openPositions, closePosition, userContextDocRef, firestore]);
+  }, [openPositions, closePosition]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
