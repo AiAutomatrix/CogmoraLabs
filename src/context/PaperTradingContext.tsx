@@ -469,8 +469,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
 
       const details: OpenPositionDetails = { triggeredBy };
-      if (stopLoss) details.stopLoss = stopLoss;
-      if (takeProfit) details.takeProfit = takeProfit;
+      if (stopLoss !== undefined) details.stopLoss = stopLoss;
+      if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -531,8 +531,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
 
       const details: OpenPositionDetails = { triggeredBy };
-      if (stopLoss) details.stopLoss = stopLoss;
-      if (takeProfit) details.takeProfit = takeProfit;
+      if (stopLoss !== undefined) details.stopLoss = stopLoss;
+      if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -612,64 +612,58 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
     setTimeout(() => {
-        let positionToClose: OpenPosition | null = null;
-        let closedTrade: PaperTrade | undefined;
+        const pos = openPositions.find(p => p.id === positionId);
+        if (!pos) return;
 
-        setOpenPositions(currentOpenPositions => {
-            const pos = currentOpenPositions.find(p => p.id === positionId);
-            if (!pos) return currentOpenPositions;
-            positionToClose = pos;
+        const exitPrice = closePriceParam ?? pos.currentPrice ?? 0;
+        if (exitPrice === 0) return;
 
-            const exitPrice = closePriceParam ?? pos.currentPrice ?? 0;
-            if (exitPrice === 0) return currentOpenPositions;
+        let pnl = 0;
+        let returnedValue = 0;
 
-            let pnl = 0;
-            let returnedValue = 0;
+        if (reason === 'Position Liquidated' && pos.positionType === 'futures') {
+            const collateral = (pos.size * pos.averageEntryPrice) / (pos.leverage || 1);
+            pnl = -collateral;
+            returnedValue = 0;
+        } else if (pos.positionType === 'spot') {
+            pnl = (exitPrice - pos.averageEntryPrice) * pos.size;
+            returnedValue = pos.size * exitPrice;
+        } else if (pos.positionType === 'futures') {
+            const pnlMultiplier = pos.side === 'long' ? 1 : -1;
+            pnl = (exitPrice - pos.averageEntryPrice) * pos.size * pnlMultiplier;
+            const leverage = pos.leverage ?? 1;
+            const collateral = (pos.size * pos.averageEntryPrice) / leverage;
+            returnedValue = collateral + pnl;
+        }
 
-            if (reason === 'Position Liquidated' && pos.positionType === 'futures') {
-                const collateral = (pos.size * pos.averageEntryPrice) / (pos.leverage || 1);
-                pnl = -collateral;
-                returnedValue = 0;
-            } else if (pos.positionType === 'spot') {
-                pnl = (exitPrice - pos.averageEntryPrice) * pos.size;
-                returnedValue = pos.size * exitPrice;
-            } else if (pos.positionType === 'futures') {
-                const pnlMultiplier = pos.side === 'long' ? 1 : -1;
-                pnl = (exitPrice - pos.averageEntryPrice) * pos.size * pnlMultiplier;
-                const leverage = pos.leverage ?? 1;
-                const collateral = (pos.size * pos.averageEntryPrice) / leverage;
-                returnedValue = collateral + pnl;
-            }
+        const newBalanceValue = balance + returnedValue;
+        setBalance(newBalanceValue);
+        saveDataToFirestore({ balance: newBalanceValue });
 
-            const newBalanceValue = balance + returnedValue;
-            setBalance(newBalanceValue);
-            saveDataToFirestore({ balance: newBalanceValue });
+        const closedTrade: PaperTrade = {
+            id: crypto.randomUUID(),
+            positionId: pos.id,
+            positionType: pos.positionType,
+            symbol: pos.symbol,
+            symbolName: pos.symbolName,
+            size: pos.size,
+            price: exitPrice,
+            side: pos.positionType === 'futures' ? (pos.side === 'long' ? 'sell' : 'buy') : 'sell',
+            timestamp: Date.now(),
+            status: 'closed',
+            pnl,
+            ...(pos.leverage && { leverage: pos.leverage }),
+        };
+        
+        setTradeHistory(th => [closedTrade, ...th]);
+        saveSubcollectionDoc('tradeHistory', closedTrade.id, closedTrade);
+        deleteSubcollectionDoc('openPositions', positionId);
+        
+        toast({ title: `${reason}: Position Closed`, description: `Closed ${pos.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
 
-            closedTrade = {
-                id: crypto.randomUUID(),
-                positionId: pos.id,
-                positionType: pos.positionType,
-                symbol: pos.symbol,
-                symbolName: pos.symbolName,
-                size: pos.size,
-                price: exitPrice,
-                side: pos.positionType === 'futures' ? (pos.side === 'long' ? 'sell' : 'buy') : 'sell',
-                timestamp: Date.now(),
-                status: 'closed',
-                pnl,
-                ...(pos.leverage && { leverage: pos.leverage }),
-            };
-            
-            setTradeHistory(th => [closedTrade!, ...th]);
-            saveSubcollectionDoc('tradeHistory', closedTrade!.id, closedTrade!);
-            deleteSubcollectionDoc('openPositions', positionId);
-            
-            toast({ title: `${reason}: Position Closed`, description: `Closed ${pos.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
-
-            return currentOpenPositions.filter(p => p.id !== positionId);
-        });
+        setOpenPositions(currentOpenPositions => currentOpenPositions.filter(p => p.id !== positionId));
     }, 0);
-  }, [balance, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc, toast]);
+  }, [balance, openPositions, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc, toast]);
 
   
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -718,7 +712,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (executedTriggerIds.size > 0) {
             setTradeTriggers(prev => {
                 const triggersToDelete = prev.filter(t => executedTriggerIds.has(t.id));
-                const symbolsToClear = new Set(triggersToDelete.filter(t => t.cancelOthers).map(t => t.symbol));
                 
                 let triggersToKeep = prev.filter(t => !executedTriggerIds.has(t.id));
 
