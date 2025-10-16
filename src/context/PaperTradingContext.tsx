@@ -1258,7 +1258,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
 
   const closeAllPositions = useCallback(() => {
-    // Schedule each close operation to run in a separate task
     setTimeout(() => {
         openPositions.forEach(p => {
             closePosition(p.id, 'Close All');
