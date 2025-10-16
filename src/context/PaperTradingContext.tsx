@@ -1255,8 +1255,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(() => {
     [...openPositions].forEach(p => closePosition(p.id, 'Close All'));
-    toast({ title: 'All Positions Closed', description: `All open positions have been closed.` });
-  }, [openPositions, closePosition, toast]);
+  }, [openPositions, closePosition]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
@@ -1358,5 +1357,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
