@@ -1,35 +1,58 @@
+
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PaperTradingProvider } from '@/context/PaperTradingContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
 import Features from '@/components/landing/Features';
 import { Github, Twitter } from 'lucide-react';
+import { SignInDialog } from '@/components/auth/SignInDialog';
+import { FirebaseClientProvider, useUser } from '@/firebase';
+import { useRouter } from 'next/navigation';
 
-// Hero Section Component
-const Hero = () => (
-  <section className="h-[60vh] flex flex-col justify-center items-center text-center p-4" style={{ 
-      backgroundImage: `
-        linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
-        url('/lottie/hero.png')
-      `,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat'
-    }}>
-    <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Welcome to Cogmora Labs</h1>
-    <p className="text-lg md:text-xl text-white mb-8 max-w-2xl mx-auto">
-      The ultimate AI-powered toolkit for cryptocurrency analysis and paper trading. 
-      Explore real-time screeners, advanced charting, and test your strategies risk-free.
-    </p>
-    <Link href="/dashboard" passHref>
-      <Button size="lg" variant="default">
-        Launch the App
-      </Button>
-    </Link>
-  </section>
-);
+const HeroContent: React.FC = () => {
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isUserLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, isUserLoading, router]);
+
+  return (
+    <>
+      <section className="h-[60vh] flex flex-col justify-center items-center text-center p-4" style={{ 
+          backgroundImage: `
+            linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
+            url('/lottie/hero.png')
+          `,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}>
+        <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">Welcome to Cogmora Labs</h1>
+        <p className="text-lg md:text-xl text-white mb-8 max-w-2xl mx-auto">
+          The ultimate AI-powered toolkit for cryptocurrency analysis and paper trading. 
+          Explore real-time screeners, advanced charting, and test your strategies risk-free.
+        </p>
+        <div className="flex gap-4">
+          <Link href="/dashboard" passHref>
+            <Button size="lg" variant="default">
+              Launch the App
+            </Button>
+          </Link>
+          <Button size="lg" variant="secondary" onClick={() => setIsSignInOpen(true)}>
+            Sign In
+          </Button>
+        </div>
+      </section>
+      <SignInDialog isOpen={isSignInOpen} onOpenChange={setIsSignInOpen} />
+    </>
+  );
+}
 
 // Live Demo Section Component
 const LiveDemo = () => (
@@ -65,10 +88,12 @@ const Footer = () => (
 export default function LandingPage() {
   return (
     <main>
-      <Hero />
-      <LiveDemo />
-      <Features />
-      <Footer />
+      <FirebaseClientProvider>
+        <HeroContent />
+        <LiveDemo />
+        <Features />
+        <Footer />
+      </FirebaseClientProvider>
     </main>
   );
 }

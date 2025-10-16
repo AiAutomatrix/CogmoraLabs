@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
@@ -13,6 +12,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import Link from 'next/link';
 import type { AgentActionPlan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { useUser } from '@/firebase';
+import { useRouter } from 'next/navigation';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 const PageContent: React.FC = () => {
   const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTCUSDT');
@@ -33,6 +35,15 @@ const PageContent: React.FC = () => {
   });
 
   const { toast } = useToast();
+
+  const { user, isUserLoading } = useUser();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/');
+    }
+  }, [user, isUserLoading, router]);
 
   // New state for multi-symbol selection
   const [numberOfChartsToSelect, setNumberOfChartsToSelect] = useState(1);
@@ -166,6 +177,18 @@ const PageContent: React.FC = () => {
   ];
 
 
+  if (isUserLoading || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+           <p className="text-muted-foreground">Loading user session...</p>
+        </div>
+      </div>
+    );
+  }
+
+
   return (
     <div className="flex flex-col bg-background h-full">
        <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
@@ -287,8 +310,10 @@ const PageContent: React.FC = () => {
 
 export default function HomePage() {
   return (
-    <PaperTradingProvider>
-      <PageContent />
-    </PaperTradingProvider>
+    <FirebaseClientProvider>
+      <PaperTradingProvider>
+        <PageContent />
+      </PaperTradingProvider>
+    </FirebaseClientProvider>
   );
 }
