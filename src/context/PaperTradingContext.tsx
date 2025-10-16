@@ -20,7 +20,7 @@ import {
   getDocs,
   onSnapshot,
 } from 'firebase/firestore';
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, addDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
 import type {
   OpenPosition,
   PaperTrade,
@@ -226,7 +226,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             lastAiActionPlan: null,
             aiActionLogs: [],
           };
-          await setDoc(userContextDocRef, initialContext);
+          setDocumentNonBlocking(userContextDocRef, initialContext, { merge: true });
         }
       } catch (error) {
         console.error("Standard error during initial data load:", error);
@@ -244,41 +244,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
-      setDoc(userContextDocRef, data, { merge: true })
-        .catch(error => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: userContextDocRef.path,
-            operation: 'write',
-            requestResourceData: data,
-          }));
-        });
+      setDocumentNonBlocking(userContextDocRef, data, { merge: true });
     }
   }, [userContextDocRef]);
   
   const saveSubcollectionDoc = useCallback((collectionName: string, docId: string, data: any) => {
     if (userContextDocRef) {
       const docRef = doc(userContextDocRef, collectionName, docId);
-      setDoc(docRef, data, { merge: true })
-        .catch(error => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: docRef.path,
-            operation: 'write',
-            requestResourceData: data,
-          }));
-        });
+      setDocumentNonBlocking(docRef, data, { merge: true });
     }
   }, [userContextDocRef]);
 
   const deleteSubcollectionDoc = useCallback((collectionName: string, docId: string) => {
     if (userContextDocRef) {
       const docRef = doc(userContextDocRef, collectionName, docId);
-      deleteDoc(docRef)
-        .catch(error => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: docRef.path,
-            operation: 'delete',
-          }));
-        });
+      deleteDocumentNonBlocking(docRef);
     }
   }, [userContextDocRef]);
 
@@ -653,8 +633,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, []);
 
-  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
+  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number): PaperTrade | undefined => {
     let positionToClose: OpenPosition | null = null;
+    let closingTrade: PaperTrade | undefined;
     setOpenPositions(currentOpenPositions => {
         const pos = currentOpenPositions.find(p => p.id === positionId);
         if (!pos) return currentOpenPositions;
@@ -662,10 +643,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return currentOpenPositions.filter(p => p.id !== positionId);
     });
 
-    if (!positionToClose) return;
+    if (!positionToClose) return undefined;
 
     const exitPrice = closePriceParam ?? positionToClose.currentPrice ?? 0;
-    if(exitPrice === 0) return; 
+    if(exitPrice === 0) return undefined; 
 
     let pnl = 0;
     let returnedValue = 0;
@@ -689,7 +670,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setBalance(newBalance);
     saveDataToFirestore({ balance: newBalance });
 
-    const closingTrade: PaperTrade = {
+    closingTrade = {
         id: crypto.randomUUID(),
         positionId: positionToClose.id,
         positionType: positionToClose.positionType,
@@ -701,13 +682,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         timestamp: Date.now(),
         status: 'closed',
         pnl,
-        leverage: positionToClose.leverage,
+        ...(positionToClose.positionType === 'futures' && { leverage: positionToClose.leverage }),
     };
-    setTradeHistory(th => [closingTrade, ...th]);
-    saveSubcollectionDoc('tradeHistory', closingTrade.id, closingTrade);
+
+    setTradeHistory(th => [closingTrade!, ...th]);
+    saveSubcollectionDoc('tradeHistory', closingTrade!.id, closingTrade!);
     deleteSubcollectionDoc('openPositions', positionId);
     
     toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
+    
+    return closingTrade;
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc]);
   
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
@@ -1398,7 +1382,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     updateFirestoreWatchlist();
   }, [pendingWatchlist, watchlist, userContextDocRef, firestore]);
 
-  const closeAllPositions = useCallback(async () => {
+  const closeAllPositions = useCallback(() => {
     if (!userContextDocRef || !firestore) return;
     const batch = writeBatch(firestore);
     
