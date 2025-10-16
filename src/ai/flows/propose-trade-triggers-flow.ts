@@ -122,7 +122,7 @@ Based on all this information, your task is to **formulate a comprehensive plan 
 2.  **Generate a brief analysis**: Write a high-level summary of what you see in the market and what your overall strategy is for this plan. Explain your reasoning based on the account metrics.
 
 3.  **Formulate the Plan**: Use the provided tools ('createTradeTrigger', 'updateTradeTrigger', 'cancelTradeTrigger', 'updateOpenPosition') to build your plan.
-    *   **CRITICAL**: For each action you take, you MUST provide a clear 'reasoning' field inside the action object explaining why you are recommending it.
+    *   **CRITICAL**: For each action you take, you MUST provide a clear 'reasoning' field inside the action object explaining why you are recommending it. This is not optional.
     *   Do not create duplicate triggers for a symbol that already has one. Either update the existing one or ignore it.
     *   If creating a new trigger, use sensible target prices and varied, realistic allocation amounts. Trade sizes should be a reasonable fraction of the account's equity.
     *   For futures, suggest reasonable leverage (2x-20x).
