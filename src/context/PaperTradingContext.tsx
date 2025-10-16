@@ -414,7 +414,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   currentPrice,
                   side: 'buy',
                   unrealizedPnl: 0,
-                  priceChgPct: priceChgPct,
+                  priceChgPct: priceChgPct ?? 0,
                   details: { stopLoss, takeProfit, triggeredBy },
               };
               saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
@@ -477,7 +477,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           leverage,
           liquidationPrice,
           unrealizedPnl: 0,
-          priceChgPct,
+          priceChgPct: priceChgPct ?? 0,
           details: { stopLoss, takeProfit, triggeredBy },
       };
 
@@ -536,7 +536,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           leverage,
           liquidationPrice,
           unrealizedPnl: 0,
-          priceChgPct,
+          priceChgPct: priceChgPct ?? 0,
           details: { stopLoss, takeProfit, triggeredBy },
       };
 
@@ -1366,5 +1366,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     
