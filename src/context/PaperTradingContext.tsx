@@ -151,7 +151,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const [automationConfig, setAutomationConfigInternal] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
   const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
-  const [pendingWatchlist, setPendingWatchlist] = useState<{items: WatchlistItem[], clearExisting: boolean} | null>(null);
 
   const [aiSettings, setAiSettingsInternal] = useState<AiTriggerSettings>(INITIAL_AI_SETTINGS);
   const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
@@ -172,7 +171,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectAttempts = useRef(0);
 
-  const notifiedAlerts = useRef(new Set<string>());
   const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const aiAutomationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const dataLoadedRef = useRef(false);
@@ -565,7 +563,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     toast({
       title: 'Trade Trigger Executed!',
-      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${currentPrice.toFixed(4)}`
+      description: `Executing ${trigger.action} for ${trigger.symbolName} at ${formatPrice(currentPrice)}`
     });
 
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
@@ -573,12 +571,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
 
     if (trigger.type === 'spot') {
-      buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
+      buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`, priceChgPct);
     } else if (trigger.type === 'futures') {
       if (trigger.action === 'long') {
-        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
+        futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`, priceChgPct);
       } else {
-        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.condition}`, priceChgPct);
+        futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`, priceChgPct);
       }
     }
   }, [buy, futuresBuy, futuresSell, toast, watchlist]);
@@ -667,9 +665,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         returnedValue = collateral + pnl;
     }
     
-    const newBalance = balance + returnedValue;
-    setBalance(newBalance);
-    saveDataToFirestore({ balance: newBalance });
+    setBalance(currentBalance => {
+        const newBalance = currentBalance + returnedValue;
+        saveDataToFirestore({ balance: newBalance });
+        return newBalance;
+    });
 
     closingTrade = {
         id: crypto.randomUUID(),
@@ -693,7 +693,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: `${reason}: Position Closed`, description: `Closed ${positionToClose.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
     
     return closingTrade;
-  }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc]);
+  }, [toast, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc]);
   
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
@@ -836,7 +836,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
   }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
-
 
   // Effect for checking SL/TP and Liquidations
   useEffect(() => {
@@ -1073,7 +1072,29 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             });
         });
         
-        setPendingWatchlist({ items: finalItems, clearExisting: config.clearExisting });
+        if (userContextDocRef && firestore) {
+            const batch = writeBatch(firestore);
+            
+            if (config.clearExisting) {
+                watchlist.forEach(item => {
+                batch.delete(doc(userContextDocRef, 'watchlist', item.symbol));
+                });
+            }
+            
+            finalItems.forEach(item => {
+                batch.set(doc(userContextDocRef, 'watchlist', item.symbol), item);
+            });
+    
+            batch.commit().catch(error => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: userContextDocRef.path, // Path of parent doc for batch
+                operation: 'write',
+                }));
+            });
+        }
+        
+        setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
+
 
         if (isManualScrape) {
           toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
@@ -1084,7 +1105,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
       }
     }
-  }, [toast, futuresContracts]);
+  }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
   
   useEffect(() => {
     if (!isLoaded) return;
@@ -1352,51 +1373,25 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       
   }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
-  
-  useEffect(() => {
-    if (!pendingWatchlist || !userContextDocRef || !firestore) return;
-
-    const { items: newItems, clearExisting } = pendingWatchlist;
-    
-    const updateFirestoreWatchlist = async () => {
-      const batch = writeBatch(firestore);
-      
-      if (clearExisting) {
-        watchlist.forEach(item => {
-          batch.delete(doc(userContextDocRef, 'watchlist', item.symbol));
-        });
-      }
-      
-      newItems.forEach(item => {
-        batch.set(doc(userContextDocRef, 'watchlist', item.symbol), item);
-      });
-
-      batch.commit().catch(error => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: userContextDocRef.path, // Path of parent doc for batch
-          operation: 'write',
-        }));
-      });
-      
-      setWatchlist(prev => clearExisting ? newItems : [...prev, ...newItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
-      setPendingWatchlist(null);
-    }
-    
-    updateFirestoreWatchlist();
-  }, [pendingWatchlist, watchlist, userContextDocRef, firestore]);
 
   const closeAllPositions = useCallback(() => {
+    const batch = writeBatch(firestore);
+    const closedTrades: PaperTrade[] = [];
+    let totalReturnedValue = 0;
+
     openPositions.forEach(p => {
-        closePosition(p.id, 'Manual Close All');
+        const closedTrade = closePosition(p.id, 'Manual Close All');
+        if (closedTrade) {
+            closedTrades.push(closedTrade);
+        }
     });
-  }, [openPositions, closePosition]);
+  }, [openPositions, closePosition, firestore]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
     setPriceAlerts(prev => ({ ...prev, [symbol]: newAlert }));
     saveSubcollectionDoc('priceAlerts', symbol, newAlert);
     toast({ title: 'Alert Set', description: `Alert set for ${symbol} when price is ${condition} ${price}.` });
-    notifiedAlerts.current.delete(symbol);
   }, [toast, saveSubcollectionDoc]);
 
   const removePriceAlert = useCallback((symbol: string) => {
@@ -1405,7 +1400,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return rest;
     });
     deleteSubcollectionDoc('priceAlerts', symbol);
-    notifiedAlerts.current.delete(symbol);
     toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
   }, [toast, deleteSubcollectionDoc]);
 
@@ -1439,6 +1433,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: 'Watchlist', description: `${symbolName} added to watchlist.` });
     }
   }, [futuresContracts, toast, saveSubcollectionDoc, deleteSubcollectionDoc, watchlist]);
+  
+  const formatPrice = (price?: number) => {
+    if (price === undefined || isNaN(price)) return "N/A";
+    const options: Intl.NumberFormatOptions = {
+        style: "currency",
+        currency: "USD",
+    };
+    if (Math.abs(price) < 1) {
+        options.minimumFractionDigits = 2;
+        options.maximumFractionDigits = 8;
+    } else {
+        options.minimumFractionDigits = 2;
+        options.maximumFractionDigits = 4;
+    }
+    return price.toLocaleString('en-US', options);
+  };
 
   return (
     <PaperTradingContext.Provider
