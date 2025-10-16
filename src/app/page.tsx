@@ -16,11 +16,8 @@ const HeroContent: React.FC = () => {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!isUserLoading && user) {
-      router.push('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
+  // This effect no longer automatically redirects.
+  // The logic is now on the /dashboard page to protect it.
 
   return (
     <>
@@ -97,3 +94,5 @@ export default function LandingPage() {
     </main>
   );
 }
+
+    
