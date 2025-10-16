@@ -35,7 +35,7 @@ const PageContent: React.FC = () => {
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   
-  const { handleAiTriggerAnalysis, nextAiScrapeTime, aiSettings, setAiSettings } = usePaperTrading();
+  const { handleAiTriggerAnalysis, nextAiScrapeTime, aiSettings, setAiSettings, isLoaded } = usePaperTrading();
 
   // AI Agent state is now local to the page for UI purposes
   const [aiAgentState, setAiAgentState] = useState<AgentActionPlan & { isLoading: boolean }>({
@@ -200,12 +200,12 @@ const PageContent: React.FC = () => {
   ];
 
 
-  if (isUserLoading || !user) {
+  if (isUserLoading || !user || !isLoaded) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="flex flex-col items-center gap-4">
            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-           <p className="text-muted-foreground">Loading user session...</p>
+           <p className="text-muted-foreground">Loading user session and portfolio...</p>
         </div>
       </div>
     );
@@ -378,5 +378,3 @@ export default function HomePage() {
     </FirebaseClientProvider>
   );
 }
-
-    

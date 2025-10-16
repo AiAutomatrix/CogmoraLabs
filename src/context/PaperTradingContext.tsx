@@ -72,6 +72,7 @@ interface PaperTradingContextType {
   tradeTriggers: TradeTrigger[];
   aiActionLogs: AiActionExecutionLog[];
   lastAiActionPlan: AgentActionPlan | null;
+  isLoaded: boolean;
   equity: number; 
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
@@ -1086,10 +1087,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast, futuresContracts]);
   
   useEffect(() => {
+    if (!isLoaded) return;
     if (automationIntervalRef.current) {
         clearInterval(automationIntervalRef.current);
     }
-    if (isLoaded && automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
+    if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
         const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
         
         const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
@@ -1122,10 +1124,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
 
   useEffect(() => {
+    if (!isLoaded) return;
     if (aiAutomationIntervalRef.current) {
       clearInterval(aiAutomationIntervalRef.current);
     }
-    if (isLoaded && aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
+    if (aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
       const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
       
       const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
@@ -1466,6 +1469,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         tradeTriggers,
         aiActionLogs,
         lastAiActionPlan,
+        isLoaded,
         equity: equity,
         buy,
         futuresBuy,
