@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { PaperTradingProvider } from '@/context/PaperTradingContext';
+import { LandingPageDemoProvider } from '@/context/LandingPageDemoContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
 import Features from '@/components/landing/Features';
 import { Github, Twitter } from 'lucide-react';
@@ -63,9 +63,9 @@ const LiveDemo = () => (
         This is a live, real-time demonstration of our watchlist component, powered by the same engine used in the main application. Add symbols like BTC-USDT, ETH-USDT, or SOL-USDT to see it in action.
       </p>
       <div className="max-w-4xl mx-auto">
-        <PaperTradingProvider>
+        <LandingPageDemoProvider>
           <LandingPageWatchlist />
-        </PaperTradingProvider>
+        </LandingPageDemoProvider>
       </div>
     </div>
   </section>

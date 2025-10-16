@@ -1,52 +1,95 @@
+
 'use client';
 
-import React, { useEffect } from 'react';
-import { usePaperTrading } from '@/context/PaperTradingContext';
-import Watchlist from '@/components/cogmora-labs/main-views/paper-trading/Watchlist';
+import React from 'react';
+import { useLandingPageDemo } from '@/context/LandingPageDemoContext';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from '@/components/ui/badge';
+import { cn } from "@/lib/utils";
 
 // This component is a wrapper to pre-populate the watchlist for the demo.
 const LandingPageWatchlist: React.FC = () => {
-  const { watchlist, toggleWatchlist } = usePaperTrading();
+  const { watchlist } = useLandingPageDemo();
 
-  useEffect(() => {
-    // We want to ensure a few items are on the watchlist for the demo.
-    // This effect runs once on mount.
-    const defaultWatchlistItems = [
-      { symbol: 'BTC-USDT', symbolName: 'Bitcoin', type: 'spot' as const },
-      { symbol: 'ETH-USDT', symbolName: 'Ethereum', type: 'spot' as const },
-      { symbol: 'SOL-USDT', symbolName: 'Solana', type: 'spot' as const },
-    ];
-
-    let itemsAdded = false;
-    defaultWatchlistItems.forEach(item => {
-      // Check if the item is already in the watchlist before adding it
-      if (!watchlist.some(w => w.symbol === item.symbol)) {
-        toggleWatchlist(item.symbol, item.symbolName, item.type);
-        itemsAdded = true;
-      }
-    });
-
-    // If we added items, a reload might be needed to trigger WS connection
-    // This is a workaround for the context's dependency array behavior
-    if (itemsAdded) {
-       // A small timeout allows state to update before a potential refresh
-       setTimeout(() => {
-        // This part is tricky. A forced reload is bad UX.
-        // The context should ideally handle new subscriptions without a reload.
-        // Let's assume the context's useEffect for WebSocket will pick up the changes.
-       }, 500);
+  const formatPrice = (price: number | undefined) => {
+    if (price === undefined || isNaN(price)) return "$0.00";
+    const options: Intl.NumberFormatOptions = {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    };
+    if (price < 0.1) {
+      options.maximumFractionDigits = 8;
+    } else {
+      options.maximumFractionDigits = 4;
     }
+    return new Intl.NumberFormat("en-US", options).format(price);
+  };
 
-  }, []); // Run only once
+  const formatChange = (changeRate: number | undefined | null) => {
+    if (changeRate === undefined || changeRate === null) return "N/A";
+    const isPositive = changeRate >= 0;
+    const colorClass = isPositive ? "text-green-500" : "text-red-500";
+    return <span className={colorClass}>{`${isPositive ? "+" : ""}${(changeRate * 100).toFixed(2)}%`}</span>;
+  };
 
-  // Provide default/dummy props for the landing page instance of the watchlist
   return (
-    <Watchlist 
-      onSymbolSelect={() => {}} 
-      selectedChartLayout={1} 
-      setSelectedChartLayout={() => {}} 
-      selectedSymbolsForHighlight={[]} 
-    />
+    <Card>
+      <CardHeader>
+        <CardTitle>Live Watchlist</CardTitle>
+        <CardDescription>
+          Real-time prices from the KuCoin WebSocket feed.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="px-2 py-2">Symbol</TableHead>
+                <TableHead className="px-2 py-2 hidden sm:table-cell">Type</TableHead>
+                <TableHead className="text-right px-2 py-2">Current Price</TableHead>
+                <TableHead className="text-right px-2 py-2">24h Change</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {watchlist.length > 0 ? (
+                watchlist.map((item) => (
+                  <TableRow key={item.symbol}>
+                    <TableCell className="font-medium px-2 py-2">{item.symbolName}</TableCell>
+                    <TableCell className="px-2 py-2 hidden sm:table-cell"><Badge variant="secondary">{item.type}</Badge></TableCell>
+                    <TableCell className="text-right px-2 py-2">{formatPrice(item.currentPrice)}</TableCell>
+                    <TableCell className="text-right font-mono px-2 py-2">
+                      {formatChange(item.priceChgPct)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center h-24">
+                    Loading live data...
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
