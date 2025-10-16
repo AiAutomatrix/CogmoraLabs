@@ -153,6 +153,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const dataLoadedRef = useRef(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
   
   const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
@@ -186,12 +187,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (!userContextDocRef || !firestore) {
       setIsLoaded(false);
+      dataLoadedRef.current = false;
       return;
     }
 
     const unsubscribers: (() => void)[] = [];
-    let isInitialLoad = true;
-
+    
     // Listener for the main context document
     const unsubContext = onSnapshot(userContextDocRef, 
       (snap) => {
@@ -213,9 +214,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             };
             setDocumentNonBlocking(userContextDocRef, initialContext);
         }
-        if (isInitialLoad) {
+        if (!dataLoadedRef.current) {
             setIsLoaded(true);
-            isInitialLoad = false;
+            dataLoadedRef.current = true;
         }
       },
       (error) => {
@@ -224,7 +225,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             path: userContextDocRef.path,
             operation: 'get',
         }));
-        setIsLoaded(true); // Still mark as loaded to unblock UI
+        if (!dataLoadedRef.current) {
+          setIsLoaded(true); // Still mark as loaded to unblock UI
+          dataLoadedRef.current = true;
+        }
       }
     );
     unsubscribers.push(unsubContext);
@@ -279,6 +283,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
       setIsLoaded(false); // Reset loaded state for next user
+      dataLoadedRef.current = false;
     };
   }, [userContextDocRef, firestore]);
 
@@ -426,8 +431,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
           
-          const updatedPosition = {
-            ...existingPosition,
+          const updatedPosition: Partial<OpenPosition> = {
             averageEntryPrice: newAverageEntry,
             size: totalSize,
             details,
@@ -688,7 +692,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         
         toast({ title: `${reason}: Position Closed`, description: `Closed ${pos.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
     }, 0);
-  }, [balance, openPositions, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc, toast, userContextDocRef]);
+  }, [balance, openPositions, saveDataToFirestore, deleteSubcollectionDoc, toast, userContextDocRef]);
 
   
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -726,19 +730,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
                     executeTrigger(trigger, newPrice!);
-                    executedTriggerIds.add(trigger.id);
-                    if (trigger.cancelOthers) {
-                        tradeTriggers.forEach(otherTrigger => {
-                            if (otherTrigger.symbol === trigger.symbol && otherTrigger.id !== trigger.id) {
-                                executedTriggerIds.add(otherTrigger.id);
-                            }
-                        });
-                    }
                 }
             }
         });
-        executedTriggerIds.forEach(id => deleteSubcollectionDoc('tradeTriggers', id));
-
+        
         // Update watchlist item with new price data, including snapshot for spot
         const updatedWatchlistItem: Partial<WatchlistItem> = {
             currentPrice: newPrice,
@@ -769,7 +764,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         });
     };
-}, [toast, executeTrigger, closePosition, saveSubcollectionDoc, deleteSubcollectionDoc, priceAlerts, tradeTriggers, openPositions]);
+}, [toast, executeTrigger, closePosition, saveSubcollectionDoc, priceAlerts, tradeTriggers, openPositions]);
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
@@ -1163,6 +1158,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
 
   const allSpotSymbols = useMemo(() => {
+    if (!isLoaded) return [];
     const symbols = new Set<string>();
     openPositions.forEach(p => p.positionType === 'spot' && symbols.add(p.symbol));
     watchlist.forEach(w => w.type === 'spot' && symbols.add(w.symbol));
@@ -1171,6 +1167,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, watchlist, tradeTriggers, isLoaded]);
 
   const allFuturesSymbols = useMemo(() => {
+    if (!isLoaded) return [];
     const symbols = new Set<string>();
     openPositions.forEach(p => p.positionType === 'futures' && symbols.add(p.symbol));
     watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
