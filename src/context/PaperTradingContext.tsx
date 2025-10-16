@@ -717,19 +717,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         if (executedTriggerIds.size > 0) {
             setTradeTriggers(prev => {
-                const triggersToKeep = prev.filter(t => !executedTriggerIds.has(t.id));
                 const triggersToDelete = prev.filter(t => executedTriggerIds.has(t.id));
+                const symbolsToClear = new Set(triggersToDelete.filter(t => t.cancelOthers).map(t => t.symbol));
+                
+                let triggersToKeep = prev.filter(t => !executedTriggerIds.has(t.id));
 
                 if (userContextDocRef && firestore) {
                     const batch = writeBatch(firestore);
                     triggersToDelete.forEach(trigger => {
                         batch.delete(doc(userContextDocRef, 'tradeTriggers', trigger.id));
                         if (trigger.cancelOthers) {
-                            prev.forEach(t => {
-                                if (t.symbol === trigger.symbol && t.id !== trigger.id) {
-                                    batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id));
-                                }
-                            });
+                           triggersToKeep = triggersToKeep.filter(t => {
+                               if (t.symbol === trigger.symbol) {
+                                   batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id));
+                                   return false;
+                               }
+                               return true;
+                           });
                         }
                     });
                     batch.commit().catch(error => {
@@ -740,8 +744,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                     });
                 }
                 
-                const symbolsToClear = new Set(triggersToDelete.filter(t => t.cancelOthers).map(t => t.symbol));
-                return triggersToKeep.filter(t => !symbolsToClear.has(t.symbol) || executedTriggerIds.has(t.id));
+                return triggersToKeep;
             });
         }
 
@@ -1362,5 +1365,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
