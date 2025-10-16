@@ -439,6 +439,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           saveSubcollectionDoc('openPositions', existingPosition.id, updatedPosition);
       } else {
           positionId = crypto.randomUUID();
+          
           const details: OpenPositionDetails = { triggeredBy };
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
@@ -631,7 +632,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
       }
       
-      // Delete the executed trigger and any others for the same symbol if 'cancelOthers' is true
       deleteSubcollectionDoc('tradeTriggers', trigger.id);
       if (trigger.cancelOthers) {
         tradeTriggers.forEach(t => {
@@ -724,7 +724,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
         
         // Check and execute trade triggers
-        const executedTriggerIds = new Set<string>();
         tradeTriggers.forEach(trigger => {
             if (trigger.symbol === symbol && trigger.status === 'active') {
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
@@ -735,36 +734,34 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
         
         // Update watchlist item with new price data, including snapshot for spot
-        const updatedWatchlistItem: Partial<WatchlistItem> = {
-            currentPrice: newPrice,
-            priceChgPct: priceChgPct ?? undefined,
-        };
-        if (isSpot) {
-            updatedWatchlistItem.snapshotData = data as SpotSnapshotData;
-        }
-        saveSubcollectionDoc('watchlist', symbol, updatedWatchlistItem);
+        setWatchlist(prev => prev.map(item => item.symbol === symbol ? {
+          ...item,
+          currentPrice: newPrice!,
+          priceChgPct: priceChgPct ?? item.priceChgPct,
+          snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData,
+        } : item));
+
 
         // Update open positions
-        openPositions.forEach(p => {
-            if (p.symbol === symbol) {
-                const unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1);
-                const updatedPosition = { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
-                
-                const { details, liquidationPrice, side } = updatedPosition;
-                if (liquidationPrice && ((side === 'long' && newPrice! <= liquidationPrice) || (side === 'short' && newPrice! >= liquidationPrice))) {
-                    closePosition(updatedPosition.id, 'Position Liquidated', liquidationPrice);
-                } else if (details?.stopLoss && ((side !== 'short' && newPrice! <= details.stopLoss) || (side === 'short' && newPrice! >= details.stopLoss))) {
-                    closePosition(updatedPosition.id, 'Stop Loss Hit', details.stopLoss);
-                } else if (details?.takeProfit && ((side !== 'short' && newPrice! >= details.takeProfit) || (side === 'short' && newPrice! <= details.takeProfit))) {
-                    closePosition(updatedPosition.id, 'Take Profit Hit', details.takeProfit);
-                } else {
-                    // Only save to Firestore if the position is not being closed
-                    saveSubcollectionDoc('openPositions', p.id, updatedPosition);
-                }
+        setOpenPositions(prev => prev.map(p => {
+          if (p.symbol === symbol) {
+            const unrealizedPnl = (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1);
+            const updatedPosition = { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
+            
+            const { details, liquidationPrice, side } = updatedPosition;
+            if (liquidationPrice && ((side === 'long' && newPrice! <= liquidationPrice) || (side === 'short' && newPrice! >= liquidationPrice))) {
+                closePosition(updatedPosition.id, 'Position Liquidated', liquidationPrice);
+            } else if (details?.stopLoss && ((side !== 'short' && newPrice! <= details.stopLoss) || (side === 'short' && newPrice! >= details.stopLoss))) {
+                closePosition(updatedPosition.id, 'Stop Loss Hit', details.stopLoss);
+            } else if (details?.takeProfit && ((side !== 'short' && newPrice! >= details.takeProfit) || (side === 'short' && newPrice! <= details.takeProfit))) {
+                closePosition(updatedPosition.id, 'Take Profit Hit', details.takeProfit);
             }
-        });
+            return updatedPosition;
+          }
+          return p;
+        }));
     };
-}, [toast, executeTrigger, closePosition, saveSubcollectionDoc, priceAlerts, tradeTriggers, openPositions]);
+}, [toast, executeTrigger, closePosition, saveSubcollectionDoc, priceAlerts, tradeTriggers]);
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
