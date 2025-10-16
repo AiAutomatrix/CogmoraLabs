@@ -611,7 +611,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     if (!positionToClose) return undefined;
     
-    // This is a critical Firestore operation
     deleteSubcollectionDoc('openPositions', positionId);
 
     const exitPrice = closePriceParam ?? positionToClose.currentPrice ?? 0;
@@ -684,6 +683,41 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
             
             if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+
+            // This is a safe place to fire toasts because it's an async event handler
+            setPriceAlerts(prevAlerts => {
+                const alert = prevAlerts[symbol];
+                if (alert && !alert.triggered) {
+                    const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
+                    if (conditionMet) {
+                        if (!alert.notified) {
+                            toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
+                        }
+                        return { ...prevAlerts, [symbol]: { ...alert, triggered: true, notified: true } };
+                    }
+                }
+                return prevAlerts;
+            });
+    
+            setTradeTriggers(prevTriggers => {
+                const executedTriggerIds = new Set<string>();
+                const triggersToKeep = [...prevTriggers];
+    
+                triggersToKeep.forEach(trigger => {
+                    if (trigger.symbol === symbol && trigger.status === 'active') {
+                        const conditionMet = (trigger.condition === 'above' && newPrice >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
+                        if (conditionMet) {
+                            executeTrigger(trigger, newPrice!);
+                            executedTriggerIds.add(trigger.id);
+                        }
+                    }
+                });
+    
+                if (executedTriggerIds.size > 0) {
+                    return triggersToKeep.filter(t => !executedTriggerIds.has(t.id));
+                }
+                return triggersToKeep;
+            });
         
             setWatchlist(prev => prev.map(item =>
                 item.symbol === symbol ? {
@@ -761,40 +795,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                     return p;
                 }).filter(p => p !== null) as OpenPosition[]
             );
-
-            setPriceAlerts(prevAlerts => {
-                const alert = prevAlerts[symbol];
-                if (alert && !alert.triggered) {
-                    const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
-                    if (conditionMet) {
-                        if (!alert.notified) {
-                            toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
-                        }
-                        return { ...prevAlerts, [symbol]: { ...alert, triggered: true, notified: true } };
-                    }
-                }
-                return prevAlerts;
-            });
-    
-            setTradeTriggers(prevTriggers => {
-                const executedTriggerIds = new Set<string>();
-                const triggersToKeep = [...prevTriggers];
-    
-                triggersToKeep.forEach(trigger => {
-                    if (trigger.symbol === symbol && trigger.status === 'active') {
-                        const conditionMet = (trigger.condition === 'above' && newPrice >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
-                        if (conditionMet) {
-                            executeTrigger(trigger, newPrice!);
-                            executedTriggerIds.add(trigger.id);
-                        }
-                    }
-                });
-    
-                if (executedTriggerIds.size > 0) {
-                    return triggersToKeep.filter(t => !executedTriggerIds.has(t.id));
-                }
-                return triggersToKeep;
-            });
         }
     }, [toast, executeTrigger, closePosition]);
 
@@ -944,12 +944,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     setAutomationConfigInternal(config);
     saveDataToFirestore({ automationConfig: config });
     if (config.updateMode === 'auto-refresh') {
-        const lastScrape = localStorage.getItem('paperTrading_lastScrapeTime'); // Use local storage for initial sync
-        const nextTime = (lastScrape ? parseInt(lastScrape, 10) : Date.now()) + config.refreshInterval;
-        setNextScrapeTime(nextTime);
         toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
     } else {
-        setNextScrapeTime(0);
         if (automationIntervalRef.current) {
           clearInterval(automationIntervalRef.current);
           automationIntervalRef.current = null;
@@ -961,41 +957,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const setAiSettings = useCallback((settings: AiTriggerSettings) => {
       setAiSettingsInternal(settings);
       saveDataToFirestore({ aiSettings: settings });
-      if (settings.scheduleInterval) {
-          const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
-          const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : 0;
-          const timeSinceLast = Date.now() - lastScrapeTime;
-          const initialDelay = timeSinceLast > settings.scheduleInterval ? 0 : settings.scheduleInterval - timeSinceLast;
-
-          const timeoutId = setTimeout(() => {
-            handleAiTriggerAnalysis(true);
-            localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-            setNextAiScrapeTime(Date.now() + settings.scheduleInterval!);
-
-            aiAutomationIntervalRef.current = setInterval(() => {
-              handleAiTriggerAnalysis(true);
-              localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-              setNextAiScrapeTime(Date.now() + settings.scheduleInterval!);
-            }, settings.scheduleInterval!);
-          }, initialDelay);
-
-          setNextAiScrapeTime(Date.now() + initialDelay);
-
-          return () => {
-              clearTimeout(timeoutId);
-              if (aiAutomationIntervalRef.current) {
-                  clearInterval(aiAutomationIntervalRef.current);
-              }
-          };
-      } else {
-          setNextAiScrapeTime(0);
-          if (aiAutomationIntervalRef.current) {
-            clearInterval(aiAutomationIntervalRef.current);
-            aiAutomationIntervalRef.current = null;
-          }
+      if (!settings.scheduleInterval) {
           toast({ title: 'AI Automation Saved', description: `AI agent auto-run has been disabled.` });
       }
-  }, [toast, saveDataToFirestore, handleAiTriggerAnalysis]);
+  }, [toast, saveDataToFirestore]);
 
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, isManualScrape: boolean = false) => {
     if (isManualScrape) {
@@ -1092,78 +1057,34 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
   
   useEffect(() => {
-    if (!isLoaded) return;
-    if (automationIntervalRef.current) {
-        clearInterval(automationIntervalRef.current);
+    if (!isLoaded || automationConfig.updateMode !== 'auto-refresh' || !automationConfig.refreshInterval) {
+        if (automationIntervalRef.current) clearInterval(automationIntervalRef.current);
+        return;
     }
-    if (automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
-        
-        const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
-        const timeSinceLast = Date.now() - lastScrapeTime;
-        const initialDelay = Math.max(0, automationConfig.refreshInterval - timeSinceLast);
 
-        const timeoutId = setTimeout(() => {
-          runAutomation();
-          localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-          setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
-          automationIntervalRef.current = setInterval(() => {
-            runAutomation();
-            localStorage.setItem('paperTrading_lastScrapeTime', Date.now().toString());
-            setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
-          }, automationConfig.refreshInterval);
-        }, initialDelay);
-        
-        setNextScrapeTime(Date.now() + initialDelay);
+    const runAutomation = () => applyWatchlistAutomation(automationConfig);
+    automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
+    setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
 
-        return () => {
-          clearTimeout(timeoutId);
-          if (automationIntervalRef.current) {
-            clearInterval(automationIntervalRef.current);
-          }
-        };
-    } else {
-        setNextScrapeTime(0);
-    }
-}, [isLoaded, automationConfig, applyWatchlistAutomation]);
+    return () => {
+        if (automationIntervalRef.current) clearInterval(automationIntervalRef.current);
+    };
+  }, [isLoaded, automationConfig, applyWatchlistAutomation]);
 
 
   useEffect(() => {
-    if (!isLoaded) return;
-    if (aiAutomationIntervalRef.current) {
-      clearInterval(aiAutomationIntervalRef.current);
+    if (!isLoaded || !aiSettings.scheduleInterval) {
+      if (aiAutomationIntervalRef.current) clearInterval(aiAutomationIntervalRef.current);
+      return;
     }
-    if (aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
-      const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
-      
-      const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
-      const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : 0;
-      const timeSinceLast = Date.now() - lastScrapeTime;
-      const initialDelay = timeSinceLast > aiSettings.scheduleInterval ? 0 : aiSettings.scheduleInterval - timeSinceLast;
 
-      const timeoutId = setTimeout(() => {
-        runScheduledAnalysis();
-        localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-        setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
-
-        aiAutomationIntervalRef.current = setInterval(() => {
-          runScheduledAnalysis();
-          localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
-          setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval!);
-        }, aiSettings.scheduleInterval!);
-      }, initialDelay);
-      
-      setNextAiScrapeTime(Date.now() + initialDelay);
-
-      return () => {
-        clearTimeout(timeoutId);
-        if (aiAutomationIntervalRef.current) {
-          clearInterval(aiAutomationIntervalRef.current);
-        }
-      };
-    } else {
-      setNextAiScrapeTime(0);
-    }
+    const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
+    aiAutomationIntervalRef.current = setInterval(runScheduledAnalysis, aiSettings.scheduleInterval);
+    setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval);
+    
+    return () => {
+      if (aiAutomationIntervalRef.current) clearInterval(aiAutomationIntervalRef.current);
+    };
   }, [isLoaded, aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
 
   const connectToSpot = useCallback(async () => {
