@@ -697,7 +697,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
         
-        // Check for Trade Triggers
         const executedTriggerIds = new Set<string>();
         tradeTriggers.forEach(trigger => {
             if (trigger.symbol === symbol && trigger.status === 'active') {
@@ -717,8 +716,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
 
         if (executedTriggerIds.size > 0) {
-            setTradeTriggers(prev => prev.filter(t => !executedTriggerIds.has(t.id)));
             executedTriggerIds.forEach(id => deleteSubcollectionDoc('tradeTriggers', id));
+            setTradeTriggers(prev => prev.filter(t => !executedTriggerIds.has(t.id)));
         }
 
         setWatchlist(prev => prev.map(item =>
@@ -1176,7 +1175,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     watchlist.forEach(w => w.type === 'spot' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'spot' && symbols.add(t.symbol));
     return Array.from(symbols);
-  }, [openPositions, watchlist, tradeTriggers]);
+  }, [openPositions, watchlist, tradeTriggers, isLoaded]);
 
   const allFuturesSymbols = useMemo(() => {
     const symbols = new Set<string>();
@@ -1184,7 +1183,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'futures' && symbols.add(t.symbol));
     return Array.from(symbols);
-  }, [openPositions, watchlist, tradeTriggers]);
+  }, [openPositions, watchlist, tradeTriggers, isLoaded]);
   
   useEffect(() => {
     if (!isLoaded) return;
@@ -1337,5 +1336,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
