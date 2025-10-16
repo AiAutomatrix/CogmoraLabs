@@ -468,7 +468,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
       }, 0);
   }, [balance, toast]);
-  
+
   const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
     setPriceAlerts(prev => {
       const alert = prev[symbol];
@@ -714,6 +714,34 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, []);
 
+  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
+    let symbolName = '';
+    setOpenPositions(prev =>
+      prev.map(pos => {
+        if (pos.id === positionId) {
+          symbolName = pos.symbolName;
+          return {
+            ...pos,
+            details: {
+              ...pos.details,
+              stopLoss: sl,
+              takeProfit: tp,
+            }
+          };
+        }
+        return pos;
+      })
+    );
+    if (symbolName) {
+      setTimeout(() => {
+        toast({
+          title: "Position Updated",
+          description: `SL/TP updated for ${symbolName}.`
+        });
+      }, 0);
+    }
+  }, [toast]);
+
   const handleAiTriggerAnalysis = useCallback(async (isScheduled = false): Promise<AgentActionPlan & {isLoading: boolean}> => {
     if (watchlist.length === 0) {
       const msg = "Watchlist is empty, skipping analysis.";
@@ -729,10 +757,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
     const currentEquity = balance + totalUnrealizedPNL;
     const totalRealizedPNL = tradeHistory.filter(t => t.status === "closed").reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
-    const winTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
-    const losingTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
-    const totalClosedTrades = winTrades + losingTrades;
-    const winRate = totalClosedTrades > 0 ? (winTrades / totalClosedTrades) * 100 : 0;
+    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
+    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
+    const totalClosedTrades = wonTrades + lostTrades;
+    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
     const currentAccountMetrics = {
       balance,
@@ -740,6 +768,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       realizedPnl: totalRealizedPNL,
       unrealizedPnl: totalUnrealizedPNL,
       winRate,
+      wonTrades,
+      lostTrades,
     };
 
     try {
@@ -794,7 +824,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
-  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, tradeHistory]);
+  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, tradeHistory, updatePositionSlTp]);
 
 
   // Auto-close positions on SL/TP or Liquidation
@@ -1057,36 +1087,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, [priceAlerts, watchlist, toast]);
 
-  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
-    let symbolName = '';
-    setOpenPositions(prev =>
-      prev.map(pos => {
-        if (pos.id === positionId) {
-          symbolName = pos.symbolName;
-          return {
-            ...pos,
-            details: {
-              ...pos.details,
-              stopLoss: sl,
-              takeProfit: tp,
-            }
-          };
-        }
-        return pos;
-      })
-    );
-    if (symbolName) {
-      setTimeout(() => {
-        toast({
-          title: "Position Updated",
-          description: `SL/TP updated for ${symbolName}.`
-        });
-      }, 0);
-    }
-  }, [toast]);
   
   const connectToSpot = useCallback(async () => {
-    if (spotWs.current) spotWs.current.close();
+    if (spotWs.current) {
+      return;
+    }
     setSpotWsStatus("fetching_token");
     try {
         const tokenData = await getSpotWsToken();
@@ -1125,11 +1130,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         };
 
         const handleCloseOrError = (event: Event | CloseEvent) => {
-            const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
-            setSpotWsStatus("error");
+            spotWs.current = null;
             if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-            
-            if (spotSubscriptionsRef.current.size > 0) {
+            setSpotWsStatus("disconnected");
+            console.error("Spot WS Error/Close:", event);
+
+            if (spotSubscriptionsRef.current.size > 0) { // Only reconnect if there are subscriptions
               spotReconnectAttempts.current++;
               const delay = Math.min(1000 * (2 ** spotReconnectAttempts.current), 30000); 
               spotReconnectTimeoutRef.current = setTimeout(() => {
@@ -1139,14 +1145,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         };
 
         ws.onclose = handleCloseOrError;
-        ws.onerror = (e) => {
-            console.error("Spot WS Error", e);
-            handleCloseOrError(e)
-        };
+        ws.onerror = handleCloseOrError;
 
     } catch (error) {
         setSpotWsStatus("error");
         const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
+        console.error("Spot WS Error", error);
         setTimeout(() => {
           toast({ title: "Spot WebSocket Error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
         }, 0);
@@ -1154,11 +1158,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   const connectToFutures = useCallback(async () => {
-    if (futuresWs.current) futuresWs.current.close();
+    if (futuresWs.current) {
+        return;
+    }
     setFuturesWsStatus("fetching_token");
     try {
         const tokenData = await getFuturesWsToken();
-        if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Futures WebSocket token");
+        if (tokenData.code !== "200000") throw new Error(`Failed to fetch KuCoin Futures WebSocket token: ${tokenData.data}`);
 
         futuresReconnectAttempts.current = 0;
         if (futuresReconnectTimeoutRef.current) clearTimeout(futuresReconnectTimeoutRef.current);
@@ -1191,11 +1197,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         };
 
         const handleCloseOrError = (event: Event | CloseEvent) => {
-            const errorMessage = event instanceof ErrorEvent ? event.message : (event instanceof CloseEvent ? `Code: ${event.code}` : 'Unknown Error');
-            setFuturesWsStatus("error");
+            futuresWs.current = null;
             if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
-
-            if (futuresSubscriptionsRef.current.size > 0) {
+            setFuturesWsStatus("disconnected");
+            console.error("Futures WS Error/Close:", event instanceof CloseEvent ? `Code: ${event.code}` : event);
+            
+            if (futuresSubscriptionsRef.current.size > 0) { // Only reconnect if there are subscriptions
               futuresReconnectAttempts.current++;
               const delay = Math.min(1000 * (2 ** futuresReconnectAttempts.current), 30000); // Exponential backoff up to 30s
               futuresReconnectTimeoutRef.current = setTimeout(() => {
@@ -1204,18 +1211,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         };
 
-        ws.onclose = (e) => {
-            console.error("Futures WS Error/Close:", `Code: ${e.code}`);
-            handleCloseOrError(e);
-        }
-        ws.onerror = (e) => {
-            console.error("Futures WS Error", e);
-            handleCloseOrError(e)
-        };
+        ws.onclose = handleCloseOrError;
+        ws.onerror = handleCloseOrError;
 
     } catch (error) {
         setFuturesWsStatus("error");
         const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
+        console.error("Futures WS Error", error);
         setTimeout(() => {
           toast({ title: "Futures WebSocket Error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
         }, 0);
@@ -1238,9 +1240,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return Array.from(symbols);
   }, [openPositions, watchlist, tradeTriggers]);
   
-  const stableConnectToSpot = useCallback(connectToSpot, []);
-  const stableConnectToFutures = useCallback(connectToFutures, []);
-  
   useEffect(() => {
       if (!isLoaded) return;
   
@@ -1251,24 +1250,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           connectFn: () => void,
           type: 'spot' | 'futures'
       ) => {
-          const currentSubs = new Set(subscriptionsRef.current);
           const desiredSubs = new Set(allSymbols);
-  
-          if (desiredSubs.size === 0 && currentSubs.size > 0) {
-              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                  wsRef.current.close();
-                  wsRef.current = null;
-              }
-              subscriptionsRef.current.clear();
-              return;
-          }
   
           if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
               connectFn();
-              return;
           }
   
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              const currentSubs = new Set(subscriptionsRef.current);
               const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
               const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
   
@@ -1283,13 +1272,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
                   subscriptionsRef.current.delete(symbol);
               });
+          } else if (desiredSubs.size === 0 && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.close();
+              wsRef.current = null;
           }
       };
   
-      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, stableConnectToSpot, 'spot');
-      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, stableConnectToFutures, 'futures');
+      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot, 'spot');
+      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures, 'futures');
       
-  }, [isLoaded, allSpotSymbols, allFuturesSymbols, stableConnectToSpot, stableConnectToFutures]);
+  }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
   
   const closeAllPositions = useCallback(() => {
@@ -1403,3 +1395,6 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
+

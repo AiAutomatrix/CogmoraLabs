@@ -172,24 +172,13 @@ export const AgentActionSchema = z.union([
 export type AgentAction = z.infer<typeof AgentActionSchema>;
 
 // Correctly define the log schema as an object containing the action and the timestamp
-export const AiActionExecutionLogSchema = z.object({
-  ...AgentActionSchema.shape, // This is incorrect for unions. We need a different approach.
-  executedAt: z.number(),
-});
-// Let's redefine AiActionExecutionLog without trying to extend the union.
-// The type in PaperTradingContext will be `(AgentAction & { executedAt: number })[]`
-// This is a TypeScript-only solution, but for Zod validation, if we need it, it has to be explicit.
-// A simpler way for validation is to just have the type in code and trust the logging function.
-// For the sake of fixing the bug, I will adjust the type here to be `AgentAction & { executedAt: number }` which is a TS intersection type.
-// The actual Zod schema will be defined inline if needed, but the error comes from `AgentActionSchema.extend`.
-// Let's just create a valid Zod schema that works.
-export const AiActionExecutionLogSchemaFixed = z.intersection(
+export const AiActionExecutionLogSchema = z.intersection(
   AgentActionSchema,
   z.object({
     executedAt: z.number(),
   })
 );
-export type AiActionExecutionLog = z.infer<typeof AiActionExecutionLogSchemaFixed>;
+export type AiActionExecutionLog = z.infer<typeof AiActionExecutionLogSchema>;
 
 
 export const AgentActionPlanSchema = z.object({
@@ -216,6 +205,8 @@ const AccountMetricsSchema = z.object({
   realizedPnl: z.number().describe("The sum of all profit and loss from closed trades."),
   unrealizedPnl: z.number().describe("The current floating profit and loss from all open positions."),
   winRate: z.number().describe("The percentage of closed trades that were profitable."),
+  wonTrades: z.number().describe("The total number of profitable closed trades."),
+  lostTrades: z.number().describe("The total number of unprofitable or break-even closed trades."),
 });
 
 export const ProposeTradeTriggersInputSchema = z.object({
@@ -516,8 +507,8 @@ export interface KucoinTicker {
   volValue: string;
   last: string;
   averagePrice?: string;
-  takerFeeRate?: string;
-  makerFeeRate?: string;
+  takerFeeRate: string;
+  makerFeeRate: string;
   takerCoefficient?: string;
   makerCoefficient?: string;
   price?: string; // Add price to match ticker data structure
@@ -588,5 +579,7 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    
 
     
