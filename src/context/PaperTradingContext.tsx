@@ -406,8 +406,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               return updatedPositions;
           } else {
               const details: OpenPositionDetails = { triggeredBy };
-              if (stopLoss) details.stopLoss = stopLoss;
-              if (takeProfit) details.takeProfit = takeProfit;
+              if (stopLoss !== undefined) details.stopLoss = stopLoss;
+              if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
               const newPosition: OpenPosition = {
                   id: crypto.randomUUID(),
@@ -705,42 +705,21 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 if (conditionMet) {
                     executeTrigger(trigger, newPrice!);
                     executedTriggerIds.add(trigger.id);
+                    if (trigger.cancelOthers) {
+                        tradeTriggers.forEach(otherTrigger => {
+                            if (otherTrigger.symbol === trigger.symbol && otherTrigger.id !== trigger.id) {
+                                executedTriggerIds.add(otherTrigger.id);
+                            }
+                        });
+                    }
                 }
             }
         });
 
         if (executedTriggerIds.size > 0) {
-            setTradeTriggers(prev => {
-                const triggersToDelete = prev.filter(t => executedTriggerIds.has(t.id));
-                
-                let triggersToKeep = prev.filter(t => !executedTriggerIds.has(t.id));
-
-                if (userContextDocRef && firestore) {
-                    const batch = writeBatch(firestore);
-                    triggersToDelete.forEach(trigger => {
-                        batch.delete(doc(userContextDocRef, 'tradeTriggers', trigger.id));
-                        if (trigger.cancelOthers) {
-                           triggersToKeep = triggersToKeep.filter(t => {
-                               if (t.symbol === trigger.symbol) {
-                                   batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id));
-                                   return false;
-                               }
-                               return true;
-                           });
-                        }
-                    });
-                    batch.commit().catch(error => {
-                        errorEmitter.emit('permission-error', new FirestorePermissionError({
-                            path: collection(userContextDocRef, 'tradeTriggers').path,
-                            operation: 'write',
-                        }));
-                    });
-                }
-                
-                return triggersToKeep;
-            });
+            setTradeTriggers(prev => prev.filter(t => !executedTriggerIds.has(t.id)));
+            executedTriggerIds.forEach(id => deleteSubcollectionDoc('tradeTriggers', id));
         }
-
 
         setWatchlist(prev => prev.map(item =>
             item.symbol === symbol ? {
@@ -769,7 +748,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             return updatedPosition;
         }));
     };
-}, [priceAlerts, tradeTriggers, toast, executeTrigger, closePosition, saveSubcollectionDoc, userContextDocRef, firestore]);
+}, [priceAlerts, tradeTriggers, toast, executeTrigger, closePosition, saveSubcollectionDoc, deleteSubcollectionDoc]);
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -1358,3 +1337,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
