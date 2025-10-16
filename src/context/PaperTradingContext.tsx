@@ -725,16 +725,30 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return { analysis: msg, plan: [], isLoading: false };
     }
 
+    // Re-fetch account metrics directly here to ensure freshness
+    const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
+    const currentEquity = balance + totalUnrealizedPNL;
+    const totalRealizedPNL = tradeHistory.filter(t => t.status === "closed").reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
+    const winTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
+    const losingTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
+    const totalClosedTrades = winTrades + losingTrades;
+    const winRate = totalClosedTrades > 0 ? (winTrades / totalClosedTrades) * 100 : 0;
+
+    const currentAccountMetrics = {
+      balance,
+      equity: currentEquity,
+      realizedPnl: totalRealizedPNL,
+      unrealizedPnl: totalUnrealizedPNL,
+      winRate,
+    };
+
     try {
       const response = await proposeTradeTriggers({ 
         watchlist, 
         settings: aiSettings, 
         activeTriggers: tradeTriggers, 
         openPositions: openPositions,
-        accountMetrics: {
-          balance,
-          ...accountMetrics
-        }
+        accountMetrics: currentAccountMetrics
       });
       
       setLastAiActionPlan(response);
@@ -780,7 +794,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
-  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction]);
+  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, tradeHistory]);
 
 
   // Auto-close positions on SL/TP or Liquidation
@@ -1072,8 +1086,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   const connectToSpot = useCallback(async () => {
-    // This function is memoized with an empty dependency array
-    // so it's only created once.
     if (spotWs.current) spotWs.current.close();
     setSpotWsStatus("fetching_token");
     try {
@@ -1123,17 +1135,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               spotReconnectTimeoutRef.current = setTimeout(() => {
                   connectToSpot();
               }, delay);
-            } else {
-               if (spotWs.current) {
-                    spotWs.current.close();
-                    spotWs.current = null;
-                }
-                spotSubscriptionsRef.current.clear();
             }
         };
 
         ws.onclose = handleCloseOrError;
-        ws.onerror = handleCloseOrError;
+        ws.onerror = (e) => {
+            console.error("Spot WS Error", e);
+            handleCloseOrError(e)
+        };
 
     } catch (error) {
         setSpotWsStatus("error");
@@ -1145,7 +1154,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast]);
   
   const connectToFutures = useCallback(async () => {
-    // This function is also memoized with an empty dependency array.
     if (futuresWs.current) futuresWs.current.close();
     setFuturesWsStatus("fetching_token");
     try {
@@ -1193,17 +1201,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               futuresReconnectTimeoutRef.current = setTimeout(() => {
                   connectToFutures();
               }, delay);
-            } else {
-               if (futuresWs.current) {
-                    futuresWs.current.close();
-                    futuresWs.current = null;
-                }
-                futuresSubscriptionsRef.current.clear();
             }
         };
 
-        ws.onclose = handleCloseOrError;
-        ws.onerror = handleCloseOrError;
+        ws.onclose = (e) => {
+            console.error("Futures WS Error/Close:", `Code: ${e.code}`);
+            handleCloseOrError(e);
+        }
+        ws.onerror = (e) => {
+            console.error("Futures WS Error", e);
+            handleCloseOrError(e)
+        };
 
     } catch (error) {
         setFuturesWsStatus("error");
@@ -1214,23 +1222,28 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
 
-  const spotPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'spot').map(p => p.symbol), [openPositions]);
-  const futuresPositionSymbols = useMemo(() => openPositions.filter(p => p.positionType === 'futures').map(p => p.symbol), [openPositions]);
+  const allSpotSymbols = useMemo(() => {
+    const symbols = new Set<string>();
+    openPositions.forEach(p => p.positionType === 'spot' && symbols.add(p.symbol));
+    watchlist.forEach(w => w.type === 'spot' && symbols.add(w.symbol));
+    tradeTriggers.forEach(t => t.type === 'spot' && symbols.add(t.symbol));
+    return Array.from(symbols);
+  }, [openPositions, watchlist, tradeTriggers]);
 
-  const spotWatchlistSymbols = useMemo(() => watchlist.filter(item => item.type === 'spot').map(item => item.symbol), [watchlist]);
-  const futuresWatchlistSymbols = useMemo(() => watchlist.filter(item => item.type === 'futures').map(item => item.symbol), [watchlist]);
+  const allFuturesSymbols = useMemo(() => {
+    const symbols = new Set<string>();
+    openPositions.forEach(p => p.positionType === 'futures' && symbols.add(p.symbol));
+    watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
+    tradeTriggers.forEach(t => t.type === 'futures' && symbols.add(t.symbol));
+    return Array.from(symbols);
+  }, [openPositions, watchlist, tradeTriggers]);
   
-  const spotTriggerSymbols = useMemo(() => tradeTriggers.filter(t => t.type === 'spot').map(t => t.symbol), [tradeTriggers]);
-  const futuresTriggerSymbols = useMemo(() => tradeTriggers.filter(t => t.type === 'futures').map(t => t.symbol), [tradeTriggers]);
-
-  const allSpotSymbols = useMemo(() => Array.from(new Set([...spotPositionSymbols, ...spotWatchlistSymbols, ...spotTriggerSymbols])), [spotPositionSymbols, spotWatchlistSymbols, spotTriggerSymbols]);
-  const allFuturesSymbols = useMemo(() => Array.from(new Set([...futuresPositionSymbols, ...futuresWatchlistSymbols, ...futuresTriggerSymbols])), [futuresPositionSymbols, futuresWatchlistSymbols, futuresTriggerSymbols]);
+  const stableConnectToSpot = useCallback(connectToSpot, []);
+  const stableConnectToFutures = useCallback(connectToFutures, []);
   
-  
-  // Main connection management effect for dynamic subscriptions
   useEffect(() => {
       if (!isLoaded) return;
-
+  
       const manageSubscriptions = (
           wsRef: React.MutableRefObject<WebSocket | null>,
           allSymbols: string[],
@@ -1238,49 +1251,45 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           connectFn: () => void,
           type: 'spot' | 'futures'
       ) => {
-          const currentSubs = subscriptionsRef.current;
+          const currentSubs = new Set(subscriptionsRef.current);
           const desiredSubs = new Set(allSymbols);
-
-          // If no symbols are needed and connection is active, close it.
-          if (desiredSubs.size === 0) {
+  
+          if (desiredSubs.size === 0 && currentSubs.size > 0) {
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                   wsRef.current.close();
-                  wsRef.current = null; // Important to nullify after close
+                  wsRef.current = null;
               }
               subscriptionsRef.current.clear();
               return;
           }
-
-          // If symbols are needed and connection is not active, establish it.
+  
           if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
-              subscriptionsRef.current = desiredSubs; // Set desired subs before connecting
               connectFn();
               return;
           }
-
-          // If connection is open, manage individual subscriptions
+  
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
               const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
               const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
-
+  
               const topicPrefix = type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
-
+  
               toAdd.forEach(symbol => {
                   wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `${topicPrefix}${symbol}`, response: true }));
+                  subscriptionsRef.current.add(symbol);
               });
-
+  
               toRemove.forEach(symbol => {
                   wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
+                  subscriptionsRef.current.delete(symbol);
               });
-              
-              subscriptionsRef.current = desiredSubs;
           }
       };
-
-      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot, 'spot');
-      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures, 'futures');
+  
+      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, stableConnectToSpot, 'spot');
+      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, stableConnectToFutures, 'futures');
       
-  }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
+  }, [isLoaded, allSpotSymbols, allFuturesSymbols, stableConnectToSpot, stableConnectToFutures]);
   
   
   const closeAllPositions = useCallback(() => {
