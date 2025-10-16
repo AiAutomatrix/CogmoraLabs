@@ -10,10 +10,19 @@ export const UserProfileSchema = z.object({
   email: z.string().email(),
   displayName: z.string().optional(),
   photoURL: z.string().url().optional(),
-  balance: z.number().default(100000),
   createdAt: z.any(), // Typically a Firestore Timestamp
 });
 export type UserProfile = z.infer<typeof UserProfileSchema>;
+
+export const FirestorePaperTradingContextSchema = z.object({
+  balance: z.number().default(100000),
+  automationConfig: z.any(), // Keeping it simple for now
+  aiSettings: z.any(),
+  lastAiActionPlan: z.any().nullable(),
+  aiActionLogs: z.array(z.any()),
+});
+export type FirestorePaperTradingContext = z.infer<typeof FirestorePaperTradingContextSchema>;
+
 
 export const PaperTradeSchema = z.object({
   id: z.string(),
