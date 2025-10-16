@@ -581,24 +581,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc]);
 
-  const checkPriceAlerts = useCallback((symbol: string, newPrice: number) => {
-    setPriceAlerts(prev => {
-      const alert = prev[symbol];
-      if (!alert || alert.triggered) return prev;
-
-      const conditionMet =
-        (alert.condition === 'above' && newPrice >= alert.price) ||
-        (alert.condition === 'below' && newPrice <= alert.price);
-
-      if (conditionMet) {
-        const newAlert = { ...alert, triggered: true };
-        saveSubcollectionDoc('priceAlerts', symbol, newAlert);
-        return { ...prev, [symbol]: newAlert};
-      }
-      return prev;
-    });
-  }, [saveSubcollectionDoc]);
-
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
     toast({
       title: 'Trade Trigger Executed!',
@@ -619,44 +601,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
   }, [buy, futuresBuy, futuresSell, toast, watchlist]);
-
-  const checkTradeTriggers = useCallback((symbol: string, newPrice: number) => {
-    let executedTriggerIds = new Set<string>();
-    let cancelSymbols = new Set<string>();
-
-    setTradeTriggers(prevTriggers => {
-      const activeTriggersForSymbol = prevTriggers.filter(t => t.status === 'active' && t.symbol === symbol);
-
-      activeTriggersForSymbol.forEach(trigger => {
-        if (executedTriggerIds.has(trigger.id)) return;
-
-        const conditionMet =
-          (trigger.condition === 'above' && newPrice >= trigger.targetPrice) ||
-          (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
-
-        if (conditionMet) {
-          executeTrigger(trigger, newPrice);
-          executedTriggerIds.add(trigger.id);
-          deleteSubcollectionDoc('tradeTriggers', trigger.id);
-          if (trigger.cancelOthers) {
-            cancelSymbols.add(trigger.symbol);
-          }
-        }
-      });
-
-      if (executedTriggerIds.size === 0) return prevTriggers;
-
-      return prevTriggers.filter(t => {
-        if (executedTriggerIds.has(t.id)) return false;
-        if (cancelSymbols.has(t.symbol) && !executedTriggerIds.has(t.id)) {
-            deleteSubcollectionDoc('tradeTriggers', t.id);
-            return false;
-        }
-        return true;
-      });
-    });
-  }, [executeTrigger, deleteSubcollectionDoc]);
-
+  
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
   
   useEffect(() => {
@@ -678,9 +623,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       
       if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
-  
-      checkPriceAlerts(symbol, newPrice);
-      checkTradeTriggers(symbol, newPrice);
   
       setWatchlist(prev => prev.map(item =>
           item.symbol === symbol ? {
@@ -709,7 +651,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         })
       );
     }
-  }, [checkPriceAlerts, checkTradeTriggers]);
+  }, []);
 
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
     let positionToClose: OpenPosition | null = null;
@@ -911,7 +853,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
 
 
-  // Auto-close positions on SL/TP or Liquidation
+  // Effect for checking SL/TP and Liquidations
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -963,8 +905,72 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         closePosition(id, reason, closePrice);
       }
     });
-
   }, [openPositions, isLoaded, closePosition]);
+  
+  // Effect for checking price alerts
+  useEffect(() => {
+    if (!isLoaded) return;
+    Object.entries(priceAlerts).forEach(([symbol, alert]) => {
+      const watchlistItem = watchlist.find(item => item.symbol === symbol);
+      if (!watchlistItem || !watchlistItem.currentPrice || alert.triggered) return;
+      
+      const conditionMet =
+        (alert.condition === 'above' && watchlistItem.currentPrice >= alert.price) ||
+        (alert.condition === 'below' && watchlistItem.currentPrice <= alert.price);
+
+      if (conditionMet) {
+          setPriceAlerts(prev => ({...prev, [symbol]: { ...prev[symbol], triggered: true }}));
+          saveSubcollectionDoc('priceAlerts', symbol, { ...alert, triggered: true });
+          if (!alert.notified) {
+            toast({
+              title: "Price Alert Triggered!",
+              description: `${watchlistItem.symbolName} has reached your alert price of ${alert.price}.`,
+            });
+            setPriceAlerts(prev => ({...prev, [symbol]: { ...prev[symbol], notified: true }}));
+             saveSubcollectionDoc('priceAlerts', symbol, { ...alert, triggered: true, notified: true });
+          }
+      }
+    });
+  }, [watchlist, priceAlerts, isLoaded, toast, saveSubcollectionDoc]);
+
+  // Effect for checking trade triggers
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    let executedTriggerIds = new Set<string>();
+    let cancelSymbols = new Set<string>();
+
+    tradeTriggers.forEach(trigger => {
+        if (trigger.status !== 'active' || executedTriggerIds.has(trigger.id)) return;
+        
+        const currentPrice = watchlist.find(item => item.symbol === trigger.symbol)?.currentPrice;
+        if (!currentPrice) return;
+
+        const conditionMet =
+          (trigger.condition === 'above' && currentPrice >= trigger.targetPrice) ||
+          (trigger.condition === 'below' && currentPrice <= trigger.targetPrice);
+
+        if (conditionMet) {
+          executeTrigger(trigger, currentPrice);
+          executedTriggerIds.add(trigger.id);
+          deleteSubcollectionDoc('tradeTriggers', trigger.id);
+          if (trigger.cancelOthers) {
+            cancelSymbols.add(trigger.symbol);
+          }
+        }
+    });
+
+    if (executedTriggerIds.size > 0 || cancelSymbols.size > 0) {
+        setTradeTriggers(prevTriggers => prevTriggers.filter(t => {
+            if (executedTriggerIds.has(t.id)) return false;
+            if (cancelSymbols.has(t.symbol)) {
+                deleteSubcollectionDoc('tradeTriggers', t.id);
+                return false;
+            }
+            return true;
+        }));
+    }
+  }, [watchlist, tradeTriggers, isLoaded, executeTrigger, deleteSubcollectionDoc]);
 
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     setAutomationConfigInternal(config);
@@ -1167,21 +1173,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setNextAiScrapeTime(0);
     }
   }, [isLoaded, aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
-  
-  useEffect(() => {
-    Object.entries(priceAlerts).forEach(([symbol, alert]) => {
-      if (alert.triggered && !notifiedAlerts.current.has(symbol)) {
-        const watchlistItem = watchlist.find(item => item.symbol === symbol);
-        toast({
-          title: "Price Alert Triggered!",
-          description: `${watchlistItem?.symbolName || symbol} has reached your alert price of ${alert.price}.`,
-        });
-        notifiedAlerts.current.add(symbol);
-      }
-    });
-  }, [priceAlerts, watchlist, toast]);
 
-  
   const connectToSpot = useCallback(async () => {
     if (spotWs.current) {
       return;
@@ -1531,5 +1523,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
