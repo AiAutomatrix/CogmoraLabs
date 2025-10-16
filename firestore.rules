@@ -1,228 +1,169 @@
+/**
+ * @fileoverview Firestore Security Rules for Cogmora Labs Paper Trading Engine.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model. Each user has a dedicated data tree
+ * under `/users/{userId}`, and only the authenticated user with the matching `uid` can
+ * read or write data within their own tree.
+ *
+ * Data Structure:
+ * - `/users/{userId}`: Stores user profile information.
+ * - `/users/{userId}/paperTradingContext/main`: Singleton document with the user's paper trading settings.
+ * - `/users/{userId}/paperTradingContext/main/openPositions/{positionId}`: Open positions.
+ * - `/users/{userId}/paperTradingContext/main/tradeHistory/{tradeId}`: Historical trades.
+ * - `/users/{userId}/paperTradingContext/main/watchlist/{symbol}`: User's watchlist.
+ * - `/users/{userId}/paperTradingContext/main/tradeTriggers/{triggerId}`: Trade triggers.
+ * - `/users/{userId}/paperTradingContext/main/priceAlerts/{symbol}`: Price alerts.
+ *
+ * Key Security Decisions:
+ * - User listing is disallowed.
+ * - Only authenticated users can access their own data.
+ * - No public data access is permitted.
+ *
+ * Denormalization for Authorization:
+ *  - The rules rely on the `request.auth.uid` to match the `userId` in the path. No denormalization is needed.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Protects the top-level user profiles.
+     * @description Secure user profiles. Only the authenticated user can read/write their own profile.
      * @path /users/{userId}
-     * @allow (create) - Authenticated user can create their own profile.
-     * @allow (get) - Authenticated user can read their own profile.
-     * @allow (update) - Authenticated user can update their own profile.
-     * @allow (delete) - Authenticated user can delete their own profile.
-     * @deny (list) - Prevents listing all user profiles.
-     * @deny (create) - Unauthenticated users cannot create profiles.
-     * @deny (update) - Authenticated user cannot update another user's profile.
-     * @deny (delete) - Authenticated user cannot delete another user's profile.
-     * @principle Enforces user ownership and prevents unauthorized access to user profiles.
+     * @allow (create) - User with UID 'user123' can create their profile if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their profile if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their profile if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create a profile with document ID 'user123'.
+     * @deny (get, list) - User with UID 'user456' cannot read the profile of 'user123'.
+     * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects the paper trading context for a user.
+     * @description Secure the main paper trading context for a user. Only the owner can access.
      * @path /users/{userId}/paperTradingContext/main
-     * @allow (create) - Authenticated user can create their own paper trading context.
-     * @allow (get) - Authenticated user can read their own paper trading context.
-     * @allow (update) - Authenticated user can update their own paper trading context.
-     * @allow (delete) - Authenticated user can delete their own paper trading context.
-     * @deny (create) - Unauthenticated users cannot create paper trading contexts.
-     * @deny (update) - Authenticated user cannot update another user's paper trading context.
-     * @deny (delete) - Authenticated user cannot delete another user's paper trading context.
-     * @principle Enforces user ownership and prevents unauthorized access to paper trading context.
+     * @allow (create) - User with UID 'user123' can create their trading context if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their trading context if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their trading context if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create the trading context for 'user123'.
+     * @deny (get, list) - User with UID 'user456' cannot read the trading context of 'user123'.
+     * @principle Restricts access to a user's own paper trading settings.
      */
     match /users/{userId}/paperTradingContext/main {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects the open positions for a user.
+     * @description Secure open positions. Only the owner can access their own positions.
      * @path /users/{userId}/paperTradingContext/main/openPositions/{positionId}
-     * @allow (create) - Authenticated user can create their own open position.
-     * @allow (get) - Authenticated user can read their own open position.
-     * @allow (update) - Authenticated user can update their own open position.
-     * @allow (delete) - Authenticated user can delete their own open position.
-     * @allow (list) - Authenticated user can list their own open positions.
-     * @deny (create) - Unauthenticated users cannot create open positions.
-     * @deny (update) - Authenticated user cannot update another user's open position.
-     * @deny (delete) - Authenticated user cannot delete another user's open position.
-     * @principle Enforces user ownership and prevents unauthorized access to open positions.
+     * @allow (create) - User with UID 'user123' can create a position under their context if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their positions if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their position if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create a position under 'user123's context.
+     * @deny (get, list) - User with UID 'user456' cannot read the positions of 'user123'.
+     * @principle Restricts access to a user's own open positions.
      */
     match /users/{userId}/paperTradingContext/main/openPositions/{positionId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects the trade history for a user.
+     * @description Secure trade history. Only the owner can access their own trade history.
      * @path /users/{userId}/paperTradingContext/main/tradeHistory/{tradeId}
-     * @allow (create) - Authenticated user can create their own trade history.
-     * @allow (get) - Authenticated user can read their own trade history.
-     * @allow (update) - Authenticated user can update their own trade history.
-     * @allow (delete) - Authenticated user can delete their own trade history.
-     * @allow (list) - Authenticated user can list their own trade history.
-     * @deny (create) - Unauthenticated users cannot create trade history.
-     * @deny (update) - Authenticated user cannot update another user's trade history.
-     * @deny (delete) - Authenticated user cannot delete another user's trade history.
-     * @principle Enforces user ownership and prevents unauthorized access to trade history.
+     * @allow (create) - User with UID 'user123' can create a trade history entry under their context if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their trade history if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their trade history if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create a trade history entry under 'user123's context.
+     * @deny (get, list) - User with UID 'user456' cannot read the trade history of 'user123'.
+     * @principle Restricts access to a user's own trade history.
      */
     match /users/{userId}/paperTradingContext/main/tradeHistory/{tradeId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects the watchlist for a user.
+     * @description Secure watchlist items. Only the owner can access their own watchlist.
      * @path /users/{userId}/paperTradingContext/main/watchlist/{symbol}
-     * @allow (create) - Authenticated user can create their own watchlist.
-     * @allow (get) - Authenticated user can read their own watchlist.
-     * @allow (update) - Authenticated user can update their own watchlist.
-     * @allow (delete) - Authenticated user can delete their own watchlist.
-     * @allow (list) - Authenticated user can list their own watchlist.
-     * @deny (create) - Unauthenticated users cannot create watchlists.
-     * @deny (update) - Authenticated user cannot update another user's watchlist.
-     * @deny (delete) - Authenticated user cannot delete another user's watchlist.
-     * @principle Enforces user ownership and prevents unauthorized access to watchlist.
+     * @allow (create) - User with UID 'user123' can create a watchlist item under their context if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their watchlist if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their watchlist item if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create a watchlist item under 'user123's context.
+     * @deny (get, list) - User with UID 'user456' cannot read the watchlist of 'user123'.
+     * @principle Restricts access to a user's own watchlist.
      */
     match /users/{userId}/paperTradingContext/main/watchlist/{symbol} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects the trade triggers for a user.
+     * @description Secure trade triggers. Only the owner can access their own trade triggers.
      * @path /users/{userId}/paperTradingContext/main/tradeTriggers/{triggerId}
-     * @allow (create) - Authenticated user can create their own trade trigger.
-     * @allow (get) - Authenticated user can read their own trade trigger.
-     * @allow (update) - Authenticated user can update their own trade trigger.
-     * @allow (delete) - Authenticated user can delete their own trade trigger.
-     * @allow (list) - Authenticated user can list their own trade triggers.
-     * @deny (create) - Unauthenticated users cannot create trade triggers.
-     * @deny (update) - Authenticated user cannot update another user's trade trigger.
-     * @deny (delete) - Authenticated user cannot delete another user's trade trigger.
-     * @principle Enforces user ownership and prevents unauthorized access to trade triggers.
+     * @allow (create) - User with UID 'user123' can create a trade trigger under their context if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their trade triggers if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their trade trigger if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create a trade trigger under 'user123's context.
+     * @deny (get, list) - User with UID 'user456' cannot read the trade triggers of 'user123'.
+     * @principle Restricts access to a user's own trade triggers.
      */
     match /users/{userId}/paperTradingContext/main/tradeTriggers/{triggerId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Protects the price alerts for a user.
+     * @description Secure price alerts. Only the owner can access their own price alerts.
      * @path /users/{userId}/paperTradingContext/main/priceAlerts/{symbol}
-     * @allow (create) - Authenticated user can create their own price alert.
-     * @allow (get) - Authenticated user can read their own price alert.
-     * @allow (update) - Authenticated user can update their own price alert.
-     * @allow (delete) - Authenticated user can delete their own price alert.
-     * @allow (list) - Authenticated user can list their own price alerts.
-     * @deny (create) - Unauthenticated users cannot create price alerts.
-     * @deny (update) - Authenticated user cannot update another user's price alert.
-     * @deny (delete) - Authenticated user cannot delete another user's price alert.
-     * @principle Enforces user ownership and prevents unauthorized access to price alerts.
+     * @allow (create) - User with UID 'user123' can create a price alert under their context if request.auth.uid == 'user123'.
+     * @allow (get, list) - User with UID 'user123' can read their price alerts if request.auth.uid == 'user123'.
+     * @allow (update, delete) - User with UID 'user123' can update/delete their price alert if request.auth.uid == 'user123' and the document exists.
+     * @deny (create) - User with UID 'user456' cannot create a price alert under 'user123's context.
+     * @deny (get, list) - User with UID 'user456' cannot read the price alerts of 'user123'.
+     * @principle Restricts access to a user's own price alerts.
      */
     match /users/{userId}/paperTradingContext/main/priceAlerts/{symbol} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
+      allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
     }
   }
 }
