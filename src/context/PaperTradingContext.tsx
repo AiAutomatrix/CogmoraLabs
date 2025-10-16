@@ -343,19 +343,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const clearHistory = useCallback(async () => {
     if (!userContextDocRef || !firestore) return;
     const batch = writeBatch(firestore);
-    tradeHistory.forEach(trade => {
-      const docRef = doc(userContextDocRef, 'tradeHistory', trade.id);
-      batch.delete(docRef);
-    });
-    await batch.commit().catch(error => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userContextDocRef.path,
-        operation: 'write',
-      }));
-    });
-    setTradeHistory([]);
-    toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
-  }, [userContextDocRef, firestore, tradeHistory, toast]);
+    const historyCol = collection(userContextDocRef, 'tradeHistory');
+    try {
+        const historySnapshot = await getDocs(historyCol);
+        historySnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        setTradeHistory([]);
+        toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
+    } catch (error) {
+        console.error("Error clearing trade history:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: collection(userContextDocRef, 'tradeHistory').path,
+            operation: 'delete',
+        }));
+        toast({ title: "Error", description: "Could not clear trade history due to permissions.", variant: "destructive" });
+    }
+  }, [userContextDocRef, firestore, toast]);
 
   const clearAiActionLogs = useCallback(() => {
     setAiActionLogs([]);
@@ -597,8 +602,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [buy, futuresBuy, futuresSell, toast, watchlist]);
   
-  const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
-
   const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
     let positionToClose: OpenPosition | null = null;
     let closedTrade: PaperTrade | undefined;
@@ -659,6 +662,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc]);
   
+  const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
   useEffect(() => {
     processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
         let newPrice: number | undefined, priceChgPct: number | undefined;
