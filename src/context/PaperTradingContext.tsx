@@ -985,9 +985,30 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ aiSettings: settings });
       if (settings.scheduleInterval) {
           const lastScrape = localStorage.getItem('aiPaperTrading_lastScrapeTime');
-          const nextTime = (lastScrape ? parseInt(lastScrape, 10) : Date.now()) + settings.scheduleInterval;
-          setNextAiScrapeTime(nextTime);
-          toast({ title: 'AI Automation Saved', description: `AI agent will run every ${settings.scheduleInterval! / 60000} minutes.` });
+          const lastScrapeTime = lastScrape ? parseInt(lastScrape, 10) : 0;
+          const timeSinceLast = Date.now() - lastScrapeTime;
+          const initialDelay = timeSinceLast > settings.scheduleInterval ? 0 : settings.scheduleInterval - timeSinceLast;
+
+          const timeoutId = setTimeout(() => {
+            handleAiTriggerAnalysis(true);
+            localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+            setNextAiScrapeTime(Date.now() + settings.scheduleInterval!);
+
+            aiAutomationIntervalRef.current = setInterval(() => {
+              handleAiTriggerAnalysis(true);
+              localStorage.setItem('aiPaperTrading_lastScrapeTime', Date.now().toString());
+              setNextAiScrapeTime(Date.now() + settings.scheduleInterval!);
+            }, settings.scheduleInterval!);
+          }, initialDelay);
+
+          setNextAiScrapeTime(Date.now() + initialDelay);
+
+          return () => {
+              clearTimeout(timeoutId);
+              if (aiAutomationIntervalRef.current) {
+                  clearInterval(aiAutomationIntervalRef.current);
+              }
+          };
       } else {
           setNextAiScrapeTime(0);
           if (aiAutomationIntervalRef.current) {
@@ -996,7 +1017,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
           toast({ title: 'AI Automation Saved', description: `AI agent auto-run has been disabled.` });
       }
-  }, [toast, saveDataToFirestore]);
+  }, [toast, saveDataToFirestore, handleAiTriggerAnalysis]);
 
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, isManualScrape: boolean = false) => {
     if (isManualScrape) {
@@ -1429,7 +1450,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       deleteSubcollectionDoc('watchlist', symbol);
       toast({ title: 'Watchlist', description: `${symbolName} removed from watchlist.` });
     } else {
-        const newItem: WatchlistItem = { symbol, symbolName, type, currentPrice: 0, high, low, priceChgPct };
+        const newItem: WatchlistItem = { 
+            symbol, 
+            symbolName, 
+            type, 
+            currentPrice: 0, 
+            high: high ?? null, 
+            low: low ?? null,
+            priceChgPct: priceChgPct ?? null,
+        };
         if (type === 'spot' && futuresContracts.length > 0) {
             const baseCurrency = symbolName.split('-')[0]; 
             const futuresEquivalent = futuresContracts.find(c => c.baseCurrency === baseCurrency);
@@ -1496,5 +1525,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
