@@ -20,7 +20,7 @@ import {
   getDocs,
   onSnapshot,
 } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from '@/firebase';
 import type {
   OpenPosition,
   PaperTrade,
@@ -238,23 +238,43 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     loadData();
   }, [userContextDocRef, firestore]);
 
-  const saveDataToFirestore = useCallback(async (data: Partial<FirestorePaperTradingContext>) => {
+  const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
-      await setDoc(userContextDocRef, data, { merge: true }).catch(e => console.error("Error saving context: ", e));
+      setDoc(userContextDocRef, data, { merge: true })
+        .catch(error => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: userContextDocRef.path,
+            operation: 'write',
+            requestResourceData: data,
+          }));
+        });
     }
   }, [userContextDocRef]);
   
-  const saveSubcollectionDoc = useCallback(async (collectionName: string, docId: string, data: any) => {
+  const saveSubcollectionDoc = useCallback((collectionName: string, docId: string, data: any) => {
     if (userContextDocRef) {
       const docRef = doc(userContextDocRef, collectionName, docId);
-      await setDoc(docRef, data, { merge: true }).catch(e => console.error(`Error saving to ${collectionName}: `, e));
+      setDoc(docRef, data, { merge: true })
+        .catch(error => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: docRef.path,
+            operation: 'write',
+            requestResourceData: data,
+          }));
+        });
     }
   }, [userContextDocRef]);
 
-  const deleteSubcollectionDoc = useCallback(async (collectionName: string, docId: string) => {
+  const deleteSubcollectionDoc = useCallback((collectionName: string, docId: string) => {
     if (userContextDocRef) {
-        const docRef = doc(userContextDocRef, collectionName, docId);
-        await deleteDoc(docRef).catch(e => console.error(`Error deleting from ${collectionName}: `, e));
+      const docRef = doc(userContextDocRef, collectionName, docId);
+      deleteDoc(docRef)
+        .catch(error => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: docRef.path,
+            operation: 'delete',
+          }));
+        });
     }
   }, [userContextDocRef]);
 
@@ -338,13 +358,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast, deleteSubcollectionDoc]);
   
   const clearHistory = useCallback(async () => {
-    if (!userContextDocRef) return;
+    if (!userContextDocRef || !firestore) return;
     const batch = writeBatch(firestore);
     tradeHistory.forEach(trade => {
       const docRef = doc(userContextDocRef, 'tradeHistory', trade.id);
       batch.delete(docRef);
     });
-    await batch.commit();
+    batch.commit().catch(error => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: userContextDocRef.path,
+        operation: 'write', // Batch writes are generic writes
+      }));
+    });
     setTradeHistory([]);
     toast({ title: "Trade History Cleared", description: "Your trade history has been permanently deleted." });
   }, [userContextDocRef, firestore, tradeHistory, toast]);
@@ -758,11 +783,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     if (shouldExecuteImmediately && currentPrice) {
         executeTrigger(newTrigger, currentPrice);
-        if (newTrigger.cancelOthers && userContextDocRef) {
+        if (newTrigger.cancelOthers && userContextDocRef && firestore) {
           const triggersToDelete = tradeTriggers.filter(t => t.symbol === newTrigger.symbol);
           const batch = writeBatch(firestore);
           triggersToDelete.forEach(t => batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id)));
-          batch.commit();
+          batch.commit().catch(error => {
+              errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: userContextDocRef.path, // Path of parent doc for batch
+                operation: 'write',
+              }));
+          });
           setTradeTriggers(prev => prev.filter(t => t.symbol !== newTrigger.symbol));
         }
     } else {
@@ -1318,7 +1348,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   
   useEffect(() => {
-    if (!pendingWatchlist || !userContextDocRef) return;
+    if (!pendingWatchlist || !userContextDocRef || !firestore) return;
 
     const { items: newItems, clearExisting } = pendingWatchlist;
     
@@ -1335,7 +1365,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         batch.set(doc(userContextDocRef, 'watchlist', item.symbol), item);
       });
 
-      await batch.commit();
+      batch.commit().catch(error => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+          path: userContextDocRef.path, // Path of parent doc for batch
+          operation: 'write',
+        }));
+      });
       
       setWatchlist(prev => clearExisting ? newItems : [...prev, ...newItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
       setPendingWatchlist(null);
@@ -1345,7 +1380,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [pendingWatchlist, watchlist, userContextDocRef, firestore]);
 
   const closeAllPositions = useCallback(async () => {
-    if (!userContextDocRef) return;
+    if (!userContextDocRef || !firestore) return;
     const batch = writeBatch(firestore);
     
     openPositions.forEach(p => {
@@ -1359,7 +1394,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
     });
 
-    await batch.commit();
+    batch.commit().catch(error => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: userContextDocRef.path, // Path of parent doc for batch
+        operation: 'write',
+      }));
+    });
 
   }, [openPositions, closePosition, userContextDocRef, firestore]);
 
@@ -1456,3 +1496,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
