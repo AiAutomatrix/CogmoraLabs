@@ -993,10 +993,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (automationIntervalRef.current) {
         clearInterval(automationIntervalRef.current);
-        automationIntervalRef.current = null;
     }
     if (isLoaded && automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        const runAutomation = () => applyWatchlistAutomation(automationConfig, true); // Always show toasts for scheduled runs
+        const runAutomation = () => applyWatchlistAutomation(automationConfig, true);
         
         const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
         const timeSinceLast = Date.now() - lastScrapeTime;
@@ -1024,12 +1023,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } else {
         setNextScrapeTime(0);
     }
-  }, [isLoaded, automationConfig, applyWatchlistAutomation]);
+}, [isLoaded, automationConfig, applyWatchlistAutomation]);
+
 
   useEffect(() => {
     if (aiAutomationIntervalRef.current) {
       clearInterval(aiAutomationIntervalRef.current);
-      aiAutomationIntervalRef.current = null;
     }
     if (isLoaded && aiSettings.scheduleInterval && aiSettings.scheduleInterval > 0) {
       const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
@@ -1424,3 +1423,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
     
 
     
+
