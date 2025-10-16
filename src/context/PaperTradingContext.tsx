@@ -237,23 +237,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
-    
     const equity = balance + totalUnrealizedPNL;
-
     const totalRealizedPNL = tradeHistory
       .filter((t) => t.status === "closed")
       .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
 
-    const winTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
-    const losingTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
-    const totalClosedTrades = winTrades + losingTrades;
-    const winRate = totalClosedTrades > 0 ? (winTrades / totalClosedTrades) * 100 : 0;
+    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
+    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
+    const totalClosedTrades = wonTrades + lostTrades;
+    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
     return {
       equity,
       realizedPnl: totalRealizedPNL,
       unrealizedPnl: totalUnrealizedPNL,
       winRate,
+      wonTrades,
+      lostTrades,
     };
   }, [openPositions, balance, tradeHistory]);
 
@@ -653,6 +653,34 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   }, [toast]);
   
+  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
+    let symbolName = '';
+    setOpenPositions(prev =>
+      prev.map(pos => {
+        if (pos.id === positionId) {
+          symbolName = pos.symbolName;
+          return {
+            ...pos,
+            details: {
+              ...pos.details,
+              stopLoss: sl,
+              takeProfit: tp,
+            }
+          };
+        }
+        return pos;
+      })
+    );
+    if (symbolName) {
+      setTimeout(() => {
+        toast({
+          title: "Position Updated",
+          description: `SL/TP updated for ${symbolName}.`
+        });
+      }, 0);
+    }
+  }, [toast]);
+
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -698,6 +726,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }, 0);
     }
   }, [toast]);
+  
 
   const logAiAction = useCallback((action: AgentAction) => {
     setAiActionLogs(prev => [...prev, { ...action, executedAt: Date.now() }]);
@@ -714,34 +743,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, []);
 
-  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
-    let symbolName = '';
-    setOpenPositions(prev =>
-      prev.map(pos => {
-        if (pos.id === positionId) {
-          symbolName = pos.symbolName;
-          return {
-            ...pos,
-            details: {
-              ...pos.details,
-              stopLoss: sl,
-              takeProfit: tp,
-            }
-          };
-        }
-        return pos;
-      })
-    );
-    if (symbolName) {
-      setTimeout(() => {
-        toast({
-          title: "Position Updated",
-          description: `SL/TP updated for ${symbolName}.`
-        });
-      }, 0);
-    }
-  }, [toast]);
-
   const handleAiTriggerAnalysis = useCallback(async (isScheduled = false): Promise<AgentActionPlan & {isLoading: boolean}> => {
     if (watchlist.length === 0) {
       const msg = "Watchlist is empty, skipping analysis.";
@@ -753,20 +754,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return { analysis: msg, plan: [], isLoading: false };
     }
 
-    // Re-fetch account metrics directly here to ensure freshness
-    const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
-    const currentEquity = balance + totalUnrealizedPNL;
-    const totalRealizedPNL = tradeHistory.filter(t => t.status === "closed").reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
-    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
-    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
-    const totalClosedTrades = wonTrades + lostTrades;
-    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
-
+    const { equity, realizedPnl, unrealizedPnl, winRate, wonTrades, lostTrades } = accountMetrics;
     const currentAccountMetrics = {
       balance,
-      equity: currentEquity,
-      realizedPnl: totalRealizedPNL,
-      unrealizedPnl: totalUnrealizedPNL,
+      equity,
+      realizedPnl,
+      unrealizedPnl,
       winRate,
       wonTrades,
       lostTrades,
@@ -807,7 +800,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             description: `${executedCount} action(s) were executed automatically. Analysis:\n${response.analysis}`
           });
         }, 0);
-        // Clear the plan after auto-execution
         setLastAiActionPlan(prev => prev ? { ...prev, plan: [] } : null);
         return { analysis: response.analysis, plan: [], isLoading: false };
       } else {
@@ -824,7 +816,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       return { analysis: `An error occurred: ${errorMessage}`, plan: [], isLoading: false };
     }
-  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, tradeHistory, updatePositionSlTp]);
+  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp]);
 
 
   // Auto-close positions on SL/TP or Liquidation
@@ -955,7 +947,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
             const sorted = [...sourceData].sort((a, b) => {
                 const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
-                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+                const valB = parseFloat(b[sortKey as keyof b] as string) || 0;
                 return valB - valA;
             });
 
@@ -1241,45 +1233,45 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, watchlist, tradeTriggers]);
   
   useEffect(() => {
-      if (!isLoaded) return;
+    if (!isLoaded) return;
   
-      const manageSubscriptions = (
-          wsRef: React.MutableRefObject<WebSocket | null>,
-          allSymbols: string[],
-          subscriptionsRef: React.MutableRefObject<Set<string>>,
-          connectFn: () => void,
-          type: 'spot' | 'futures'
-      ) => {
-          const desiredSubs = new Set(allSymbols);
+    const manageSubscriptions = (
+      wsRef: React.MutableRefObject<WebSocket | null>,
+      allSymbols: string[],
+      subscriptionsRef: React.MutableRefObject<Set<string>>,
+      connectFn: () => void,
+      type: 'spot' | 'futures'
+    ) => {
+      const desiredSubs = new Set(allSymbols);
   
-          if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
-              connectFn();
-          }
+      if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
+        connectFn();
+      }
   
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              const currentSubs = new Set(subscriptionsRef.current);
-              const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
-              const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const currentSubs = new Set(subscriptionsRef.current);
+        const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
+        const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
   
-              const topicPrefix = type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
+        const topicPrefix = type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
   
-              toAdd.forEach(symbol => {
-                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `${topicPrefix}${symbol}`, response: true }));
-                  subscriptionsRef.current.add(symbol);
-              });
+        toAdd.forEach(symbol => {
+          wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `${topicPrefix}${symbol}`, response: true }));
+          subscriptionsRef.current.add(symbol);
+        });
   
-              toRemove.forEach(symbol => {
-                  wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
-                  subscriptionsRef.current.delete(symbol);
-              });
-          } else if (desiredSubs.size === 0 && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.close();
-              wsRef.current = null;
-          }
-      };
+        toRemove.forEach(symbol => {
+          wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
+          subscriptionsRef.current.delete(symbol);
+        });
+      } else if (desiredSubs.size === 0 && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
   
-      manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot, 'spot');
-      manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures, 'futures');
+    manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot, 'spot');
+    manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures, 'futures');
       
   }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
@@ -1398,3 +1390,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
 
     
 
+    
