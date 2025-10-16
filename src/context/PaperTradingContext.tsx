@@ -135,6 +135,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const [automationConfig, setAutomationConfigInternal] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
   const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
+  const [pendingWatchlist, setPendingWatchlist] = useState<{items: WatchlistItem[], clearExisting: boolean} | null>(null);
+
 
   const [aiSettings, setAiSettingsInternal] = useState<AiTriggerSettings>(INITIAL_AI_SETTINGS);
   const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
@@ -257,7 +259,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
   }, [openPositions, balance, tradeHistory]);
 
-  const { equity } = accountMetrics;
+  const { equity, wonTrades, lostTrades } = accountMetrics;
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
@@ -972,9 +974,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 }
             });
         });
-
-        setWatchlist(prev => config.clearExisting ? finalItems : [...prev, ...finalItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
         
+        setPendingWatchlist({ items: finalItems, clearExisting: config.clearExisting });
+
         if (forceScrape) {
           setTimeout(() => {
             toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
@@ -1276,6 +1278,37 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
   
+  useEffect(() => {
+    if (!pendingWatchlist) return;
+
+    const { items: newItems, clearExisting } = pendingWatchlist;
+    const newSymbols = new Set(newItems.map(item => item.symbol));
+    
+    // Determine symbols to unsubscribe from
+    const symbolsToUnsubscribe = clearExisting 
+        ? [...watchlist.map(item => item.symbol)] 
+        : watchlist.filter(item => !newSymbols.has(item.symbol)).map(item => item.symbol);
+    
+    // Unsubscribe from symbols that are no longer needed
+    symbolsToUnsubscribe.forEach(symbol => {
+        const watchlistItem = watchlist.find(item => item.symbol === symbol);
+        const wsRef = watchlistItem?.type === 'spot' ? spotWs : futuresWs;
+        const topicPrefix = watchlistItem?.type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
+            (watchlistItem?.type === 'spot' ? spotSubscriptionsRef : futuresSubscriptionsRef).current.delete(symbol);
+        }
+    });
+
+    // A short delay to allow unsubscribe messages to be sent before updating the state
+    setTimeout(() => {
+        setWatchlist(prev => clearExisting ? newItems : [...prev, ...newItems.filter(f => !prev.some(p => p.symbol === f.symbol))]);
+        setPendingWatchlist(null);
+    }, 200);
+
+}, [pendingWatchlist, watchlist]);
+
+
   const closeAllPositions = useCallback(() => {
     const positionsToClose = [...openPositions];
     positionsToClose.forEach(p => {
@@ -1387,6 +1420,8 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     
 
