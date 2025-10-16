@@ -153,7 +153,7 @@ export default function PaperTradingDashboard({
         <CardHeader>
           <CardTitle>Account Metrics</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
+        <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Equity</p>
             <p className="text-lg md:text-xl font-bold">
@@ -190,6 +190,12 @@ export default function PaperTradingDashboard({
             <p className="text-sm text-muted-foreground">Win Rate</p>
             <p className="text-lg md:text-xl font-bold">
               {winRate.toFixed(2)}%
+            </p>
+          </div>
+          <div className="p-4 bg-muted rounded-lg">
+            <p className="text-sm text-muted-foreground">Won / Lost</p>
+            <p className="text-lg md:text-xl font-bold">
+              <span className="text-green-500">{winTrades}</span> / <span className="text-red-500">{losingTrades}</span>
             </p>
           </div>
         </CardContent>
