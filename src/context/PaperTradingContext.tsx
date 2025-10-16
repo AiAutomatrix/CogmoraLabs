@@ -259,7 +259,33 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
   }, [openPositions, balance, tradeHistory]);
 
-  const { equity, wonTrades, lostTrades } = accountMetrics;
+  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
+    let symbolName = '';
+    setOpenPositions(prev =>
+      prev.map(pos => {
+        if (pos.id === positionId) {
+          symbolName = pos.symbolName;
+          return {
+            ...pos,
+            details: {
+              ...pos.details,
+              stopLoss: sl,
+              takeProfit: tp,
+            }
+          };
+        }
+        return pos;
+      })
+    );
+    if (symbolName) {
+      setTimeout(() => {
+        toast({
+          title: "Position Updated",
+          description: `SL/TP updated for ${symbolName}.`
+        });
+      }, 0);
+    }
+  }, [toast]);
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
     setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
@@ -655,34 +681,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   }, [toast]);
   
-  const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
-    let symbolName = '';
-    setOpenPositions(prev =>
-      prev.map(pos => {
-        if (pos.id === positionId) {
-          symbolName = pos.symbolName;
-          return {
-            ...pos,
-            details: {
-              ...pos.details,
-              stopLoss: sl,
-              takeProfit: tp,
-            }
-          };
-        }
-        return pos;
-      })
-    );
-    if (symbolName) {
-      setTimeout(() => {
-        toast({
-          title: "Position Updated",
-          description: `SL/TP updated for ${symbolName}.`
-        });
-      }, 0);
-    }
-  }, [toast]);
-
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
@@ -916,8 +914,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
   }, [toast]);
 
-  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, forceScrape: boolean = false) => {
-    if (forceScrape) {
+  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig, isManualScrape: boolean = false) => {
+    if (isManualScrape) {
       setTimeout(() => {
         toast({ title: 'Automation Running', description: 'Fetching screener data to build watchlist...' });
       }, 0);
@@ -977,14 +975,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         
         setPendingWatchlist({ items: finalItems, clearExisting: config.clearExisting });
 
-        if (forceScrape) {
+        if (isManualScrape) {
           setTimeout(() => {
             toast({ title: 'Watchlist Updated', description: `Watchlist has been updated based on your automation rules.`});
           }, 0);
         }
     } catch(error) {
       console.error('Watchlist automation failed:', error);
-      if (forceScrape) {
+      if (isManualScrape) {
         setTimeout(() => {
           toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
         }, 0);
@@ -998,7 +996,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         automationIntervalRef.current = null;
     }
     if (isLoaded && automationConfig.updateMode === 'auto-refresh' && automationConfig.refreshInterval > 0) {
-        const runAutomation = () => applyWatchlistAutomation(automationConfig, false);
+        const runAutomation = () => applyWatchlistAutomation(automationConfig, true); // Always show toasts for scheduled runs
         
         const lastScrapeTime = parseInt(localStorage.getItem('paperTrading_lastScrapeTime') || '0', 10);
         const timeSinceLast = Date.now() - lastScrapeTime;
@@ -1379,7 +1377,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         tradeTriggers,
         aiActionLogs,
         lastAiActionPlan,
-        equity,
+        equity: accountMetrics.equity,
         buy,
         futuresBuy,
         futuresSell,
