@@ -1,6 +1,20 @@
 
 import { z } from 'zod';
 
+//==========================================================================
+// CORE FIRESTORE SCHEMAS
+//==========================================================================
+
+export const UserProfileSchema = z.object({
+  uid: z.string(),
+  email: z.string().email(),
+  displayName: z.string().optional(),
+  photoURL: z.string().url().optional(),
+  balance: z.number().default(100000),
+  createdAt: z.any(), // Typically a Firestore Timestamp
+});
+export type UserProfile = z.infer<typeof UserProfileSchema>;
+
 export const PaperTradeSchema = z.object({
   id: z.string(),
   positionId: z.string(),
@@ -137,7 +151,10 @@ export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
 export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 
-// AI Agent Action Schemas
+//==========================================================================
+// AI AGENT SCHEMAS
+//==========================================================================
+
 export const AgentCreateActionSchema = z.object({
   type: z.literal('CREATE'),
   trigger: ProposedTradeTriggerSchema,
@@ -225,8 +242,10 @@ export const ProposeTradeTriggersOutputSchema = z.object({
 });
 export type ProposeTradeTriggersOutput = z.infer<typeof ProposeTradeTriggersOutputSchema>;
 
+//==========================================================================
+// AUTOMATION SCHEMAS
+//==========================================================================
 
-// Automation Feature Types
 export const AutomationRuleSchema = z.object({
     id: z.string(),
     source: z.enum(['spot', 'futures']),
@@ -243,6 +262,10 @@ export const AutomationConfigSchema = z.object({
 });
 export type AutomationConfig = z.infer<typeof AutomationConfigSchema>;
 
+
+//==========================================================================
+// MISC & LEGACY SCHEMAS
+//==========================================================================
 
 // Original TradeSchema, keeping if used elsewhere, but papertrade is more specific
 export const TradeSchema = z.object({
@@ -387,6 +410,10 @@ export const PairDataSchema = z.object({
   pairs: z.array(PairDetailSchema).optional().nullable(), // Made optional and nullable based on potential API responses
 });
 export type PairData = z.infer<typeof PairDataSchema>;
+
+//==========================================================================
+// KUCOIN API & WEBSOCKET SCHEMAS
+//==========================================================================
 
 export const KucoinFuturesContractSchema = z.object({
     symbol: z.string(),
@@ -579,7 +606,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
-
-    
