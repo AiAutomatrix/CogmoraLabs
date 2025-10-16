@@ -652,7 +652,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         };
 
         setTradeHistory(th => [closedTrade!, ...th]);
-        saveSubcollectionDoc('tradeHistory', closedTrade!.id, closedTrade);
+        saveSubcollectionDoc('tradeHistory', closedTrade!.id, closedTrade!);
         deleteSubcollectionDoc('openPositions', positionId);
         
         toast({ title: `${reason}: Position Closed`, description: `Closed ${pos.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
@@ -697,23 +697,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setTradeTriggers(prevTriggers => {
             const executedTriggerIds = new Set<string>();
-            const triggersToKeep = [...prevTriggers];
-
-            triggersToKeep.forEach(trigger => {
+            
+            prevTriggers.forEach(trigger => {
                 if (trigger.symbol === symbol && trigger.status === 'active') {
                     const conditionMet = (trigger.condition === 'above' && newPrice >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice <= trigger.targetPrice);
                     if (conditionMet) {
                         executeTrigger(trigger, newPrice!);
                         executedTriggerIds.add(trigger.id);
-                        deleteSubcollectionDoc('tradeTriggers', trigger.id);
                     }
                 }
             });
 
             if (executedTriggerIds.size > 0) {
-                return triggersToKeep.filter(t => !executedTriggerIds.has(t.id));
+                 const triggersToKeep = prevTriggers.filter(t => !executedTriggerIds.has(t.id));
+                 executedTriggerIds.forEach(id => deleteSubcollectionDoc('tradeTriggers', id));
+                 return triggersToKeep;
             }
-            return triggersToKeep;
+            return prevTriggers;
         });
     
         setWatchlist(prev => prev.map(item =>
@@ -1259,9 +1259,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(() => {
     // Schedule each close operation to run in a separate task
-    openPositions.forEach(p => {
-        setTimeout(() => closePosition(p.id, 'Close All'), 0);
-    });
+    setTimeout(() => {
+        openPositions.forEach(p => {
+            closePosition(p.id, 'Close All');
+        });
+    }, 0);
   }, [openPositions, closePosition]);
 
 
