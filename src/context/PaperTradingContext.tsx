@@ -229,7 +229,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           await setDoc(userContextDocRef, initialContext);
         }
       } catch (error) {
-        console.error("Failed to load data from Firestore", error);
+        console.error("Standard error during initial data load:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: userContextDocRef.path,
+            operation: 'get',
+        }));
       } finally {
         setIsLoaded(true);
         dataLoadedRef.current = true;
@@ -1071,6 +1075,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         type: rule.source,
                         currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
                         priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                        high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
+                        low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                     });
                 }
             });
@@ -1525,3 +1531,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
