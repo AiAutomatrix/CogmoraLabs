@@ -381,32 +381,35 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
       const size = amountUSD / currentPrice;
-      let newPosition: OpenPosition | undefined;
-      
+      let existingPosition: OpenPosition | undefined;
       setOpenPositions(prev => {
           const existingPositionIndex = prev.findIndex(p => p.symbol === symbol && p.positionType === 'spot');
           
           if (existingPositionIndex > -1) {
               const updatedPositions = [...prev];
-              const existing = updatedPositions[existingPositionIndex];
-              const totalSize = existing.size + size;
-              const totalValue = (existing.size * existing.averageEntryPrice) + (size * currentPrice);
-              existing.averageEntryPrice = totalValue / totalSize;
-              existing.size = totalSize;
-              
-              const newDetails: OpenPositionDetails = { ...existing.details, triggeredBy };
-               if (stopLoss !== undefined) newDetails.stopLoss = stopLoss;
-               if (takeProfit !== undefined) newDetails.takeProfit = takeProfit;
-              existing.details = newDetails;
+              existingPosition = updatedPositions[existingPositionIndex];
+              const totalSize = existingPosition.size + size;
+              const totalValue = (existingPosition.size * existingPosition.averageEntryPrice) + (size * currentPrice);
+              const newAverageEntry = totalValue / totalSize;
 
-              saveSubcollectionDoc('openPositions', existing.id, existing);
+              const details: OpenPositionDetails = { ...existingPosition.details, triggeredBy };
+              if (stopLoss) details.stopLoss = stopLoss;
+              if (takeProfit) details.takeProfit = takeProfit;
+
+              updatedPositions[existingPositionIndex] = {
+                ...existingPosition,
+                averageEntryPrice: newAverageEntry,
+                size: totalSize,
+                details: details,
+              };
+              saveSubcollectionDoc('openPositions', existingPosition.id, updatedPositions[existingPositionIndex]);
               return updatedPositions;
           } else {
               const details: OpenPositionDetails = { triggeredBy };
-              if (stopLoss !== undefined) details.stopLoss = stopLoss;
-              if (takeProfit !== undefined) details.takeProfit = takeProfit;
+              if (stopLoss) details.stopLoss = stopLoss;
+              if (takeProfit) details.takeProfit = takeProfit;
 
-              newPosition = {
+              const newPosition: OpenPosition = {
                   id: crypto.randomUUID(),
                   positionType: 'spot',
                   symbol,
@@ -416,7 +419,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   currentPrice,
                   side: 'buy',
                   unrealizedPnl: 0,
-                  priceChgPct: 0, // Default to 0, will be updated by socket
+                  priceChgPct: 0,
                   details,
               };
               saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
@@ -430,7 +433,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       const newTrade: PaperTrade = {
         id: crypto.randomUUID(),
-        positionId: newPosition ? newPosition.id : 'N/A', // Handle existing position case better if needed
+        positionId: existingPosition ? existingPosition.id : 'N/A', // Needs a robust way to get new position ID
         positionType: 'spot',
         symbol,
         symbolName,
@@ -466,8 +469,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
 
       const details: OpenPositionDetails = { triggeredBy };
-      if (stopLoss !== undefined) details.stopLoss = stopLoss;
-      if (takeProfit !== undefined) details.takeProfit = takeProfit;
+      if (stopLoss) details.stopLoss = stopLoss;
+      if (takeProfit) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -528,8 +531,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
 
       const details: OpenPositionDetails = { triggeredBy };
-      if (stopLoss !== undefined) details.stopLoss = stopLoss;
-      if (takeProfit !== undefined) details.takeProfit = takeProfit;
+      if (stopLoss) details.stopLoss = stopLoss;
+      if (takeProfit) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(),
@@ -594,7 +597,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       description: `Executing ${trigger.action} for ${trigger.symbolName} at ${formatPrice(currentPrice)}`
     });
 
-    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
     const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
 
     if (trigger.type === 'spot') {
@@ -606,13 +608,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
       }
     }
-  }, [buy, futuresBuy, futuresSell, toast, watchlist]);
+  }, [buy, futuresBuy, futuresSell, toast]);
   
  const closePosition = useCallback((positionId: string, reason: string = 'Manual Close', closePriceParam?: number) => {
     setTimeout(() => {
         let positionToClose: OpenPosition | null = null;
         let closedTrade: PaperTrade | undefined;
-        let newBalanceValue = 0;
 
         setOpenPositions(currentOpenPositions => {
             const pos = currentOpenPositions.find(p => p.id === positionId);
@@ -640,11 +641,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 returnedValue = collateral + pnl;
             }
 
-            setBalance(currentBalance => {
-                newBalanceValue = currentBalance + returnedValue;
-                saveDataToFirestore({ balance: newBalanceValue });
-                return newBalanceValue;
-            });
+            const newBalanceValue = balance + returnedValue;
+            setBalance(newBalanceValue);
+            saveDataToFirestore({ balance: newBalanceValue });
 
             closedTrade = {
                 id: crypto.randomUUID(),
@@ -660,7 +659,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 pnl,
                 ...(pos.leverage && { leverage: pos.leverage }),
             };
-
+            
             setTradeHistory(th => [closedTrade!, ...th]);
             saveSubcollectionDoc('tradeHistory', closedTrade!.id, closedTrade!);
             deleteSubcollectionDoc('openPositions', positionId);
@@ -670,7 +669,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             return currentOpenPositions.filter(p => p.id !== positionId);
         });
     }, 0);
-  }, [saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc, toast]);
+  }, [balance, saveDataToFirestore, saveSubcollectionDoc, deleteSubcollectionDoc, toast]);
 
   
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -1258,7 +1257,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(() => {
     openPositions.forEach(p => {
-        // Use setTimeout to schedule each close action asynchronously
         setTimeout(() => closePosition(p.id, 'Close All'), 0);
     });
   }, [openPositions, closePosition]);
@@ -1295,7 +1293,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             currentPrice: 0, 
             high: high ?? undefined, 
             low: low ?? undefined,
-            priceChgPct: priceChgPct ?? undefined,
+            priceChgPct: priceChgPct ?? 0,
         };
         if (type === 'spot' && futuresContracts.length > 0) {
             const baseCurrency = symbolName.split('-')[0]; 
