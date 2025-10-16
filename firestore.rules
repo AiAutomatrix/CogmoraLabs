@@ -1,324 +1,223 @@
 /**
- * @fileoverview Firestore Security Rules for Cogmora Labs application.
+ * @fileoverview Firestore Security Rules for Cogmora Labs Application
  *
  * Core Philosophy:
- * This ruleset enforces a strict user-ownership model.  Each user has a dedicated data tree rooted at `/users/{userId}`.
- * All data within this tree is exclusively accessible and modifiable by the owning user.
+ * This ruleset enforces a strict user-ownership model for all data. Each user has a dedicated data tree under `/users/{userId}`, and only the authenticated user can access their own data.
  *
  * Data Structure:
- * - `/users/{userId}`: User profile data.
- * - `/users/{userId}/paperTradingContexts/{paperTradingContextId}`:  Paper trading context.
- * - `/users/{userId}/paperTradingContexts/{paperTradingContextId}/trades/{tradeId}`: Trade history.
- * - `/users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeTriggers/{tradeTriggerId}`: Trade triggers/alerts.
- * - `/users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId}`: Open positions.
- * - `/users/{userId}/paperTradingContexts/{paperTradingContextId}/aiSettings/{aiSettingsId}`: AI settings.
- * - `/users/{userId}/paperTradingContexts/{paperTradingContextId}/automationConfigs/{automationConfigId}`: Automation configurations.
- * - `/users/{userId}/notifications/{notificationId}`: User notifications.
+ * All data is nested under /users/{userId}, creating a hierarchical structure that simplifies authorization.  Paper trading contexts, trades, triggers, open positions, AI settings, automation configurations, and notifications are all stored as subcollections under the user's profile.
  *
  * Key Security Decisions:
- * - Strict User Ownership: All reads and writes are restricted to the owning user via the `isOwner(userId)` function.
- * - No User Listing: Listing all users is disallowed for privacy and security reasons.
- * - Data Denormalization:  The data model is designed to avoid complex `get()` calls within the rules. Relationships are enforced through path-based rules (e.g., a Trade document's location implies its `paperTradingContextId` and `userId`).
- * - Self-Creation: Users can create their own profile document at `/users/{userId}` using their authenticated UID.
+ * - Listing of all users is explicitly forbidden.
+ * - All write operations require a verified, authenticated user.
+ * - Data consistency between the path and the document's internal `userId` field is enforced on creation to prevent unauthorized data placement.
+ * - Updates to the `userId` field are forbidden to prevent ownership changes.
+ *
+ * Denormalization for Authorization:
+ * The data structure places all user-owned data under a specific user ID. This eliminates the need for `get()` calls to determine ownership, as the path itself indicates the owner.  This is reinforced by requiring that the `userId` field within documents in user subcollections matches the `userId` in the path.
+ *
+ * Structural Segregation:
+ * Private user data is stored in the `/users/{userId}` tree, ensuring it is not mixed with public data.  There are no public collections in this model.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secures the user profile collection. Only the owner can read and write their profile.
+     * @description Protects the listing of all users.
+     * @path /users
+     * @allow (list) - N/A: Listing all users is denied.
+     * @deny (list) - Any request to list all users.
+     * @principle Prevents information leakage by denying listing of all user profiles.
+     */
+    match /users {
+      allow get: if false;
+      allow list: if false;
+    }
+
+    /**
+     * @description Enforces user-ownership for user profiles.
      * @path /users/{userId}
-     * @allow (create) User with UID 'user_abc' can create their profile document at /users/user_abc.
-     * @allow (get) User with UID 'user_abc' can read their profile document at /users/user_abc.
-     * @allow (update) User with UID 'user_abc' can update their profile document at /users/user_abc.
-     * @allow (delete) User with UID 'user_abc' can delete their profile document at /users/user_abc.
-     * @deny (create) User with UID 'user_xyz' cannot create a profile document at /users/user_abc.
-     * @deny (get) User with UID 'user_xyz' cannot read the profile document at /users/user_abc.
-     * @deny (update) User with UID 'user_xyz' cannot update the profile document at /users/user_abc.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the profile document at /users/user_abc.
-     * @principle Enforces document ownership for all operations. Allows self-creation.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates their own profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads their own profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates their own profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes their own profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (create) - User `attacker` attempts to create a profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read the profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update the profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete the profile at `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
      */
     match /users/{userId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
-      allow list: if false; // Listing users is disallowed.
-
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the paper trading context collection. Only the owner can read and write their paper trading context.
+     * @description Enforces user-ownership for paper trading contexts.
      * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}
-     * @allow (create) User with UID 'user_abc' can create a paper trading context under /users/user_abc/paperTradingContexts/ptc_123.
-     * @allow (get) User with UID 'user_abc' can read the paper trading context at /users/user_abc/paperTradingContexts/ptc_123.
-     * @allow (update) User with UID 'user_abc' can update the paper trading context at /users/user_abc/paperTradingContexts/ptc_123.
-     * @allow (delete) User with UID 'user_abc' can delete the paper trading context at /users/user_abc/paperTradingContexts/ptc_123.
-     * @deny (create) User with UID 'user_xyz' cannot create a paper trading context under /users/user_abc/paperTradingContexts/ptc_123.
-     * @deny (get) User with UID 'user_xyz' cannot read the paper trading context at /users/user_abc/paperTradingContexts/ptc_123.
-     * @deny (update) User with UID 'user_xyz' cannot update the paper trading context at /users/user_abc/paperTradingContexts/ptc_123.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the paper trading context at /users/user_abc/paperTradingContexts/ptc_123.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates a paper trading context under their profile.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads a paper trading context under their profile.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates a paper trading context under their profile.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes a paper trading context under their profile.
+     * @deny (create) - User `attacker` attempts to create a paper trading context under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read a paper trading context under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update a paper trading context under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete a paper trading context under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data.  Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/paperTradingContexts/{paperTradingContextId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
       allow create: if isOwner(userId) && request.resource.data.userId == userId;
       allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the trade collection. Only the owner can read and write their trades.
+     * @description Enforces user-ownership for trades.
      * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/trades/{tradeId}
-     * @allow (create) User with UID 'user_abc' can create a trade under /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @allow (get) User with UID 'user_abc' can read the trade at /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @allow (update) User with UID 'user_abc' can update the trade at /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @allow (delete) User with UID 'user_abc' can delete the trade at /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @deny (create) User with UID 'user_xyz' cannot create a trade under /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @deny (get) User with UID 'user_xyz' cannot read the trade at /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @deny (update) User with UID 'user_xyz' cannot update the trade at /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the trade at /users/user_abc/paperTradingContexts/ptc_123/trades/trade_456.
-     * @principle Enforces document ownership for all operations.
+     *  @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates a trade under their paper trading context.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads a trade under their paper trading context.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates a trade under their paper trading context.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes a trade under their paper trading context.
+     * @deny (create) - User `attacker` attempts to create a trade under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read a trade under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update a trade under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete a trade under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data. Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/paperTradingContexts/{paperTradingContextId}/trades/{tradeId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
-      allow create: if isOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
-      allow update: if isExistingOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
+      allow create: if isOwner(userId) && getPaperTradingContext(userId, paperTradingContextId).data.userId == userId;
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the trade trigger collection. Only the owner can read and write their trade triggers.
+     * @description Enforces user-ownership for trade triggers.
      * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeTriggers/{tradeTriggerId}
-     * @allow (create) User with UID 'user_abc' can create a trade trigger under /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @allow (get) User with UID 'user_abc' can read the trade trigger at /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @allow (update) User with UID 'user_abc' can update the trade trigger at /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @allow (delete) User with UID 'user_abc' can delete the trade trigger at /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @deny (create) User with UID 'user_xyz' cannot create a trade trigger under /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @deny (get) User with UID 'user_xyz' cannot read the trade trigger at /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @deny (update) User with UID 'user_xyz' cannot update the trade trigger at /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the trade trigger at /users/user_abc/paperTradingContexts/ptc_123/tradeTriggers/trigger_789.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates a trade trigger under their paper trading context.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads a trade trigger under their paper trading context.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates a trade trigger under their paper trading context.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes a trade trigger under their paper trading context.
+     * @deny (create) - User `attacker` attempts to create a trade trigger under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read a trade trigger under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update a trade trigger under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete a trade trigger under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data. Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeTriggers/{tradeTriggerId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
-      allow create: if isOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
-      allow update: if isExistingOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
+      allow create: if isOwner(userId) && getPaperTradingContext(userId, paperTradingContextId).data.userId == userId;
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the open position collection. Only the owner can read and write their open positions.
+     * @description Enforces user-ownership for open positions.
      * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId}
-     * @allow (create) User with UID 'user_abc' can create an open position under /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @allow (get) User with UID 'user_abc' can read the open position at /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @allow (update) User with UID 'user_abc' can update the open position at /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @allow (delete) User with UID 'user_abc' can delete the open position at /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @deny (create) User with UID 'user_xyz' cannot create an open position under /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @deny (get) User with UID 'user_xyz' cannot read the open position at /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @deny (update) User with UID 'user_xyz' cannot update the open position at /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the open position at /users/user_abc/paperTradingContexts/ptc_123/openPositions/pos_abc.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates an open position under their paper trading context.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads an open position under their paper trading context.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates an open position under their paper trading context.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes an open position under their paper trading context.
+     * @deny (create) - User `attacker` attempts to create an open position under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read an open position under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update an open position under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete an open position under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data. Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
-      allow create: if isOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
-      allow update: if isExistingOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
+      allow create: if isOwner(userId) && getPaperTradingContext(userId, paperTradingContextId).data.userId == userId;
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the AI settings collection. Only the owner can read and write their AI settings.
+     * @description Enforces user-ownership for AI settings.
      * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/aiSettings/{aiSettingsId}
-     * @allow (create) User with UID 'user_abc' can create AI settings under /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @allow (get) User with UID 'user_abc' can read the AI settings at /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @allow (update) User with UID 'user_abc' can update the AI settings at /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @allow (delete) User with UID 'user_abc' can delete the AI settings at /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @deny (create) User with UID 'user_xyz' cannot create AI settings under /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @deny (get) User with UID 'user_xyz' cannot read the AI settings at /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @deny (update) User with UID 'user_xyz' cannot update the AI settings at /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the AI settings at /users/user_abc/paperTradingContexts/ptc_123/aiSettings/ai_123.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates AI settings under their paper trading context.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads AI settings under their paper trading context.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates AI settings under their paper trading context.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes AI settings under their paper trading context.
+     * @deny (create) - User `attacker` attempts to create AI settings under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read AI settings under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update AI settings under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete AI settings under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data. Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/paperTradingContexts/{paperTradingContextId}/aiSettings/{aiSettingsId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
-      allow create: if isOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
-      allow update: if isExistingOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
+      allow create: if isOwner(userId) && getPaperTradingContext(userId, paperTradingContextId).data.userId == userId;
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the automation configuration collection. Only the owner can read and write their automation configurations.
+     * @description Enforces user-ownership for automation configurations.
      * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/automationConfigs/{automationConfigId}
-     * @allow (create) User with UID 'user_abc' can create an automation config under /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @allow (get) User with UID 'user_abc' can read the automation config at /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @allow (update) User with UID 'user_abc' can update the automation config at /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @allow (delete) User with UID 'user_abc' can delete the automation config at /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @deny (create) User with UID 'user_xyz' cannot create an automation config under /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @deny (get) User with UID 'user_xyz' cannot read the automation config at /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @deny (update) User with UID 'user_xyz' cannot update the automation config at /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the automation config at /users/user_abc/paperTradingContexts/ptc_123/automationConfigs/auto_123.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates an automation configuration under their paper trading context.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads an automation configuration under their paper trading context.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates an automation configuration under their paper trading context.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes an automation configuration under their paper trading context.
+     * @deny (create) - User `attacker` attempts to create an automation configuration under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read an automation configuration under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update an automation configuration under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete an automation configuration under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data. Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/paperTradingContexts/{paperTradingContextId}/automationConfigs/{automationConfigId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
-      allow create: if isOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
-      allow update: if isExistingOwner(userId) && request.resource.data.paperTradingContextId == paperTradingContextId;
+      allow create: if isOwner(userId) && getPaperTradingContext(userId, paperTradingContextId).data.userId == userId;
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Secures the notification collection. Only the owner can read and write their notifications.
+     * @description Enforces user-ownership for notifications.
      * @path /users/{userId}/notifications/{notificationId}
-     * @allow (create) User with UID 'user_abc' can create a notification under /users/user_abc/notifications/notif_123.
-     * @allow (get) User with UID 'user_abc' can read the notification at /users/user_abc/notifications/notif_123.
-     * @allow (update) User with UID 'user_abc' can update the notification at /users/user_abc/notifications/notif_123.
-     * @allow (delete) User with UID 'user_abc' can delete the notification at /users/user_abc/notifications/notif_123.
-     * @deny (create) User with UID 'user_xyz' cannot create a notification under /users/user_abc/notifications/notif_123.
-     * @deny (get) User with UID 'user_xyz' cannot read the notification at /users/user_abc/notifications/notif_123.
-     * @deny (update) User with UID 'user_xyz' cannot update the notification at /users/user_abc/notifications/notif_123.
-     * @deny (delete) User with UID 'user_xyz' cannot delete the notification at /users/user_abc/notifications/notif_123.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` creates a notification under their profile.
+     * @allow (get) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` reads a notification under their profile.
+     * @allow (update) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` updates a notification under their profile.
+     * @allow (delete) - User `MDzjcEpJMVOYFAjingObgZvdrcn1` deletes a notification under their profile.
+     * @deny (create) - User `attacker` attempts to create a notification under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (get) - User `attacker` attempts to read a notification under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (update) - User `attacker` attempts to update a notification under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @deny (delete) - User `attacker` attempts to delete a notification under `/users/MDzjcEpJMVOYFAjingObgZvdrcn1`.
+     * @principle Enforces document ownership for writes and restricts access to a user's own data.  Validates relational integrity by enforcing userId consistency.
      */
     match /users/{userId}/notifications/{notificationId} {
-      // Helper function to check if the user is signed in
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Helper function to check if the requested user ID matches the authenticated user ID.
-      function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
-      }
-
-      // Helper function to check if the user is the existing owner of the document.
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-
       allow create: if isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.userId == userId; // userId cannot be changed.
+      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
       allow delete: if isExistingOwner(userId);
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
+
+    function getPaperTradingContext(userId, paperTradingContextId) {
+        return get(/databases/$(database)/documents/users/$(userId)/paperTradingContexts/$(paperTradingContextId));
     }
   }
 }

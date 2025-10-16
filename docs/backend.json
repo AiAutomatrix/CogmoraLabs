@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -6,9 +7,9 @@
       "type": "object",
       "description": "Represents a user profile within the Cogmora Labs application.",
       "properties": {
-        "id": {
+        "uid": {
           "type": "string",
-          "description": "Unique identifier for the user profile."
+          "description": "The user's unique ID, from Firebase Authentication."
         },
         "email": {
           "type": "string",
@@ -24,510 +25,165 @@
           "description": "URL of the user's profile photo.",
           "format": "uri"
         },
-        "subscriptionTier": {
-          "type": "string",
-          "description": "The user's current subscription tier (e.g., Free, Premium)."
+        "createdAt": {
+          "type": "object",
+          "description": "Firestore server timestamp of when the user profile was created."
         }
       },
       "required": [
-        "id",
-        "email"
+        "uid",
+        "email",
+        "createdAt"
       ]
     },
     "PaperTradingContext": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "PaperTradingContext",
       "type": "object",
-      "description": "Represents the complete state of a user's paper trading environment.",
+      "description": "Represents the core settings of a user's paper trading environment. This is a singleton document per user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the PaperTradingContext entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to UserProfile. (Relationship: UserProfile 1:1 PaperTradingContext)"
-        },
         "balance": {
           "type": "number",
-          "description": "The user's current balance for paper trading."
-        },
-        "openPositions": {
-          "type": "array",
-          "description": "List of open positions.",
-          "items": {
-            "type": "string"
-          }
-        },
-        "tradeHistory": {
-          "type": "array",
-          "description": "History of trades.",
-          "items": {
-            "type": "string"
-          }
-        },
-        "watchlist": {
-          "type": "array",
-          "description": "List of assets in the user's watchlist.",
-          "items": {
-            "type": "string"
-          }
-        },
-        "triggers": {
-          "type": "array",
-          "description": "List of trade triggers.",
-          "items": {
-            "type": "string"
-          }
+          "description": "The user's current cash balance for paper trading."
         },
         "automationConfig": {
-          "type": "string",
-          "description": "Configuration for automated trading."
+          "type": "object",
+          "description": "Configuration for the automated watchlist scraper."
         },
         "aiSettings": {
-          "type": "string",
-          "description": "Settings for AI-powered trading assistance."
+          "type": "object",
+          "description": "Settings for the AI trading agent."
+        },
+        "lastAiActionPlan": {
+          "type": "object",
+          "description": "The last plan proposed by the AI agent, for state persistence.",
+          "nullable": true
+        },
+        "aiActionLogs": {
+           "type": "array",
+           "description": "A log of all AI actions executed by the user.",
+           "items": { "type": "object" }
         }
       },
       "required": [
-        "id",
-        "userId",
-        "balance"
-      ]
-    },
-    "TradeTrigger": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "TradeTrigger",
-      "type": "object",
-      "description": "Represents a trade trigger (price alert, etc.).",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the trade trigger."
-        },
-        "paperTradingContextId": {
-          "type": "string",
-          "description": "Reference to PaperTradingContext. (Relationship: PaperTradingContext 1:N TradeTrigger)"
-        },
-        "asset": {
-          "type": "string",
-          "description": "The asset that the trigger is based on (e.g., BTCUSD)."
-        },
-        "triggerType": {
-          "type": "string",
-          "description": "The type of trigger (e.g., price alert, moving average crossover)."
-        },
-        "triggerValue": {
-          "type": "number",
-          "description": "The value that triggers the event (e.g., price level)."
-        },
-        "action": {
-          "type": "string",
-          "description": "The action to take when the trigger fires (e.g., buy, sell)."
-        },
-        "status": {
-          "type": "string",
-          "description": "The status of the trigger (e.g., active, inactive, triggered)."
-        }
-      },
-      "required": [
-        "id",
-        "paperTradingContextId",
-        "asset",
-        "triggerType",
-        "triggerValue",
-        "action",
-        "status"
-      ]
-    },
-    "Trade": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Trade",
-      "type": "object",
-      "description": "Represents a trade that has been executed.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the trade."
-        },
-        "paperTradingContextId": {
-          "type": "string",
-          "description": "Reference to PaperTradingContext. (Relationship: PaperTradingContext 1:N Trade)"
-        },
-        "asset": {
-          "type": "string",
-          "description": "The asset that was traded (e.g., BTCUSD)."
-        },
-        "type": {
-          "type": "string",
-          "description": "The type of trade (e.g., buy, sell)."
-        },
-        "price": {
-          "type": "number",
-          "description": "The price at which the trade was executed."
-        },
-        "quantity": {
-          "type": "number",
-          "description": "The quantity of the asset that was traded."
-        },
-        "timestamp": {
-          "type": "string",
-          "description": "The timestamp of the trade execution.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "paperTradingContextId",
-        "asset",
-        "type",
-        "price",
-        "quantity",
-        "timestamp"
+        "balance",
+        "automationConfig",
+        "aiSettings"
       ]
     },
     "OpenPosition": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "OpenPosition",
       "type": "object",
-      "description": "Represents an open trading position.",
+      "description": "Represents an open trading position in the user's portfolio.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the open position."
-        },
-        "paperTradingContextId": {
-          "type": "string",
-          "description": "Reference to PaperTradingContext. (Relationship: PaperTradingContext 1:N OpenPosition)"
-        },
-        "asset": {
-          "type": "string",
-          "description": "The asset for the open position (e.g., BTCUSD)."
-        },
-        "entryPrice": {
-          "type": "number",
-          "description": "The price at which the position was opened."
-        },
-        "quantity": {
-          "type": "number",
-          "description": "The quantity of the asset in the position."
-        },
-        "timestamp": {
-          "type": "string",
-          "description": "The timestamp when the position was opened.",
-          "format": "date-time"
-        },
-        "stopLoss": {
-          "type": "number",
-          "description": "Stop loss price for the position."
-        },
-        "takeProfit": {
-          "type": "number",
-          "description": "Take profit price for the position."
-        }
+        "id": { "type": "string" },
+        "positionType": { "type": "string", "enum": ["spot", "futures"] },
+        "symbol": { "type": "string" },
+        "symbolName": { "type": "string" },
+        "size": { "type": "number" },
+        "averageEntryPrice": { "type": "number" },
+        "currentPrice": { "type": "number" },
+        "side": { "type": "string", "enum": ["buy", "long", "short"] },
+        "leverage": { "type": "number" },
+        "unrealizedPnl": { "type": "number" },
+        "priceChgPct": { "type": "number" },
+        "liquidationPrice": { "type": "number" },
+        "details": { "type": "object" }
       },
-      "required": [
-        "id",
-        "paperTradingContextId",
-        "asset",
-        "entryPrice",
-        "quantity",
-        "timestamp"
-      ]
+      "required": ["id", "symbol", "size", "averageEntryPrice"]
     },
-    "AiSettings": {
+    "PaperTrade": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "AiSettings",
+      "title": "PaperTrade",
       "type": "object",
-      "description": "Represents the settings used by the AI agent.",
+      "description": "Represents a single trade execution, logged for history.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the AI settings."
-        },
-        "paperTradingContextId": {
-          "type": "string",
-          "description": "Reference to PaperTradingContext. (Relationship: PaperTradingContext 1:1 AiSettings)"
-        },
-        "riskTolerance": {
-          "type": "string",
-          "description": "The user's risk tolerance (e.g., high, medium, low)."
-        },
-        "preferredAssets": {
-          "type": "array",
-          "description": "The user's preferred assets for trading.",
-          "items": {
-            "type": "string"
-          }
-        },
-        "aiAgentType": {
-          "type": "string",
-          "description": "The type of AI agent to use (e.g., trend follower, mean reversion)."
-        }
+        "id": { "type": "string" },
+        "positionId": { "type": "string" },
+        "symbol": { "type": "string" },
+        "size": { "type": "number" },
+        "price": { "type": "number" },
+        "side": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "closed"] }
       },
-      "required": [
-        "id",
-        "paperTradingContextId"
-      ]
+       "required": ["id", "positionId", "symbol", "price", "timestamp"]
     },
-    "AutomationConfig": {
+    "WatchlistItem": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "AutomationConfig",
+      "title": "WatchlistItem",
       "type": "object",
-      "description": "Represents the configuration for automated trading.",
+      "description": "Represents a single symbol in the user's watchlist.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Automation config."
-        },
-        "paperTradingContextId": {
-          "type": "string",
-          "description": "Reference to PaperTradingContext. (Relationship: PaperTradingContext 1:1 AutomationConfig)"
-        },
-        "isAutomationEnabled": {
-          "type": "boolean",
-          "description": "Indicates whether automated trading is enabled."
-        },
-        "maxConcurrentTrades": {
-          "type": "number",
-          "description": "The maximum number of concurrent trades allowed."
-        },
-        "tradeSizePercentage": {
-          "type": "number",
-          "description": "The percentage of the balance to use for each trade."
-        }
+        "symbol": { "type": "string" },
+        "symbolName": { "type": "string" },
+        "type": { "type": "string", "enum": ["spot", "futures"] },
+        "currentPrice": { "type": "number" }
       },
-      "required": [
-        "id",
-        "paperTradingContextId"
-      ]
+      "required": ["symbol", "symbolName", "type"]
     },
-    "Notification": {
+    "TradeTrigger": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Notification",
+      "title": "TradeTrigger",
       "type": "object",
-      "description": "Represents a notification to the user.",
+      "description": "Represents a conditional trade trigger.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the notification."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to UserProfile. (Relationship: UserProfile 1:N Notification)"
-        },
-        "type": {
-          "type": "string",
-          "description": "The type of notification (e.g., price alert, trade execution)."
-        },
-        "message": {
-          "type": "string",
-          "description": "The message of the notification."
-        },
-        "timestamp": {
-          "type": "string",
-          "description": "The timestamp of the notification.",
-          "format": "date-time"
-        },
-        "isRead": {
-          "type": "boolean",
-          "description": "Indicates whether the notification has been read."
-        }
+        "id": { "type": "string" },
+        "symbol": { "type": "string" },
+        "condition": { "type": "string", "enum": ["above", "below"] },
+        "targetPrice": { "type": "number" },
+        "action": { "type": "string" },
+        "amount": { "type": "number" }
       },
-      "required": [
-        "id",
-        "userId",
-        "type",
-        "message",
-        "timestamp"
-      ]
+      "required": ["id", "symbol", "targetPrice", "action", "amount"]
+    },
+    "PriceAlert": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PriceAlert",
+      "type": "object",
+      "description": "Represents a simple price alert for a symbol.",
+      "properties": {
+        "price": { "type": "number" },
+        "condition": { "type": "string", "enum": ["above", "below"] },
+        "triggered": { "type": "boolean" }
+      },
+      "required": ["price", "condition", "triggered"]
     }
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "password"
     ]
   },
   "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "UserProfile",
-          "schema": {
-            "$ref": "#/backend/entities/UserProfile"
-          },
-          "description": "Collection for storing user profiles.  Parent to all user-owned data.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/paperTradingContexts/{paperTradingContextId}",
-        "definition": {
-          "entityName": "PaperTradingContext",
-          "schema": {
-            "$ref": "#/backend/entities/PaperTradingContext"
-          },
-          "description": "Stores user's paper trading context. Under users/{userId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "paperTradingContextId",
-              "description": "The unique identifier for the paper trading context."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/paperTradingContexts/{paperTradingContextId}/trades/{tradeId}",
-        "definition": {
-          "entityName": "Trade",
-          "schema": {
-            "$ref": "#/backend/entities/Trade"
-          },
-          "description": "Stores trades for each paper trading context.  Under users/{userId}/paperTradingContexts/{paperTradingContextId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "paperTradingContextId",
-              "description": "The unique identifier for the paper trading context."
-            },
-            {
-              "name": "tradeId",
-              "description": "The unique identifier for the trade."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeTriggers/{tradeTriggerId}",
-        "definition": {
-          "entityName": "TradeTrigger",
-          "schema": {
-            "$ref": "#/backend/entities/TradeTrigger"
-          },
-          "description": "Stores trade triggers. Under users/{userId}/paperTradingContexts/{paperTradingContextId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "paperTradingContextId",
-              "description": "The unique identifier for the paper trading context."
-            },
-            {
-              "name": "tradeTriggerId",
-              "description": "The unique identifier for the trade trigger."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId}",
-        "definition": {
-          "entityName": "OpenPosition",
-          "schema": {
-            "$ref": "#/backend/entities/OpenPosition"
-          },
-          "description": "Stores open positions. Under users/{userId}/paperTradingContexts/{paperTradingContextId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "paperTradingContextId",
-              "description": "The unique identifier for the paper trading context."
-            },
-            {
-              "name": "openPositionId",
-              "description": "The unique identifier for the open position."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/paperTradingContexts/{paperTradingContextId}/aiSettings/{aiSettingsId}",
-        "definition": {
-          "entityName": "AiSettings",
-          "schema": {
-            "$ref": "#/backend/entities/AiSettings"
-          },
-          "description": "Stores AI settings. Under users/{userId}/paperTradingContexts/{paperTradingContextId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "paperTradingContextId",
-              "description": "The unique identifier for the paper trading context."
-            },
-            {
-              "name": "aiSettingsId",
-              "description": "The unique identifier for the ai settings."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/paperTradingContexts/{paperTradingContextId}/automationConfigs/{automationConfigId}",
-        "definition": {
-          "entityName": "AutomationConfig",
-          "schema": {
-            "$ref": "#/backend/entities/AutomationConfig"
-          },
-          "description": "Stores automation configurations. Under users/{userId}/paperTradingContexts/{paperTradingContextId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "paperTradingContextId",
-              "description": "The unique identifier for the paper trading context."
-            },
-            {
-              "name": "automationConfigId",
-              "description": "The unique identifier for the automation config."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/notifications/{notificationId}",
-        "definition": {
-          "entityName": "Notification",
-          "schema": {
-            "$ref": "#/backend/entities/Notification"
-          },
-          "description": "Stores notifications. Under users/{userId} for ownership.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "notificationId",
-              "description": "The unique identifier for the notification."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "The Firestore structure is designed to ensure authorization independence, scalability, and ease of debugging, adhering to the principles outlined in the prompt. User-specific data is stored under `/users/{userId}`. This path-based ownership simplifies security rules and supports atomic operations. Subcollections under the user's document, like `paperTradingContexts`, `trades`, `tradeTriggers`, `openPositions`, `aiSettings`, `automationConfigs`, and `notifications`, inherit this ownership. This structure avoids complex `get()` calls in security rules by placing user-owned data under a dedicated user ID path, making rules more straightforward and efficient. The structure facilitates QAPs (Rules are not Filters) by segregating user data, allowing secure list operations restricted to the authenticated user's data."
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Top-level collection for all user data. Document ID is the Firebase Auth UID."
+    },
+    "/users/{userId}/paperTradingContext/main": {
+      "schema": { "$ref": "#/entities/PaperTradingContext" },
+      "description": "A singleton document holding the main paper trading state for a user."
+    },
+    "/users/{userId}/paperTradingContext/main/openPositions/{positionId}": {
+      "schema": { "$ref": "#/entities/OpenPosition" },
+      "description": "Subcollection for a user's open trading positions."
+    },
+    "/users/{userId}/paperTradingContext/main/tradeHistory/{tradeId}": {
+      "schema": { "$ref": "#/entities/PaperTrade" },
+      "description": "Subcollection for a user's historical trades."
+    },
+    "/users/{userId}/paperTradingContext/main/watchlist/{symbol}": {
+      "schema": { "$ref": "#/entities/WatchlistItem" },
+      "description": "Subcollection for a user's watchlist. Document ID is the symbol."
+    },
+    "/users/{userId}/paperTradingContext/main/tradeTriggers/{triggerId}": {
+      "schema": { "$ref": "#/entities/TradeTrigger" },
+      "description": "Subcollection for a user's active trade triggers."
+    },
+    "/users/{userId}/paperTradingContext/main/priceAlerts/{symbol}": {
+      "schema": { "$ref": "#/entities/PriceAlert" },
+      "description": "Subcollection for a user's simple price alerts."
+    }
   }
 }
