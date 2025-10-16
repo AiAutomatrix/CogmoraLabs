@@ -347,10 +347,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const docRef = doc(userContextDocRef, 'tradeHistory', trade.id);
       batch.delete(docRef);
     });
-    batch.commit().catch(error => {
+    await batch.commit().catch(error => {
       errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: userContextDocRef.path,
-        operation: 'write', // Batch writes are generic writes
+        operation: 'write',
       }));
     });
     setTradeHistory([]);
@@ -684,7 +684,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             
             if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
 
-            // This is a safe place to fire toasts because it's an async event handler
             setPriceAlerts(prevAlerts => {
                 const alert = prevAlerts[symbol];
                 if (alert && !alert.triggered) {
@@ -742,7 +741,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         }
                         const updatedPosition = { ...p, currentPrice: newPrice!, unrealizedPnl, priceChgPct: priceChgPct ?? p.priceChgPct };
                         
-                        // SL/TP and Liquidation Check
                         let shouldClose = false;
                         let reason = '';
                         let closePrice: number | undefined = undefined;
@@ -786,7 +784,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
                         if (shouldClose && closePrice !== undefined) {
                             closePosition(updatedPosition.id, reason, closePrice);
-                            return null; // Position will be removed
+                            return null;
                         }
                         
                         return updatedPosition;
@@ -823,7 +821,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           triggersToDelete.forEach(t => batch.delete(doc(userContextDocRef, 'tradeTriggers', t.id)));
           batch.commit().catch(error => {
               errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: userContextDocRef.path, // Path of parent doc for batch
+                path: userContextDocRef.path,
                 operation: 'write',
               }));
           });
@@ -1034,9 +1032,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 batch.set(doc(userContextDocRef, 'watchlist', item.symbol), item);
             });
     
-            batch.commit().catch(error => {
+            await batch.commit().catch(error => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: userContextDocRef.path, // Path of parent doc for batch
+                path: userContextDocRef.path,
                 operation: 'write',
                 }));
             });
@@ -1279,9 +1277,65 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
   
 
-  const closeAllPositions = useCallback(() => {
-    openPositions.forEach(p => closePosition(p.id, 'Manual Close All'));
-  }, [openPositions, closePosition]);
+  const closeAllPositions = useCallback(async () => {
+    if (!userContextDocRef || !firestore) return;
+    const batch = writeBatch(firestore);
+    
+    let balanceChange = 0;
+    const closedTrades: PaperTrade[] = [];
+
+    openPositions.forEach(p => {
+        let pnl = 0;
+        let returnedValue = 0;
+
+        if (p.positionType === 'spot') {
+            pnl = (p.currentPrice - p.averageEntryPrice) * p.size;
+            returnedValue = p.size * p.currentPrice;
+        } else if (p.positionType === 'futures') {
+            const pnlMultiplier = p.side === 'long' ? 1 : -1;
+            pnl = (p.currentPrice - p.averageEntryPrice) * p.size * pnlMultiplier;
+            const collateral = (p.size * p.averageEntryPrice) / (p.leverage || 1);
+            returnedValue = collateral + pnl;
+        }
+        balanceChange += returnedValue;
+        
+        const closingTrade: PaperTrade = {
+            id: crypto.randomUUID(),
+            positionId: p.id,
+            positionType: p.positionType,
+            symbol: p.symbol,
+            symbolName: p.symbolName,
+            size: p.size,
+            price: p.currentPrice,
+            side: p.positionType === 'futures' ? (p.side === 'long' ? 'sell' : 'buy') : 'sell',
+            timestamp: Date.now(),
+            status: 'closed',
+            pnl,
+            ...(p.leverage && { leverage: p.leverage }),
+        };
+        closedTrades.push(closingTrade);
+
+        const posDocRef = doc(userContextDocRef, 'openPositions', p.id);
+        batch.delete(posDocRef);
+        const tradeDocRef = doc(userContextDocRef, 'tradeHistory', closingTrade.id);
+        batch.set(tradeDocRef, closingTrade);
+    });
+
+    const newBalance = balance + balanceChange;
+    batch.update(userContextDocRef, { balance: newBalance });
+
+    await batch.commit().catch(error => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: userContextDocRef.path, // Path of parent doc for batch
+        operation: 'write',
+      }));
+    });
+
+    setOpenPositions([]);
+    setBalance(newBalance);
+    setTradeHistory(prev => [...closedTrades, ...prev]);
+    toast({ title: 'All Positions Closed', description: `All open positions have been closed.` });
+  }, [openPositions, balance, userContextDocRef, firestore, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
