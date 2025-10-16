@@ -212,7 +212,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 lastAiActionPlan: null,
                 aiActionLogs: [],
             };
-            setDocumentNonBlocking(userContextDocRef, initialContext);
+            setDocumentNonBlocking(userContextDocRef, initialContext, { merge: false });
         }
         if (!dataLoadedRef.current) {
             setIsLoaded(true);
@@ -688,11 +688,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         };
         
         addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), closedTrade);
-        deleteSubcollectionDoc('openPositions', positionId);
+        deleteDocumentNonBlocking(doc(userContextDocRef!, 'openPositions', positionId));
         
         toast({ title: `${reason}: Position Closed`, description: `Closed ${pos.symbolName} for a PNL of ${pnl.toFixed(2)} USD` });
     }, 0);
-  }, [balance, openPositions, saveDataToFirestore, deleteSubcollectionDoc, toast, userContextDocRef]);
+  }, [balance, openPositions, saveDataToFirestore, toast, userContextDocRef]);
 
   
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -711,6 +711,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
 
         if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+        
+        const executedTriggerIds = new Set<string>();
 
         // Check and execute price alerts
         const alert = priceAlerts[symbol];
@@ -729,6 +731,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
                     executeTrigger(trigger, newPrice!);
+                    executedTriggerIds.add(trigger.id);
                 }
             }
         });
@@ -1316,3 +1319,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
