@@ -1208,7 +1208,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const allFuturesSymbols = useMemo(() => {
     const symbols = new Set<string>();
     openPositions.forEach(p => p.positionType === 'futures' && symbols.add(p.symbol));
-    watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
+    watchlist.forEach(w => w.type === 'futures' && symbols.add(p.symbol));
     tradeTriggers.forEach(t => t.type === 'futures' && symbols.add(t.symbol));
     return Array.from(symbols);
   }, [openPositions, watchlist, tradeTriggers]);
@@ -1258,7 +1258,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
 
   const closeAllPositions = useCallback(() => {
-    [...openPositions].forEach(p => closePosition(p.id, 'Close All'));
+    const positionsToClose = [...openPositions];
+    positionsToClose.forEach(p => {
+      // Use setTimeout to schedule the close operation, breaking the sync chain
+      setTimeout(() => {
+        closePosition(p.id, 'Close All');
+      }, 0);
+    });
   }, [openPositions, closePosition]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
@@ -1361,3 +1367,6 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+
+    
