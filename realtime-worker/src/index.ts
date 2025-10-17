@@ -210,49 +210,58 @@ collectAllSymbols(); // Initial run
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
-    // Use a batch to perform all writes atomically
     const batch = db.batch();
+    let writes = 0;
 
-    // Check for open positions to hit SL/TP
-    const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
-    const positionsSnapshot = await positionsQuery.get();
-    positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        const pos = doc.data();
-        if (pos.details?.status === 'closing') return;
+    try {
+        // Check for open positions to hit SL/TP
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsSnapshot = await positionsQuery.get();
+        positionsSnapshot.forEach((doc) => {
+            const pos = doc.data();
+            if (pos.details?.status === 'closing') return;
 
-        const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-        const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+            const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+            const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-        if (slHit || tpHit) {
-            console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-            batch.update(doc.ref, { 'details.status': 'closing' });
+            if (slHit || tpHit) {
+                console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                batch.update(doc.ref, { 'details.status': 'closing' });
+                writes++;
+            }
+        });
+
+        // Check for active trade triggers
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
+        const triggersSnapshot = await triggersQuery.get();
+        triggersSnapshot.forEach((doc) => {
+            const trigger = doc.data();
+            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+
+            if (conditionMet) {
+                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                // Deleting triggers is handled by the frontend/context now after execution
+                // We just mark it for execution. Here we'll just delete it for simplicity in the worker.
+                batch.delete(doc.ref); 
+                writes++;
+                // In a full implementation, you'd create the position here, not just delete the trigger.
+            }
+        });
+
+        // Update watchlist items with the new price
+        const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
+        const watchlistSnapshot = await watchlistQuery.get();
+        watchlistSnapshot.forEach((doc) => {
+            batch.update(doc.ref, { currentPrice: price });
+            writes++;
+        });
+
+        if (writes > 0) {
+            await batch.commit();
         }
-    });
-
-    // Check for active trade triggers
-    const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
-    const triggersSnapshot = await triggersQuery.get();
-    triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        const trigger = doc.data();
-        const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-        if (conditionMet) {
-            console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-            batch.delete(doc.ref); 
-        }
-    });
-
-    // Update watchlist items with the new price
-    const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
-    const watchlistSnapshot = await watchlistQuery.get();
-    watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        batch.update(doc.ref, { currentPrice: price });
-    });
-    
-    // Commit the batch
-    await batch.commit().catch(err => {
-        console.error(`Failed to commit price update batch for symbol ${symbol}:`, err);
-    });
+    } catch (err) {
+        console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
+    }
 }
 
 
