@@ -2,6 +2,7 @@
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
+import fetch from 'node-fetch'; // Import node-fetch
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
