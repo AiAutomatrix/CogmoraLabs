@@ -32,27 +32,17 @@ const createTriggerTool = ai.defineTool(
   {
     name: 'createTradeTrigger',
     description: 'Creates a new trade trigger for a symbol that does not have one.',
-    // Flatten the schema to make it easier for the model to follow
+    // Restructure the schema to be hierarchical, which is easier for the model
     inputSchema: z.object({
       reasoning: z.string().describe("A brief justification for why this new trigger is being proposed."),
-      symbol: ProposedTradeTriggerSchema.shape.symbol,
-      symbolName: ProposedTradeTriggerSchema.shape.symbolName,
-      type: ProposedTradeTriggerSchema.shape.type,
-      condition: ProposedTradeTriggerSchema.shape.condition,
-      targetPrice: ProposedTradeTriggerSchema.shape.targetPrice,
-      action: ProposedTradeTriggerSchema.shape.action,
-      amount: ProposedTradeTriggerSchema.shape.amount,
-      leverage: ProposedTradeTriggerSchema.shape.leverage,
-      stopLoss: ProposedTradeTriggerSchema.shape.stopLoss.optional(),
-      takeProfit: ProposedTradeTriggerSchema.shape.takeProfit.optional(),
-      cancelOthers: ProposedTradeTriggerSchema.shape.cancelOthers.optional(),
+      trigger: ProposedTradeTriggerSchema.describe("The full trigger object to be created."),
     }),
     outputSchema: AgentCreateActionSchema,
   },
-  async ({ reasoning, ...triggerProps }) => ({
+  async ({ reasoning, trigger }) => ({
     type: 'CREATE',
     reasoning,
-    trigger: triggerProps,
+    trigger,
   })
 );
 
