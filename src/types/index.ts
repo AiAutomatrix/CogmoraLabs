@@ -25,7 +25,7 @@ export type FirestorePaperTradingContext = z.infer<typeof FirestorePaperTradingC
 
 
 export const PaperTradeSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(), // Made optional as it's assigned by Firestore
   positionId: z.string(),
   positionType: z.enum(['spot', 'futures']),
   symbol: z.string(),
@@ -33,12 +33,13 @@ export const PaperTradeSchema = z.object({
   size: z.number(),
   price: z.number(),
   side: z.enum(['buy', 'sell', 'long', 'short']),
-  leverage: z.number().optional(),
+  leverage: z.number().nullable(), // Allow null
   timestamp: z.number(),
   status: z.enum(['open', 'closed']),
-  pnl: z.number().optional(),
+  pnl: z.number().optional().nullable(),
 });
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
+
 
 export const OpenPositionDetailsSchema = z.object({
   stopLoss: z.number().optional(),
@@ -57,7 +58,7 @@ export const OpenPositionSchema = z.object({
   averageEntryPrice: z.number(),
   currentPrice: z.number(),
   side: z.enum(['buy', 'long', 'short']),
-  leverage: z.number().optional(),
+  leverage: z.number().optional().nullable(),
   unrealizedPnl: z.number().optional(),
   priceChgPct: z.number().optional(),
   liquidationPrice: z.number().optional(),
@@ -367,7 +368,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof LiquiditySchema>;
+export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -615,3 +616,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    

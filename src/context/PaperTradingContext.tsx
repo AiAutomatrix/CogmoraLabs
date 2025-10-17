@@ -64,6 +64,11 @@ const INITIAL_AI_SETTINGS: AiTriggerSettings = {
   manageOpenPositions: false,
 };
 
+// --- ONE-TIME DATA RESET ---
+// This key will be used to check if the reset has been performed.
+const RESET_KEY = 'cogmora-profile-reset-v1';
+
+
 interface PaperTradingContextType {
   balance: number;
   openPositions: OpenPosition[];
@@ -182,6 +187,68 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
     return null;
   }, [user, firestore]);
+  
+  // ONE-TIME RESET LOGIC
+  useEffect(() => {
+    const performReset = async () => {
+      if (!userContextDocRef || !firestore) return;
+      
+      const hasBeenReset = localStorage.getItem(RESET_KEY);
+      if (hasBeenReset) return;
+
+      console.warn("PERFORMING ONE-TIME PROFILE RESET to clear corrupted data.");
+      toast({
+          title: "Profile Reset",
+          description: "Your paper trading account is being reset to clear corrupted data from a previous bug. Please wait.",
+          duration: 10000,
+      });
+
+      try {
+        // Collections to wipe
+        const collectionsToWipe = ['openPositions', 'tradeHistory', 'tradeTriggers', 'priceAlerts'];
+        const batch = writeBatch(firestore);
+
+        for (const collectionName of collectionsToWipe) {
+            const collectionRef = collection(userContextDocRef, collectionName);
+            const snapshot = await getDocs(collectionRef);
+            snapshot.forEach(doc => batch.delete(doc.ref));
+        }
+
+        // Reset the main context document
+        const initialContext: FirestorePaperTradingContext = {
+            balance: INITIAL_BALANCE,
+            automationConfig: INITIAL_AUTOMATION_CONFIG,
+            aiSettings: INITIAL_AI_SETTINGS,
+            lastAiActionPlan: null,
+            aiActionLogs: [],
+        };
+        batch.set(userContextDocRef, initialContext);
+
+        await batch.commit();
+
+        localStorage.setItem(RESET_KEY, 'true');
+        toast({
+            title: "Profile Reset Complete",
+            description: "Your account has been reset. You can now continue trading.",
+            variant: 'default',
+        });
+        console.log("ONE-TIME PROFILE RESET COMPLETE.");
+      } catch (error) {
+          console.error("FAILED TO PERFORM ONE-TIME PROFILE RESET:", error);
+          toast({
+              title: "Profile Reset Failed",
+              description: "Could not reset your profile. Please contact support.",
+              variant: "destructive",
+          });
+      }
+    };
+    
+    // Only run this if the context is ready
+    if(userContextDocRef && firestore) {
+      performReset();
+    }
+
+  }, [userContextDocRef, firestore, toast]);
 
   // Combined listener setup
   useEffect(() => {
@@ -460,8 +527,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
       }
       
-      const newTrade: PaperTrade = {
-        id: crypto.randomUUID(),
+      const newTrade: Omit<PaperTrade, 'id'> = {
         positionId: positionId,
         positionType: 'spot',
         symbol,
@@ -469,6 +535,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         size,
         price: currentPrice,
         side: 'buy',
+        leverage: null, // Explicitly set to null for spot trades
         timestamp: Date.now(),
         status: 'open',
       };
@@ -520,8 +587,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ balance: newBalance });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
-      const newTrade: PaperTrade = {
-          id: crypto.randomUUID(),
+      const newTrade: Omit<PaperTrade, 'id'> = {
           positionId: newPosition.id,
           positionType: "futures",
           symbol,
@@ -579,8 +645,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ balance: newBalance });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
-      const newTrade: PaperTrade = {
-          id: crypto.randomUUID(),
+      const newTrade: Omit<PaperTrade, 'id'> = {
           positionId: newPosition.id,
           positionType: "futures",
           symbol,
@@ -614,6 +679,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   };
   
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
+    deleteSubcollectionDoc('tradeTriggers', trigger.id);
+
     setTimeout(() => {
       toast({
         title: 'Trade Trigger Executed!',
@@ -632,8 +699,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
       }
       
-      deleteSubcollectionDoc('tradeTriggers', trigger.id);
-
       if (trigger.cancelOthers) {
         tradeTriggers.forEach(t => {
           if (t.symbol === trigger.symbol && t.id !== trigger.id) {
@@ -661,8 +726,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       
       saveDataToFirestore({ balance: newBalance });
 
-      const closedTrade: PaperTrade = {
-        id: crypto.randomUUID(),
+      const closedTrade: Omit<PaperTrade, 'id'> = {
         positionId: pos.id,
         positionType: pos.positionType,
         symbol: pos.symbol,
@@ -670,7 +734,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         size: pos.size,
         price: pos.currentPrice,
         side: pos.side === 'buy' ? 'sell' : pos.side,
-        leverage: pos.leverage,
+        leverage: pos.leverage ?? null, // Ensure leverage is null for spot trades
         timestamp: Date.now(),
         status: 'closed',
         pnl: pnl,
@@ -1161,7 +1225,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     watchlist.forEach(w => w.type === 'spot' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'spot' && symbols.add(t.symbol));
     return Array.from(symbols);
-  }, [openPositions, watchlist, tradeTriggers, isLoaded]);
+  }, [isLoaded, openPositions, watchlist, tradeTriggers]);
 
   const allFuturesSymbols = useMemo(() => {
     if (!isLoaded) return [];
@@ -1170,7 +1234,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'futures' && symbols.add(t.symbol));
     return Array.from(symbols);
-  }, [openPositions, watchlist, tradeTriggers, isLoaded]);
+  }, [isLoaded, openPositions, watchlist, tradeTriggers]);
   
   useEffect(() => {
     if (!isLoaded) return;
@@ -1316,3 +1380,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
