@@ -2,7 +2,7 @@
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
-import fetch from 'node-fetch'; // Import node-fetch
+import fetch from 'node-fetch'; // Use node-fetch
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -215,7 +215,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     let writes = 0;
 
     try {
-        // Check for open positions to hit SL/TP
+        // Check for open positions to hit SL/TP - SIMPLIFIED QUERY
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         positionsSnapshot.forEach((doc) => {
@@ -232,7 +232,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // Check for active trade triggers
+        // Check for active trade triggers - SIMPLIFIED QUERY
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
@@ -249,7 +249,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // Update watchlist items with the new price
+        // Update watchlist items with the new price - SIMPLIFIED QUERY
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
         watchlistSnapshot.forEach((doc) => {
