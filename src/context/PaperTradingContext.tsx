@@ -705,7 +705,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const pos = openPositions.find(p => p.id === positionId);
     if (!pos) return;
   
-    // Update the position status to 'closing' which will be handled by a backend function
+    // Update the position status to 'closing' which will be handled by the backend function
     saveSubcollectionDoc('openPositions', positionId, { details: { ...pos.details, status: 'closing' } });
     
     toast({
@@ -940,7 +940,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
   
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
-    const newConfig = { ...config, lastRun: config.updateMode === 'auto-refresh' ? Date.now() : null };
+    const newConfig: AutomationConfig = { ...config };
+    // Only update lastRun if it's an auto-refresh schedule being set or saved
+    if (config.updateMode === 'auto-refresh') {
+        newConfig.lastRun = Date.now();
+    } else {
+        newConfig.lastRun = null;
+    }
     saveDataToFirestore({ automationConfig: newConfig });
     if (config.updateMode === 'auto-refresh') {
         toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
@@ -948,12 +954,20 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
     }
   }, [toast, saveDataToFirestore]);
+
   
   const setAiSettings = useCallback((settings: AiTriggerSettings) => {
-      const newSettings = { ...settings, nextRun: settings.scheduleInterval ? Date.now() + settings.scheduleInterval : null };
+      const newSettings: AiTriggerSettings = { ...settings };
+      if (settings.scheduleInterval) {
+          newSettings.nextRun = Date.now() + settings.scheduleInterval;
+      } else {
+          newSettings.nextRun = null;
+      }
       saveDataToFirestore({ aiSettings: newSettings });
       if (!settings.scheduleInterval) {
           toast({ title: 'AI Automation Saved', description: `AI agent auto-run has been disabled.` });
+      } else {
+          toast({ title: 'AI Automation Saved', description: `AI agent will run every ${settings.scheduleInterval / 60000} minutes.` });
       }
   }, [toast, saveDataToFirestore]);
 
