@@ -42,7 +42,7 @@ class WebSocketManager {
                 this.resubscribe();
             });
 
-            this.ws.on('message', (data) => {
+            this.ws.on('message', (data: string) => {
                 this.handleMessage(data.toString());
             });
 
@@ -158,14 +158,14 @@ async function collectAllSymbols() {
     const futuresSymbols = new Set<string>();
 
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
-    triggersSnapshot.forEach(doc => {
+    triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const trigger = doc.data();
         if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
         if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
     const positionsSnapshot = await db.collectionGroup('openPositions').get();
-    positionsSnapshot.forEach(doc => {
+    positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const position = doc.data();
         if (position.positionType === 'spot') spotSymbols.add(position.symbol);
         if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
@@ -185,7 +185,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     // Check for open positions to hit SL/TP
     const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
     const positionsSnapshot = await positionsQuery.get();
-    positionsSnapshot.forEach(doc => {
+    positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const pos = doc.data();
         if (pos.details?.status === 'closing') return;
 
@@ -201,7 +201,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     // Check for active trade triggers
     const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
     const triggersSnapshot = await triggersQuery.get();
-    triggersSnapshot.forEach(async doc => {
+    triggersSnapshot.forEach(async (doc: admin.firestore.QueryDocumentSnapshot) => {
         const trigger = doc.data();
         const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
