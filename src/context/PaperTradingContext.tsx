@@ -754,14 +754,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               return p;
           })
         );
-        
-        // This is now handled by the backend worker writing to Firestore
-        // setWatchlist(prev => prev.map(item => item.symbol === symbol ? {
-        //   ...item,
-        //   currentPrice: newPrice!,
-        //   priceChgPct: priceChgPct ?? item.priceChgPct,
-        //   snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData,
-        // } : item));
 
         const alert = priceAlerts[symbol];
         if (alert && !alert.triggered) {
@@ -1199,7 +1191,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
 
-  // Symbols for frontend websockets (positions and triggers)
+  // Determine which symbols this frontend client needs to be concerned with for live prices.
+  // This NO LONGER includes the watchlist.
   const spotSymbolsToWatch = useMemo(() => {
     if (!isLoaded) return [];
     const symbols = new Set<string>();
@@ -1369,3 +1362,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
