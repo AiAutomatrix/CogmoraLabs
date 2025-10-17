@@ -1,5 +1,4 @@
 
-
 "use client";
 import React, {
   createContext,
@@ -165,17 +164,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
   const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
 
+  // Queues for processing side effects from price updates
+  const executedTriggerIds = useRef(new Set<string>());
+  const positionsToCloseIds = useRef(new Set<string>());
+  const triggeredAlerts = useRef(new Set<string>());
+
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const spotSubscriptionsRef = useRef<Set<string>>(new Set());
+  const spotSubscriptionsRef = useRef(new Set<string>());
   const spotReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const spotReconnectAttempts = useRef(0);
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const futuresSubscriptionsRef = useRef<Set<string>>(new Set());
+  const futuresSubscriptionsRef = useRef(new Set<string>());
   const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectAttempts = useRef(0);
 
@@ -710,25 +714,41 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const pos = openPositions.find(p => p.id === positionId);
     if (!pos) return;
   
-    // Don't calculate P&L here. Just mark for closing.
-    const updatedDetails: OpenPositionDetails = {
-      ...(pos.details || {}),
-      status: 'closing',
+    const pnl = pos.unrealizedPnl ?? 0;
+    
+    let newBalance = balance + pnl;
+    if (pos.positionType === 'futures' && pos.leverage) {
+        const collateral = (pos.size * pos.averageEntryPrice) / pos.leverage;
+        newBalance += collateral;
+    } else if (pos.positionType === 'spot') {
+        // For spot, the initial amount was already subtracted from balance.
+        // We just add the full current value back.
+        const currentValue = pos.size * pos.currentPrice;
+        newBalance = balance + currentValue;
+    }
+
+    saveDataToFirestore({ balance: newBalance });
+    
+    const tradeUpdate: Partial<PaperTrade> = {
+        status: 'closed',
+        pnl: pnl,
     };
-  
-    saveSubcollectionDoc('openPositions', positionId, { details: updatedDetails });
-  
+    
+    const tradeToUpdate = tradeHistory.find(t => t.positionId === positionId && t.status === 'open');
+    if (tradeToUpdate) {
+        saveSubcollectionDoc('tradeHistory', tradeToUpdate.id!, tradeUpdate);
+    }
+    
+    deleteSubcollectionDoc('openPositions', positionId);
     toast({
-      title: "Closing Position...",
-      description: `${pos.symbolName} position has been marked for closing.`
+        title: "Position Closed",
+        description: `${pos.symbolName} position closed. P&L: ${formatPrice(pnl)}`
     });
-  }, [openPositions, toast, saveSubcollectionDoc]);
+  }, [openPositions, balance, tradeHistory, toast, saveSubcollectionDoc, deleteSubcollectionDoc, saveDataToFirestore]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
   useEffect(() => {
-    const executedTriggerIds = new Set<string>();
-
     processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
         let newPrice: number | undefined, priceChgPct: number | undefined;
 
@@ -750,9 +770,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                   // Check for SL/TP hits for open positions
                   if (p.details?.status !== 'closing') {
                       if (p.details?.stopLoss && ((p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
-                          closePosition(p.id);
+                          positionsToCloseIds.current.add(p.id);
                       } else if (p.details?.takeProfit && ((p.side === 'long' || p.side === 'buy') ? newPrice! >= p.details.takeProfit : newPrice! <= p.details.takeProfit)) {
-                          closePosition(p.id);
+                          positionsToCloseIds.current.add(p.id);
                       }
                   }
 
@@ -778,23 +798,61 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (alert && !alert.triggered) {
             const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
             if (conditionMet) {
-                const updatedAlert = { ...alert, triggered: true, notified: true };
-                saveSubcollectionDoc('priceAlerts', symbol, updatedAlert);
-                toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
+                triggeredAlerts.current.add(symbol);
             }
         }
         
         tradeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol && !executedTriggerIds.has(trigger.id)) {
+            if (trigger.symbol === symbol) {
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
-                    executedTriggerIds.add(trigger.id);
-                    executeTrigger(trigger, newPrice!);
+                    executedTriggerIds.current.add(trigger.id);
                 }
             }
         });
     };
-  }, [toast, executeTrigger, saveSubcollectionDoc, priceAlerts, tradeTriggers, closePosition]);
+  }, [priceAlerts, tradeTriggers]);
+
+  // Effect to process the queues of side effects
+  useEffect(() => {
+    if (executedTriggerIds.current.size > 0) {
+      const triggersToExecute = Array.from(executedTriggerIds.current);
+      executedTriggerIds.current.clear();
+      
+      triggersToExecute.forEach(triggerId => {
+        const trigger = tradeTriggers.find(t => t.id === triggerId);
+        const watchlistItem = watchlist.find(w => w.symbol === trigger?.symbol);
+        if (trigger && watchlistItem?.currentPrice) {
+          executeTrigger(trigger, watchlistItem.currentPrice);
+        }
+      });
+    }
+
+    if (positionsToCloseIds.current.size > 0) {
+      const positionsToActOn = Array.from(positionsToCloseIds.current);
+      positionsToCloseIds.current.clear();
+
+      positionsToActOn.forEach(positionId => {
+        closePosition(positionId);
+      });
+    }
+    
+    if (triggeredAlerts.current.size > 0) {
+        const alertsToFire = Array.from(triggeredAlerts.current);
+        triggeredAlerts.current.clear();
+
+        alertsToFire.forEach(symbol => {
+            const alert = priceAlerts[symbol];
+            if (alert) {
+                const updatedAlert = { ...alert, triggered: true, notified: true };
+                saveSubcollectionDoc('priceAlerts', symbol, updatedAlert);
+                toast({ title: "Price Alert Triggered!", description: `${symbol} has reached your alert price of ${alert.price}.` });
+            }
+        });
+    }
+
+  }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, closePosition, saveSubcollectionDoc, toast]);
+
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
@@ -1364,5 +1422,8 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
+
 
     
