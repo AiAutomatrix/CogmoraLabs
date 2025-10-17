@@ -1,22 +1,25 @@
 # Use an official Node.js runtime as a parent image
 FROM node:20-slim
 
+# Install CA certificates for secure WebSocket (WSS) and HTTPS connections
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+
 # Set the working directory in the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json to the working directory
+# Copy package.json and package-lock.json
 COPY package*.json ./
 
 # Install any needed packages
 RUN npm install
 
-# Copy the rest of the application's source code
+# Bundle app source
 COPY . .
 
-# Compile TypeScript to JavaScript
+# Build the TypeScript code
 RUN npm run build
 
-# Make port 8080 available to the world outside this container
+# Your app binds to port 8080 so you'll use the EXPOSE instruction
 EXPOSE 8080
 
 # Define the command to run your app

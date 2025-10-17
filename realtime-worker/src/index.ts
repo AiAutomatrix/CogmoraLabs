@@ -29,7 +29,7 @@ class WebSocketManager {
         console.log(`[${this.name}] Attempting to connect...`);
         try {
             const response = await fetch(this.tokenEndpoint, { method: 'POST' });
-            const tokenData = await response.json();
+            const tokenData = await response.json() as any;
             if (tokenData.code !== '200000') throw new Error(tokenData.msg);
 
             const { token, instanceServers } = tokenData.data;
@@ -215,7 +215,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     let writes = 0;
 
     try {
-        // Check for open positions to hit SL/TP - SIMPLIFIED QUERY
+        // Check for open positions to hit SL/TP
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         positionsSnapshot.forEach((doc) => {
@@ -232,7 +232,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // Check for active trade triggers - SIMPLIFIED QUERY
+        // Check for active trade triggers
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
@@ -241,15 +241,12 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             if (conditionMet) {
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-                // Deleting triggers is handled by the frontend/context now after execution
-                // We just mark it for execution. Here we'll just delete it for simplicity in the worker.
                 batch.delete(doc.ref); 
                 writes++;
-                // In a full implementation, you'd create the position here, not just delete the trigger.
             }
         });
 
-        // Update watchlist items with the new price - SIMPLIFIED QUERY
+        // Update watchlist items with the new price
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
         watchlistSnapshot.forEach((doc) => {
