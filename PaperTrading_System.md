@@ -2,54 +2,42 @@
 
 This document outlines the architecture and functionality of the comprehensive paper trading feature within the Cogmora Labs application. It enables users to simulate both spot and leveraged futures cryptocurrency trades using live market data from KuCoin without risking real money.
 
-## Core Architecture: The `PaperTradingContext`
+## Core Architecture: A Hybrid Client-Server Model
 
-The entire paper trading engine is a self-contained, client-side system built using React's Context API. This approach centralizes state management and logic, making the system responsive and persistent across browser sessions.
+The paper trading engine is a sophisticated hybrid system that intelligently combines a real-time client-side interface with a powerful autonomous backend.
 
-- **`PaperTradingContext.tsx`**: This file is the heart and brain of the entire system. It is a React Context provider that manages:
-  -   **Virtual Account**: Tracks the user's cash `balance`. New users start with a default of **$100,000**.
-  -   **State Management**: Holds the state for `openPositions` (spot & futures), `tradeHistory`, the `watchlist`, `priceAlerts`, and `tradeTriggers`.
-  -   **Automation Configuration**: Manages `automationConfig` for the watchlist scraper and `aiSettings` for the AI Trading Agent, including their scheduled execution timers.
-  -   **Trade Execution**: Contains the core logic for all trade functions: `buy`, `futuresBuy`, `futuresSell`, and `closePosition`.
-  -   **WebSocket Connections**: Manages live WebSocket connections to KuCoin for both spot and futures price feeds, ensuring real-time data is piped directly into the state.
-- **Local Storage Persistence**: The entire state of the paper trading account—including balance, positions, history, watchlist, and all automation settings—is automatically serialized and saved to the browser's `localStorage` whenever it changes.
+### 1. The Client-Side Engine: `PaperTradingContext.tsx`
 
-## Real-Time Data Flow via WebSockets
+This is the heart and brain of the user-facing application, providing an instant, responsive experience.
 
-To provide a live trading experience, the system establishes and maintains direct WebSocket connections to KuCoin's public feeds. This logic is managed entirely within `PaperTradingContext.tsx`.
+-   **State Management**: It manages the user's entire trading state (`balance`, `openPositions`, `tradeHistory`, `watchlist`, `priceAlerts`, `tradeTriggers`, and all automation settings) and syncs it with Firestore in real-time.
+-   **Live UI Updates**: It establishes its own WebSocket connections to KuCoin's spot and futures feeds. This allows the UI to display live prices and P&L updates without waiting for a backend.
+-   **Trade Initiation**: When a user manually initiates a trade, the `PaperTradingContext` executes the initial write to the database.
 
-1.  **Connection Management**: The context manages two independent WebSocket instances:
-    -   A **Spot WebSocket** that subscribes to the `/market/snapshot:{symbol}` topic.
-    -   A **Futures WebSocket** that subscribes to the `/contractMarket/snapshot:{symbol}` topic.
-2.  **Dynamic Subscriptions**: The context is intelligent. When a new position is opened, an item is added to the watchlist, or a trade trigger is set, it adds the required symbol to a subscription list. When no longer needed, it unsubscribes to keep connections efficient.
-3.  **Live Price Updates**: The `onmessage` event handlers for both WebSockets listen for new price data.
-4.  **`processUpdate` Function**: When a new price is received, this utility function is called. It iterates through `openPositions` and `watchlist`, finds the matching item, and updates its `currentPrice`, `priceChgPct`, etc. It also checks if any price alerts or trade triggers have been met.
-5.  **Reactive UI**: Because all data is held in React state, any update from the WebSocket automatically triggers a re-render in the UI, ensuring all metrics are always live.
+### 2. The Backend Engine (Cloud Functions & Cloud Run)
 
-## Trade Execution Flow
+This is the autonomous, 24/7 part of the system that works even when the user's app is closed.
 
-### Spot Trading
-1.  **Initiation**: User clicks the "Buy" (<ShoppingCart/>) button in the `AllTickersScreener.tsx`.
-2.  **Input**: The `TradePopup.tsx` modal appears, asking for a USD allocation.
-3.  **Execution**: Upon confirmation, the `buy` function in the context is called. It subtracts the allocation from the balance, creates/updates a spot `OpenPosition`, and logs the transaction.
+-   **Scheduled Automation (Cloud Functions)**:
+    -   **AI Agent**: A scheduled function runs the AI analysis (`proposeTradeTriggers` flow) based on the user's `aiSettings` in Firestore.
+    -   **Watchlist Scraper**: A scheduled function runs the watchlist automation based on the `automationConfig` in Firestore.
+-   **Real-Time Trigger Execution (Cloud Run)**:
+    -   A persistent, always-on service maintains its own WebSocket connections to KuCoin.
+    -   It constantly monitors all users' `tradeTriggers` and open positions' SL/TP levels in Firestore.
+    -   The moment a price condition is met, this service executes the trade or closes the position by writing directly to the database.
+-   **Reliable Position Closing (Cloud Functions)**:
+    -   A `closePositionHandler` function is automatically triggered whenever any position (closed either by the user or the real-time worker) is marked for closing. It securely calculates P&L and finalizes the database transaction.
 
-### Futures Trading (Leveraged)
-1.  **Initiation**: User clicks the "Trade" (<BarChartHorizontal/>) button in the `AllFuturesScreener.tsx`.
-2.  **Input**: The `FuturesTradePopup.tsx` modal appears, prompting for **collateral** and **leverage**.
-3.  **Execution**: The user chooses to "Buy / Long" or "Sell / Short," calling `futuresBuy` or `futuresSell`. The collateral is subtracted from the balance, and a new `OpenPosition` is created.
+## Real-Time Data Flow
+
+1.  **Client-Side**: The `PaperTradingContext` connects to WebSockets to provide a live UI. It dynamically subscribes to symbols based on what the user is currently viewing or trading.
+2.  **Server-Side**: The **Cloud Run worker** maintains its own WebSocket connections, dynamically subscribing to all symbols that *any* user has in an open position, trigger, or watchlist, ensuring nothing is missed.
+3.  **Synchronization**: Both the client and the server write to and read from the same **Firestore database**. When the backend Cloud Run worker executes a trade, it writes to Firestore. The `onSnapshot` listeners in the user's client-side app immediately pick up this change and update the UI in real-time, making it appear as if the trade happened directly in the app.
 
 ## Advanced Features
 
-- **Price Alerts**: Users can set price targets on watchlist items. The context checks these alerts on every price update and fires a toast notification when a target is hit.
-- **Trade Triggers**: Users can create conditional orders (e.g., "Buy 100 USD of BTC if price drops below $65,000"). These are stored in the context and executed automatically when the condition is met by the WebSocket price feed. Active triggers are displayed on the "Triggers" tab.
-- **Stop Loss / Take Profit**: SL/TP price levels can be attached to any open position. The context continuously monitors these and will automatically close the position if a level is breached.
-- **Watchlist Automation**: Users can configure rules in the `AutomateWatchlistPopup` to automatically scrape the KuCoin screeners and populate the watchlist based on criteria like "Top 10 by Volume." This can be a one-time action or a scheduled auto-refresh. The countdown timer appears on the "Triggers" tab.
-- **AI Agent Automation**: Users can configure the AI Paper Trading Agent to run on a schedule. The countdown timer for the next analysis run also appears on the "Triggers" tab.
-
-## Component Relationships
-
--   **`PaperTradingProvider`**: Wraps the main application in `dashboard/page.tsx` to provide the context.
--   **`PaperTradingDashboard.tsx`**: The primary UI. Consumes all data from the `usePaperTrading` hook to display metrics, positions, triggers, watchlist, and history.
--   **`AllTickersScreener.tsx` & `AllFuturesScreener.tsx`**: Originate spot and futures trades.
--   **`Watchlist.tsx`**: Allows users to set up alerts and complex trade triggers.
--   **`TradePopup.tsx` & `FuturesTradePopup.tsx`**: Modals for entering and confirming trades.
+-   **Price Alerts**: Users can set price targets on watchlist items. The client-side context checks these alerts on every price update and fires a toast notification.
+-   **Trade Triggers**: Users create conditional orders. These are saved to Firestore, where they are monitored and executed 24/7 by the **Cloud Run worker**.
+-   **Stop Loss / Take Profit**: SL/TP levels are saved to an open position's document in Firestore. They are also monitored and executed 24/7 by the **Cloud Run worker**.
+-   **Watchlist Automation**: Users configure rules in the UI. The settings are saved to Firestore and executed on a schedule by a **Cloud Function**.
+-   **AI Agent Automation**: Users configure the AI agent's schedule in the UI. The settings are saved to Firestore and executed on a schedule by a **Cloud Function**.
