@@ -13,7 +13,7 @@ To transform the paper trading engine from a client-dependent tool into a fully 
 
 ## 2. Key Components & Data Flow
 
--   **Firestore Database**: Serves as the "single source of truth." All state, including user settings, open positions, and active triggers, is stored here. The frontend UI and the backend functions both read from and write to Firestore.
+-   **Firestore Database**: Serves as the "single source of truth." All state, including user settings, open positions (`openPositions`), active triggers (`tradeTriggers`), watchlist items (`watchlist`), trade history (`tradeHistory`), and AI agent logs (`aiActionLogs`) is stored here. The frontend UI and the backend functions both read from and write to Firestore.
 -   **Cloud Functions for Firebase**: Provides the serverless compute environment where our backend logic will execute. We will use two primary types of functions:
     1.  **Scheduled Functions (Pub/Sub)**: Triggered on a recurring schedule (e.g., every minute) by Cloud Scheduler. These are perfect for our AI agent and watchlist scraper.
     2.  **Firestore Triggers (`onWrite`)**: Triggered automatically in response to specific data changes in the database. This is ideal for handling real-time events like closing a position.
@@ -49,7 +49,7 @@ This will be a single, efficient scheduled function that runs every minute and a
     4.  **Query for Watchlist Scraper Tasks**: Query all `users` documents where `automationConfig.updateMode` is `auto-refresh` AND `automationConfig.lastRun + automationConfig.refreshInterval` is less than or equal to the current time.
     5.  **Execute Scraper Tasks**: For each user found, asynchronously:
         -   Perform the screener scraping logic (same as in the current `applyWatchlistAutomation` function).
-        -   Update the user's `watchlist` subcollection.
+        -   Update the user's `watchlist` subcollection based on their `automationConfig` settings.
         -   Update the user's `automationConfig.lastRun` to the current time.
 
 ### Function 2: Position Closer (`closePositionHandler`)
@@ -74,15 +74,15 @@ This function will handle the financial calculations for closing a trade, ensuri
 
 ---
 
-## 4. (Future Vision) Persistent WebSocket Worker
+## 4. (Future Vision) Persistent WebSocket Worker for Real-Time Triggers
 
-While scheduled functions are great for periodic tasks, a true real-time trigger system requires an always-on WebSocket connection. This is a more advanced setup.
+While scheduled functions are great for periodic tasks, a true real-time trigger system requires an always-on WebSocket connection. This is a more advanced setup that would provide instant execution.
 
 -   **Architecture**: A dedicated, long-running service (e.g., a Node.js process on Cloud Run or a VPS) that maintains a single, persistent WebSocket connection to KuCoin for the `/market/ticker:all` topic.
 -   **Logic**:
-    1.  Receives a price tick.
-    2.  Queries all `tradeTriggers` across all users in Firestore that match the incoming symbol.
-    3.  For each matching trigger, it checks if the price condition is met.
+    1.  Receives a price tick from the WebSocket.
+    2.  Queries all `tradeTriggers` across all users in Firestore that match the incoming symbol. This query would be highly efficient using Firestore's indexing.
+    3.  For each matching trigger, it checks if the new price condition is met.
     4.  If a condition is met, it writes to a new collection, e.g., `/pendingExecutions/{executionId}`, containing the `triggerId` and `userId`.
 -   **Execution**: A separate `onWrite` Firestore trigger on `/pendingExecutions/{executionId}` would then wake up, execute the trade logic (similar to the `closePositionHandler`), and delete the trigger and pending execution documents.
 
