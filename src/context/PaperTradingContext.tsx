@@ -633,6 +633,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       
       deleteSubcollectionDoc('tradeTriggers', trigger.id);
+
       if (trigger.cancelOthers) {
         tradeTriggers.forEach(t => {
           if (t.symbol === trigger.symbol && t.id !== trigger.id) {
@@ -643,19 +644,48 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }, 0);
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
- const closePosition = useCallback((positionId: string) => {
-    const pos = openPositions.find(p => p.id === positionId);
-    if (!pos) return;
+  const closePosition = useCallback((positionId: string) => {
+    setTimeout(() => {
+      const pos = openPositions.find(p => p.id === positionId);
+      if (!pos) return;
 
-    // Instead of executing, we just mark the position for closing.
-    // A backend function would listen for this change.
-    saveSubcollectionDoc('openPositions', positionId, { ...pos, status: 'closing' });
+      const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
+      let newBalance = balance;
 
-    toast({
-        title: "Position Marked for Closing",
-        description: `${pos.symbolName} is being closed.`,
-    });
-}, [openPositions, saveSubcollectionDoc, toast]);
+      if (pos.positionType === 'futures' && pos.leverage) {
+        const collateral = (pos.size * pos.averageEntryPrice) / pos.leverage;
+        newBalance += collateral + pnl;
+      } else {
+        newBalance += (pos.size * pos.currentPrice);
+      }
+      
+      saveDataToFirestore({ balance: newBalance });
+
+      const closedTrade: PaperTrade = {
+        id: crypto.randomUUID(),
+        positionId: pos.id,
+        positionType: pos.positionType,
+        symbol: pos.symbol,
+        symbolName: pos.symbolName,
+        size: pos.size,
+        price: pos.currentPrice,
+        side: pos.side === 'buy' ? 'sell' : pos.side,
+        leverage: pos.leverage,
+        timestamp: Date.now(),
+        status: 'closed',
+        pnl: pnl,
+      };
+      
+      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), closedTrade);
+      deleteSubcollectionDoc('openPositions', positionId);
+      
+      toast({
+        title: "Position Closed",
+        description: `${pos.symbolName} position closed with P&L: ${formatPrice(pnl)}.`,
+        variant: pnl >= 0 ? "default" : "destructive"
+      });
+    }, 0);
+  }, [openPositions, balance, toast, saveDataToFirestore, deleteSubcollectionDoc, userContextDocRef]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -677,17 +707,31 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         
         // This is now only updating local state for real-time display.
         // It does NOT write back to Firestore.
-        setOpenPositions(prev => prev.map(p => {
-          if (p.symbol === symbol) {
-            return { 
-                ...p, 
-                currentPrice: newPrice!,
-                unrealizedPnl: (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1),
-                priceChgPct: priceChgPct ?? p.priceChgPct
-            };
-          }
-          return p;
-        }));
+        setOpenPositions(prev => {
+            let positionsChanged = false;
+            const updatedPositions = prev.map(p => {
+                if (p.symbol === symbol) {
+                    positionsChanged = true;
+                    // Check for SL/TP hits
+                    if (p.details?.stopLoss && ( (p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
+                        closePosition(p.id);
+                        return null; // Mark for removal
+                    }
+                    if (p.details?.takeProfit && ( (p.side === 'long' || p.side === 'buy') ? newPrice! >= p.details.takeProfit : newPrice! <= p.details.takeProfit)) {
+                        closePosition(p.id);
+                        return null; // Mark for removal
+                    }
+                    return { 
+                        ...p, 
+                        currentPrice: newPrice!,
+                        unrealizedPnl: (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1),
+                        priceChgPct: priceChgPct ?? p.priceChgPct
+                    };
+                }
+                return p;
+            }).filter(p => p !== null) as OpenPosition[];
+            return positionsChanged ? updatedPositions : prev;
+        });
         
         setWatchlist(prev => prev.map(item => item.symbol === symbol ? {
           ...item,
@@ -717,7 +761,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         });
     };
-}, [toast, executeTrigger, saveSubcollectionDoc, priceAlerts, tradeTriggers]);
+  }, [toast, executeTrigger, saveSubcollectionDoc, priceAlerts, tradeTriggers, closePosition]);
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
     const newTrigger: TradeTrigger = {
@@ -1272,5 +1316,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
