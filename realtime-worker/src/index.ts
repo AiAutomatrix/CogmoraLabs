@@ -44,7 +44,7 @@ class WebSocketManager {
             });
 
             this.ws.on('message', (data: string) => {
-                this.handleMessage(data.toString());
+                this.handleMessage(data);
             });
 
             this.ws.on('close', this.handleClose);
@@ -59,15 +59,20 @@ class WebSocketManager {
     private handleMessage = (data: string) => {
         const message = JSON.parse(data);
         if (message.type === 'message' && message.topic) {
-            let symbol = message.topic.replace(this.topicPrefix, '');
+            let symbol: string;
             const priceData = message.data;
             
             let price: number | undefined;
-            if(this.name === 'SPOT'){
-                price = parseFloat(priceData.price);
-                 // For spot, the topic might be /market/ticker:, so we get symbol from data
-                if (priceData.symbol) symbol = priceData.symbol;
+
+            if (this.name === 'SPOT') {
+                symbol = message.topic.replace('/market/snapshot:', '');
+                price = parseFloat(priceData?.data?.lastTradedPrice);
+                if (priceData.symbol) { // For /market/ticker:all
+                    symbol = priceData.symbol;
+                    price = parseFloat(priceData.price);
+                }
             } else { // FUTURES
+                symbol = message.topic.replace('/contractMarket/tickerV2:', '');
                 price = priceData.markPrice;
             }
 
@@ -150,7 +155,7 @@ class WebSocketManager {
 
 // --- Main Application Logic ---
 
-const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, '/market/ticker:');
+const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, '/market/snapshot:');
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, '/contractMarket/tickerV2:');
 
 spotManager.connect();
