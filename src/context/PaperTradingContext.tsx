@@ -188,39 +188,38 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return null;
   }, [user, firestore]);
   
-  // ONE-TIME RESET LOGIC
   useEffect(() => {
-    const performReset = async () => {
-      if (!userContextDocRef || !firestore) return;
-      
-      const hasBeenReset = localStorage.getItem(RESET_KEY);
-      if (hasBeenReset) return;
+    const performResetIfNeeded = async () => {
+      if (!userContextDocRef || !firestore || isLoaded) return;
 
-      console.warn("PERFORMING ONE-TIME PROFILE RESET to clear corrupted data.");
+      const hasBeenReset = localStorage.getItem(RESET_KEY);
+      if (hasBeenReset === 'true') {
+        return;
+      }
+      
+      console.warn("PERFORMING ONE-TIME PROFILE RESET.");
       toast({
-          title: "Profile Reset",
-          description: "Your paper trading account is being reset to clear corrupted data from a previous bug. Please wait.",
-          duration: 10000,
+        title: "Profile Reset",
+        description: "Your paper trading account is being reset to a clean state.",
+        duration: 10000,
       });
 
       try {
-        // Collections to wipe
         const collectionsToWipe = ['openPositions', 'tradeHistory', 'tradeTriggers', 'priceAlerts'];
         const batch = writeBatch(firestore);
 
         for (const collectionName of collectionsToWipe) {
-            const collectionRef = collection(userContextDocRef, collectionName);
-            const snapshot = await getDocs(collectionRef);
-            snapshot.forEach(doc => batch.delete(doc.ref));
+          const collectionRef = collection(userContextDocRef, collectionName);
+          const snapshot = await getDocs(collectionRef);
+          snapshot.forEach(doc => batch.delete(doc.ref));
         }
 
-        // Reset the main context document
         const initialContext: FirestorePaperTradingContext = {
-            balance: INITIAL_BALANCE,
-            automationConfig: INITIAL_AUTOMATION_CONFIG,
-            aiSettings: INITIAL_AI_SETTINGS,
-            lastAiActionPlan: null,
-            aiActionLogs: [],
+          balance: INITIAL_BALANCE,
+          automationConfig: INITIAL_AUTOMATION_CONFIG,
+          aiSettings: INITIAL_AI_SETTINGS,
+          lastAiActionPlan: null,
+          aiActionLogs: [],
         };
         batch.set(userContextDocRef, initialContext);
 
@@ -228,27 +227,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         localStorage.setItem(RESET_KEY, 'true');
         toast({
-            title: "Profile Reset Complete",
-            description: "Your account has been reset. You can now continue trading.",
-            variant: 'default',
+          title: "Profile Reset Complete",
+          description: "Your account has been reset. You can now continue trading.",
+          variant: 'default',
         });
         console.log("ONE-TIME PROFILE RESET COMPLETE.");
       } catch (error) {
-          console.error("FAILED TO PERFORM ONE-TIME PROFILE RESET:", error);
-          toast({
-              title: "Profile Reset Failed",
-              description: "Could not reset your profile. Please contact support.",
-              variant: "destructive",
-          });
+        console.error("FAILED TO PERFORM ONE-TIME PROFILE RESET:", error);
+        toast({
+          title: "Profile Reset Failed",
+          description: "Could not reset your profile. Please contact support.",
+          variant: "destructive",
+        });
       }
     };
     
-    // Only run this if the context is ready
-    if(userContextDocRef && firestore) {
-      performReset();
-    }
+    performResetIfNeeded();
+  }, [userContextDocRef, firestore, isLoaded, toast]);
 
-  }, [userContextDocRef, firestore, toast]);
 
   // Combined listener setup
   useEffect(() => {
@@ -679,34 +675,35 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   };
   
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
-    deleteSubcollectionDoc('tradeTriggers', trigger.id);
-
-    setTimeout(() => {
-      toast({
+    
+    toast({
         title: 'Trade Trigger Executed!',
         description: `Executing ${trigger.action} for ${trigger.symbolName} at ${formatPrice(currentPrice)}`
-      });
+    });
 
-      const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
+    const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
 
-      if (trigger.type === 'spot') {
+    if (trigger.type === 'spot') {
         buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
-      } else if (trigger.type === 'futures') {
+    } else if (trigger.type === 'futures') {
         if (trigger.action === 'long') {
-          futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
+            futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
         } else {
-          futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
+            futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
         }
-      }
-      
-      if (trigger.cancelOthers) {
+    }
+    
+    if (trigger.cancelOthers) {
         tradeTriggers.forEach(t => {
-          if (t.symbol === trigger.symbol && t.id !== trigger.id) {
-            deleteSubcollectionDoc('tradeTriggers', t.id);
-          }
+            if (t.symbol === trigger.symbol && t.id !== trigger.id) {
+                deleteSubcollectionDoc('tradeTriggers', t.id);
+            }
         });
-      }
-    }, 0);
+    }
+
+    // This is the crucial fix: delete the trigger after it has been fully processed.
+    deleteSubcollectionDoc('tradeTriggers', trigger.id);
+
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
   const closePosition = useCallback((positionId: string) => {
@@ -816,10 +813,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
         
         // Check trade triggers
+        const executedTriggerIds = new Set<string>();
         tradeTriggers.forEach(trigger => {
             if (trigger.symbol === symbol && trigger.status === 'active') {
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
+                    executedTriggerIds.add(trigger.id);
                     executeTrigger(trigger, newPrice!);
                 }
             }
@@ -1131,7 +1130,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             spotWs.current = null;
             if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
             setSpotWsStatus("disconnected");
-            console.error("Spot WS Error/Close:", event);
+            
+            const reason = event instanceof CloseEvent ? `Code: ${event.code}, Reason: ${event.reason}` : 'Unknown error';
+            console.error(`Spot WS Error/Close:`, reason);
 
             if (spotSubscriptionsRef.current.size > 0) { 
               spotReconnectAttempts.current++;
@@ -1196,7 +1197,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             futuresWs.current = null;
             if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
             setFuturesWsStatus("disconnected");
-            console.error("Futures WS Error/Close:", event instanceof CloseEvent ? `Code: ${event.code}` : event);
+            const reason = event instanceof CloseEvent ? `Code: ${event.code}, Reason: ${event.reason}` : 'Unknown error';
+            console.error(`Futures WS Error/Close:`, reason);
             
             if (futuresSubscriptionsRef.current.size > 0) { 
               futuresReconnectAttempts.current++;
@@ -1248,14 +1250,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     ) => {
       const desiredSubs = new Set(allSymbols);
   
-      if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
-        connectFn();
+      if (desiredSubs.size === 0) {
+        if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+          wsRef.current.close();
+        }
+        return;
       }
   
+      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+        connectFn();
+        return;
+      }
+      
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         const currentSubs = new Set(subscriptionsRef.current);
-        const toAdd = [...desiredSubs].filter(s => !currentSubs.has(s));
-        const toRemove = [...currentSubs].filter(s => !desiredSubs.has(s));
+        const toAdd = allSymbols.filter(s => !currentSubs.has(s));
+        const toRemove = Array.from(currentSubs).filter(s => !desiredSubs.has(s));
   
         const topicPrefix = type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
   
@@ -1268,9 +1278,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           wsRef.current!.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: `${topicPrefix}${symbol}`, response: true }));
           subscriptionsRef.current.delete(symbol);
         });
-      } else if (desiredSubs.size === 0 && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
-        wsRef.current = null;
       }
     };
   
