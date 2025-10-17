@@ -1,3 +1,4 @@
+
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
@@ -170,6 +171,13 @@ async function collectAllSymbols() {
         if (position.positionType === 'spot') spotSymbols.add(position.symbol);
         if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
     });
+
+    const watchlistSnapshot = await db.collectionGroup('watchlist').get();
+    watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+        const item = doc.data();
+        if (item.type === 'spot') spotSymbols.add(item.symbol);
+        if (item.type === 'futures') futuresSymbols.add(item.symbol);
+    });
     
     spotManager.updateSubscriptions(spotSymbols);
     futuresManager.updateSubscriptions(futuresSymbols);
@@ -212,6 +220,13 @@ async function processPriceUpdate(symbol: string, price: number) {
             // In a full implementation, you'd create the position, update balance, etc., here.
             await doc.ref.delete(); 
         }
+    });
+
+    // Update watchlist items with the new price
+    const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
+    const watchlistSnapshot = await watchlistQuery.get();
+    watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+        doc.ref.update({ currentPrice: price });
     });
 }
 
