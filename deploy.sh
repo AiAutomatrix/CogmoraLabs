@@ -1,10 +1,9 @@
 #!/bin/bash
-
 # Stop on any error
 set -e
 
 # Variables
-PROJECT_ID="studio-2613744537-e60c7"
+PROJECT_ID="studio-2613744537"   # Correct project ID
 REGION="us-central1"
 SERVICE_NAME="realtime-worker"
 IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$SERVICE_NAME:latest"
