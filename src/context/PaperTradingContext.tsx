@@ -755,12 +755,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           })
         );
         
-        setWatchlist(prev => prev.map(item => item.symbol === symbol ? {
-          ...item,
-          currentPrice: newPrice!,
-          priceChgPct: priceChgPct ?? item.priceChgPct,
-          snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData,
-        } : item));
+        // This is now handled by the backend worker writing to Firestore
+        // setWatchlist(prev => prev.map(item => item.symbol === symbol ? {
+        //   ...item,
+        //   currentPrice: newPrice!,
+        //   priceChgPct: priceChgPct ?? item.priceChgPct,
+        //   snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData,
+        // } : item));
 
         const alert = priceAlerts[symbol];
         if (alert && !alert.triggered) {
@@ -1198,23 +1199,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast]);
 
-  const allSpotSymbols = useMemo(() => {
+  // Symbols for frontend websockets (positions and triggers)
+  const spotSymbolsToWatch = useMemo(() => {
     if (!isLoaded) return [];
     const symbols = new Set<string>();
     openPositions.forEach(p => p.positionType === 'spot' && symbols.add(p.symbol));
-    watchlist.forEach(w => w.type === 'spot' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'spot' && symbols.add(t.symbol));
     return Array.from(symbols);
-  }, [isLoaded, openPositions, watchlist, tradeTriggers]);
+  }, [isLoaded, openPositions, tradeTriggers]);
 
-  const allFuturesSymbols = useMemo(() => {
+  const futuresSymbolsToWatch = useMemo(() => {
     if (!isLoaded) return [];
     const symbols = new Set<string>();
     openPositions.forEach(p => p.positionType === 'futures' && symbols.add(p.symbol));
-    watchlist.forEach(w => w.type === 'futures' && symbols.add(w.symbol));
     tradeTriggers.forEach(t => t.type === 'futures' && symbols.add(t.symbol));
     return Array.from(symbols);
-  }, [isLoaded, openPositions, watchlist, tradeTriggers]);
+  }, [isLoaded, openPositions, tradeTriggers]);
   
   useEffect(() => {
     if (!isLoaded) return;
@@ -1264,10 +1264,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     };
   
-    manageSubscriptions(spotWs, allSpotSymbols, spotSubscriptionsRef, connectToSpot, 'spot');
-    manageSubscriptions(futuresWs, allFuturesSymbols, futuresSubscriptionsRef, connectToFutures, 'futures');
+    manageSubscriptions(spotWs, spotSymbolsToWatch, spotSubscriptionsRef, connectToSpot, 'spot');
+    manageSubscriptions(futuresWs, futuresSymbolsToWatch, futuresSubscriptionsRef, connectToFutures, 'futures');
       
-  }, [isLoaded, allSpotSymbols, allFuturesSymbols, connectToSpot, connectToFutures]);
+  }, [isLoaded, spotSymbolsToWatch, futuresSymbolsToWatch, connectToSpot, connectToFutures]);
   
 
   const closeAllPositions = useCallback(() => {

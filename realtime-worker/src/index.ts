@@ -59,17 +59,19 @@ class WebSocketManager {
     private handleMessage = (data: string) => {
         const message = JSON.parse(data);
         if (message.type === 'message' && message.topic) {
-            const symbol = message.topic.replace(this.topicPrefix, '');
+            let symbol = message.topic.replace(this.topicPrefix, '');
             const priceData = message.data;
             
             let price: number | undefined;
             if(this.name === 'SPOT'){
                 price = parseFloat(priceData.price);
+                 // For spot, the topic might be /market/ticker:, so we get symbol from data
+                if (priceData.symbol) symbol = priceData.symbol;
             } else { // FUTURES
                 price = priceData.markPrice;
             }
 
-            if (price) {
+            if (price && symbol) {
                 processPriceUpdate(symbol, price);
             }
         }
@@ -158,6 +160,7 @@ async function collectAllSymbols() {
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
+    // Collect from tradeTriggers
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
     triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const trigger = doc.data();
@@ -165,6 +168,7 @@ async function collectAllSymbols() {
         if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
+    // Collect from openPositions
     const positionsSnapshot = await db.collectionGroup('openPositions').get();
     positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const position = doc.data();
@@ -172,6 +176,7 @@ async function collectAllSymbols() {
         if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
     });
 
+    // Collect from watchlist
     const watchlistSnapshot = await db.collectionGroup('watchlist').get();
     watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const item = doc.data();
@@ -226,7 +231,10 @@ async function processPriceUpdate(symbol: string, price: number) {
     const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
     const watchlistSnapshot = await watchlistQuery.get();
     watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        doc.ref.update({ currentPrice: price });
+        // Use non-blocking update for performance
+        doc.ref.update({ currentPrice: price }).catch(err => {
+            console.error(`Failed to update watchlist item ${doc.id}:`, err);
+        });
     });
 }
 
