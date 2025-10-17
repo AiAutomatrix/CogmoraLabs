@@ -21,7 +21,7 @@ class WebSocketManager {
     constructor(
         private name: string,
         private tokenEndpoint: string,
-        private topicPrefix: string
+        private getTopic: (symbol: string) => string,
     ) {}
 
     public connect = async () => {
@@ -59,17 +59,18 @@ class WebSocketManager {
     private handleMessage = (data: string) => {
         const message = JSON.parse(data);
         if (message.type === 'message' && message.topic) {
-            let symbol: string;
+            let symbol: string | undefined;
             const priceData = message.data;
             
             let price: number | undefined;
 
             if (this.name === 'SPOT') {
-                symbol = message.topic.replace('/market/snapshot:', '');
-                price = parseFloat(priceData?.data?.lastTradedPrice);
-                if (priceData.symbol) { // For /market/ticker:all
-                    symbol = priceData.symbol;
+                if (message.topic === '/market/ticker:all') {
+                    symbol = priceData.symbol; // For /market/ticker:all
                     price = parseFloat(priceData.price);
+                } else { // For /market/snapshot:{symbol}
+                    symbol = message.topic.replace('/market/snapshot:', '');
+                    price = parseFloat(priceData?.data?.lastTradedPrice);
                 }
             } else { // FUTURES
                 symbol = message.topic.replace('/contractMarket/tickerV2:', '');
@@ -77,7 +78,7 @@ class WebSocketManager {
             }
 
             if (price && symbol) {
-                processPriceUpdate(symbol, price);
+                processPriceUpdate(symbol, price).catch(e => console.error(`Error in processPriceUpdate for ${symbol}:`, e));
             }
         }
     }
@@ -119,7 +120,7 @@ class WebSocketManager {
                 this.ws?.send(JSON.stringify({
                     id: Date.now(),
                     type: 'subscribe',
-                    topic: `${this.topicPrefix}${symbol}`,
+                    topic: this.getTopic(symbol),
                     response: true
                 }));
             });
@@ -137,12 +138,12 @@ class WebSocketManager {
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
         toAdd.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `${this.topicPrefix}${symbol}` }));
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.add(symbol);
         });
 
         toRemove.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `${this.topicPrefix}${symbol}` }));
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.delete(symbol);
         });
 
@@ -152,45 +153,54 @@ class WebSocketManager {
     }
 }
 
-
 // --- Main Application Logic ---
 
-const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, '/market/snapshot:');
-const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, '/contractMarket/tickerV2:');
+const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (symbol) => `/market/snapshot:${symbol}`);
+const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/tickerV2:${symbol}`);
+
 
 spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
+    // Add a 5-second delay to give Firestore indexes time to warm up on container start
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    console.log("Collecting symbols to monitor...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
-    // Collect from tradeTriggers
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
-    triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        const trigger = doc.data();
-        if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-        if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-    });
+    try {
+        // Collect from tradeTriggers
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+            const trigger = doc.data();
+            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+        });
 
-    // Collect from openPositions
-    const positionsSnapshot = await db.collectionGroup('openPositions').get();
-    positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        const position = doc.data();
-        if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-        if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-    });
+        // Collect from openPositions
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+            const position = doc.data();
+            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+        });
 
-    // Collect from watchlist
-    const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-    watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        const item = doc.data();
-        if (item.type === 'spot') spotSymbols.add(item.symbol);
-        if (item.type === 'futures') futuresSymbols.add(item.symbol);
-    });
-    
-    spotManager.updateSubscriptions(spotSymbols);
-    futuresManager.updateSubscriptions(futuresSymbols);
+        // Collect from watchlist
+        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
+        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+            const item = doc.data();
+            if (item.type === 'spot') spotSymbols.add(item.symbol);
+            if (item.type === 'futures') futuresSymbols.add(item.symbol);
+        });
+        
+        console.log(`Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
+        spotManager.updateSubscriptions(spotSymbols);
+        futuresManager.updateSubscriptions(futuresSymbols);
+    } catch (e) {
+        console.error("CRITICAL: Failed to collect symbols due to Firestore query error.", e);
+    }
 }
 
 // Check for symbols to monitor every 30 seconds
@@ -200,6 +210,9 @@ collectAllSymbols(); // Initial run
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
+    // Use a batch to perform all writes atomically
+    const batch = db.batch();
+
     // Check for open positions to hit SL/TP
     const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
     const positionsSnapshot = await positionsQuery.get();
@@ -212,23 +225,20 @@ async function processPriceUpdate(symbol: string, price: number) {
 
         if (slHit || tpHit) {
             console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-            doc.ref.update({ 'details.status': 'closing' });
+            batch.update(doc.ref, { 'details.status': 'closing' });
         }
     });
 
     // Check for active trade triggers
     const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
     const triggersSnapshot = await triggersQuery.get();
-    triggersSnapshot.forEach(async (doc: admin.firestore.QueryDocumentSnapshot) => {
+    triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
         const trigger = doc.data();
         const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
         if (conditionMet) {
             console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-            // This is a simplified execution. A robust version would use a transactional Cloud Function.
-            // For now, we'll mark it for deletion and assume a separate cleanup process.
-            // In a full implementation, you'd create the position, update balance, etc., here.
-            await doc.ref.delete(); 
+            batch.delete(doc.ref); 
         }
     });
 
@@ -236,10 +246,12 @@ async function processPriceUpdate(symbol: string, price: number) {
     const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
     const watchlistSnapshot = await watchlistQuery.get();
     watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-        // Use non-blocking update for performance
-        doc.ref.update({ currentPrice: price }).catch(err => {
-            console.error(`Failed to update watchlist item ${doc.id}:`, err);
-        });
+        batch.update(doc.ref, { currentPrice: price });
+    });
+    
+    // Commit the batch
+    await batch.commit().catch(err => {
+        console.error(`Failed to commit price update batch for symbol ${symbol}:`, err);
     });
 }
 
