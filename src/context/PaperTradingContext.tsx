@@ -123,11 +123,9 @@ interface PaperTradingContextType {
   automationConfig: AutomationConfig;
   setAutomationConfig: (config: AutomationConfig) => void;
   applyWatchlistAutomation: (config: AutomationConfig, forceScrape?: boolean) => void;
-  nextScrapeTime: number;
   aiSettings: AiTriggerSettings;
   setAiSettings: (settings: AiTriggerSettings) => void;
   handleAiTriggerAnalysis: (isScheduled?: boolean) => Promise<any>;
-  nextAiScrapeTime: number;
   logAiAction: (action: AgentAction) => void;
   removeActionFromPlan: (action: AgentAction) => void;
 }
@@ -160,9 +158,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [isLoaded, setIsLoaded] = useState(false);
   const dataLoadedRef = useRef(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
-  
-  const [nextScrapeTime, setNextScrapeTime] = useState<number>(0);
-  const [nextAiScrapeTime, setNextAiScrapeTime] = useState(0);
 
   // Queues for processing side effects from price updates
   const executedTriggerIds = useRef(new Set<string>());
@@ -182,9 +177,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const futuresSubscriptionsRef = useRef(new Set<string>());
   const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectAttempts = useRef(0);
-
-  const automationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const aiAutomationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const userContextDocRef = useMemo(() => {
     if (user && firestore) {
@@ -698,6 +690,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
     }
     
+    deleteSubcollectionDoc('tradeTriggers', trigger.id);
+
     if (trigger.cancelOthers) {
         tradeTriggers.forEach(t => {
             if (t.symbol === trigger.symbol && t.id !== trigger.id) {
@@ -705,46 +699,20 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         });
     }
-
-    deleteSubcollectionDoc('tradeTriggers', trigger.id);
-
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
   const closePosition = useCallback((positionId: string) => {
     const pos = openPositions.find(p => p.id === positionId);
     if (!pos) return;
   
-    const pnl = pos.unrealizedPnl ?? 0;
+    // Update the position status to 'closing' which will be handled by a backend function
+    saveSubcollectionDoc('openPositions', positionId, { details: { ...pos.details, status: 'closing' } });
     
-    let newBalance = balance + pnl;
-    if (pos.positionType === 'futures' && pos.leverage) {
-        const collateral = (pos.size * pos.averageEntryPrice) / pos.leverage;
-        newBalance += collateral;
-    } else if (pos.positionType === 'spot') {
-        // For spot, the initial amount was already subtracted from balance.
-        // We just add the full current value back.
-        const currentValue = pos.size * pos.currentPrice;
-        newBalance = balance + currentValue;
-    }
-
-    saveDataToFirestore({ balance: newBalance });
-    
-    const tradeUpdate: Partial<PaperTrade> = {
-        status: 'closed',
-        pnl: pnl,
-    };
-    
-    const tradeToUpdate = tradeHistory.find(t => t.positionId === positionId && t.status === 'open');
-    if (tradeToUpdate) {
-        saveSubcollectionDoc('tradeHistory', tradeToUpdate.id!, tradeUpdate);
-    }
-    
-    deleteSubcollectionDoc('openPositions', positionId);
     toast({
-        title: "Position Closed",
-        description: `${pos.symbolName} position closed. P&L: ${formatPrice(pnl)}`
+        title: "Position Closing",
+        description: `${pos.symbolName} position is being processed for closure.`
     });
-  }, [openPositions, balance, tradeHistory, toast, saveSubcollectionDoc, deleteSubcollectionDoc, saveDataToFirestore]);
+  }, [openPositions, toast, saveSubcollectionDoc]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -972,20 +940,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
   
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
-    saveDataToFirestore({ automationConfig: config });
+    const newConfig = { ...config, lastRun: config.updateMode === 'auto-refresh' ? Date.now() : null };
+    saveDataToFirestore({ automationConfig: newConfig });
     if (config.updateMode === 'auto-refresh') {
         toast({ title: 'Automation Saved', description: `Watchlist will auto-refresh every ${config.refreshInterval / 60000} minutes.` });
     } else {
-        if (automationIntervalRef.current) {
-          clearInterval(automationIntervalRef.current);
-          automationIntervalRef.current = null;
-        }
         toast({ title: 'Automation Saved', description: `Watchlist auto-refresh has been disabled.` });
     }
   }, [toast, saveDataToFirestore]);
   
   const setAiSettings = useCallback((settings: AiTriggerSettings) => {
-      saveDataToFirestore({ aiSettings: settings });
+      const newSettings = { ...settings, nextRun: settings.scheduleInterval ? Date.now() + settings.scheduleInterval : null };
+      saveDataToFirestore({ aiSettings: newSettings });
       if (!settings.scheduleInterval) {
           toast({ title: 'AI Automation Saved', description: `AI agent auto-run has been disabled.` });
       }
@@ -1083,37 +1049,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
     }
   }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
-  
-  useEffect(() => {
-    if (!isLoaded || automationConfig.updateMode !== 'auto-refresh' || !automationConfig.refreshInterval) {
-        if (automationIntervalRef.current) clearInterval(automationIntervalRef.current);
-        return;
-    }
-
-    const runAutomation = () => applyWatchlistAutomation(automationConfig);
-    automationIntervalRef.current = setInterval(runAutomation, automationConfig.refreshInterval);
-    setNextScrapeTime(Date.now() + automationConfig.refreshInterval);
-
-    return () => {
-        if (automationIntervalRef.current) clearInterval(automationIntervalRef.current);
-    };
-  }, [isLoaded, automationConfig, applyWatchlistAutomation]);
-
-
-  useEffect(() => {
-    if (!isLoaded || !aiSettings.scheduleInterval) {
-      if (aiAutomationIntervalRef.current) clearInterval(aiAutomationIntervalRef.current);
-      return;
-    }
-
-    const runScheduledAnalysis = () => handleAiTriggerAnalysis(true);
-    aiAutomationIntervalRef.current = setInterval(runScheduledAnalysis, aiSettings.scheduleInterval);
-    setNextAiScrapeTime(Date.now() + aiSettings.scheduleInterval);
-    
-    return () => {
-      if (aiAutomationIntervalRef.current) clearInterval(aiAutomationIntervalRef.current);
-    };
-  }, [isLoaded, aiSettings.scheduleInterval, handleAiTriggerAnalysis]);
 
   const connectToSpot = useCallback(async () => {
     if (spotWs.current) {
@@ -1401,11 +1336,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         automationConfig,
         setAutomationConfig,
         applyWatchlistAutomation,
-        nextScrapeTime,
         aiSettings,
         setAiSettings,
         handleAiTriggerAnalysis,
-        nextAiScrapeTime,
         logAiAction,
         removeActionFromPlan,
       }}
@@ -1422,8 +1355,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
-
-
-    

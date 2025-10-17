@@ -170,7 +170,7 @@ export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
 
 export const AgentCreateActionSchema = z.object({
   type: z.literal('CREATE'),
-  trigger: ProposedTradeTriggerSchema,
+  trigger: ProposedTradeTriggerSchema.describe("The full trigger object to be created."),
   reasoning: z.string().describe("A brief justification for why this new trigger is being proposed."),
 });
 export const AgentUpdateActionSchema = z.object({
@@ -222,10 +222,11 @@ export const AiTriggerSettingsSchema = z.object({
   instructions: z.string().optional(),
   setSlTp: z.boolean().optional(),
   scheduleInterval: z.number().nullable().optional(), // in ms, null for manual
+  nextRun: z.number().nullable().optional(), // Timestamp for next scheduled run
   autoExecute: z.boolean().optional(),
   justCreate: z.boolean().optional(),
   justUpdate: z.boolean().optional(),
-  manageOpenPositions: z.boolean().optional(), // New setting
+  manageOpenPositions: z.boolean().optional(),
 });
 export type AiTriggerSettings = z.infer<typeof AiTriggerSettingsSchema>;
 
@@ -272,6 +273,7 @@ export const AutomationConfigSchema = z.object({
     updateMode: z.enum(['one-time', 'auto-refresh']),
     refreshInterval: z.number(), // in milliseconds
     clearExisting: z.boolean(),
+    lastRun: z.number().nullable().optional(), // Timestamp of the last run
 });
 export type AutomationConfig = z.infer<typeof AutomationConfigSchema>;
 
@@ -619,7 +621,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
-
-    

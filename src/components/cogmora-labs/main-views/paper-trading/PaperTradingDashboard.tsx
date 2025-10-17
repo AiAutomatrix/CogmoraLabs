@@ -63,7 +63,6 @@ export default function PaperTradingDashboard({
     clearHistory,
     aiSettings,
     setAiSettings,
-    nextAiScrapeTime,
     equity,
   } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
@@ -354,7 +353,6 @@ export default function PaperTradingDashboard({
               aiSettings={aiSettings}
               setAiSettings={setAiSettings}
               handleAiTriggerAnalysis={handleAiTriggerAnalysis}
-              nextAiScrapeTime={nextAiScrapeTime}
             />
         </TabsContent>
         <TabsContent value="watchlist">

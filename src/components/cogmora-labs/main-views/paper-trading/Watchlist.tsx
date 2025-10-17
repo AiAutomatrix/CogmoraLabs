@@ -35,17 +35,17 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 
 
-const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
-    const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
+const CountdownTimer = ({ nextRunTime }: { nextRunTime: number | null | undefined }) => {
+    const [timeLeft, setTimeLeft] = useState(nextRunTime ? nextRunTime - Date.now() : 0);
 
     useEffect(() => {
-        if (nextScrapeTime <= 0) {
+        if (!nextRunTime || nextRunTime <= 0) {
             setTimeLeft(0);
             return;
         }
 
         const interval = setInterval(() => {
-            const newTimeLeft = nextScrapeTime - Date.now();
+            const newTimeLeft = nextRunTime - Date.now();
             if (newTimeLeft <= 0) {
                 setTimeLeft(0);
                 clearInterval(interval);
@@ -55,10 +55,10 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
         }, 1000);
 
         return () => clearInterval(interval);
-    }, [nextScrapeTime]);
+    }, [nextRunTime]);
 
 
-    if (timeLeft <= 0) {
+    if (!nextRunTime || timeLeft <= 0) {
         return null;
     }
 
@@ -93,7 +93,6 @@ export default function Watchlist({
     addPriceAlert,
     removePriceAlert,
     automationConfig,
-    nextScrapeTime,
   } = usePaperTrading();
 
   const [alertPrice, setAlertPrice] = useState('');
@@ -188,7 +187,7 @@ export default function Watchlist({
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            {isAutoRefreshEnabled && <CountdownTimer nextScrapeTime={nextScrapeTime} />}
+            {isAutoRefreshEnabled && <CountdownTimer nextRunTime={automationConfig.lastRun ? automationConfig.lastRun + automationConfig.refreshInterval : undefined} />}
             <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
                 <Wand2 className="mr-2 h-4 w-4" />
                 Automate
@@ -346,6 +345,3 @@ export default function Watchlist({
     </>
   );
 }
-
-    
-

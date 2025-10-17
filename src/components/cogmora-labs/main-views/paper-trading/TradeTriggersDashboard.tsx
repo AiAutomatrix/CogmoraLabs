@@ -27,17 +27,17 @@ import { AiTriggerSettingsPopup } from './AiTriggerSettingsPopup';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 
-const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
-    const [timeLeft, setTimeLeft] = useState(nextScrapeTime - Date.now());
+const CountdownTimer = ({ nextRunTime }: { nextRunTime: number | null | undefined }) => {
+    const [timeLeft, setTimeLeft] = useState(nextRunTime ? nextRunTime - Date.now() : 0);
 
     useEffect(() => {
-        if (nextScrapeTime <= 0) {
+        if (!nextRunTime || nextRunTime <= 0) {
             setTimeLeft(0);
             return;
         };
 
         const updateTimer = () => {
-            const newTimeLeft = nextScrapeTime - Date.now();
+            const newTimeLeft = nextRunTime - Date.now();
              if (newTimeLeft <= 0) {
                 setTimeLeft(0);
             } else {
@@ -49,9 +49,9 @@ const CountdownTimer = ({ nextScrapeTime }: { nextScrapeTime: number }) => {
         const interval = setInterval(updateTimer, 1000);
 
         return () => clearInterval(interval);
-    }, [nextScrapeTime]);
+    }, [nextRunTime]);
 
-    if (timeLeft <= 0) {
+    if (!nextRunTime || timeLeft <= 0) {
         return <span className="font-mono text-xs md:text-sm">...</span>;
     }
 
@@ -76,14 +76,12 @@ export default function TradeTriggersDashboard({
     aiSettings,
     setAiSettings,
     handleAiTriggerAnalysis,
-    nextAiScrapeTime,
 }: {
     aiSettings: AiTriggerSettings;
     setAiSettings: (settings: AiTriggerSettings) => void;
     handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
-    nextAiScrapeTime: number;
 }) {
-  const { tradeTriggers, removeTradeTrigger, automationConfig, nextScrapeTime: nextWatchlistScrapeTime } = usePaperTrading();
+  const { tradeTriggers, removeTradeTrigger, automationConfig } = usePaperTrading();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const isWatchlistAutomationActive = automationConfig.updateMode === 'auto-refresh';
@@ -167,7 +165,7 @@ export default function TradeTriggersDashboard({
                     <TableCell className="text-right px-2 py-3">
                         <div className="flex items-center justify-end">
                             <Timer className="h-4 w-4 mr-1 md:mr-2 text-muted-foreground"/>
-                            <CountdownTimer nextScrapeTime={nextAiScrapeTime} />
+                            <CountdownTimer nextRunTime={aiSettings.nextRun} />
                         </div>
                     </TableCell>
                     <TableCell className="text-center px-2 py-3">-</TableCell>
@@ -190,7 +188,7 @@ export default function TradeTriggersDashboard({
                     <TableCell className="text-right px-2 py-3">
                         <div className="flex items-center justify-end">
                             <Timer className="h-4 w-4 mr-1 md:mr-2 text-muted-foreground"/>
-                            <CountdownTimer nextScrapeTime={nextWatchlistScrapeTime} />
+                            <CountdownTimer nextRunTime={automationConfig.lastRun ? automationConfig.lastRun + automationConfig.refreshInterval : undefined} />
                         </div>
                     </TableCell>
                     <TableCell className="text-center px-2 py-3">-</TableCell>

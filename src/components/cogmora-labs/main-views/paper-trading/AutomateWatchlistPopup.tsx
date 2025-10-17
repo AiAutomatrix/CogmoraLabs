@@ -124,9 +124,9 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
                              <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
                              <SelectContent>
                                 <SelectItem value="900000">15 min</SelectItem>
+                                <SelectItem value="1800000">30 min</SelectItem>
                                 <SelectItem value="3600000">1 hour</SelectItem>
                                 <SelectItem value="14400000">4 hours</SelectItem>
-                                <SelectItem value="86400000">24 hours</SelectItem>
                              </SelectContent>
                         </Select>
                     </div>
