@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import type { WatchlistItem } from '@/types';
 import {
@@ -111,6 +111,10 @@ export default function Watchlist({
   const isAutoRefreshEnabled = automationConfig.updateMode === 'auto-refresh';
   const chartOptions = [1, 2, 3, 4];
 
+  const sortedWatchlist = useMemo(() => {
+    return [...watchlist].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  }, [watchlist]);
+
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
     const options: Intl.NumberFormatOptions = {
@@ -216,8 +220,8 @@ export default function Watchlist({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {watchlist.length > 0 ? (
-                watchlist.map((item) => {
+              {sortedWatchlist.length > 0 ? (
+                sortedWatchlist.map((item) => {
                   const alert = priceAlerts[item.symbol];
                   const symbolForHighlight = getHighlightSymbol(item);
                   const isSelected = selectedSymbolsForHighlight.includes(symbolForHighlight);
@@ -344,3 +348,4 @@ export default function Watchlist({
 }
 
     
+

@@ -1,4 +1,5 @@
 
+
 import { z } from 'zod';
 
 //==========================================================================
@@ -45,6 +46,7 @@ export const OpenPositionDetailsSchema = z.object({
   stopLoss: z.number().optional(),
   takeProfit: z.number().optional(),
   triggeredBy: z.string().optional(), // e.g., 'manual', 'trigger:above', 'trigger:below'
+  status: z.enum(['open', 'closing']).optional(), // For backend processing
 });
 export type OpenPositionDetails = z.infer<typeof OpenPositionDetailsSchema>;
 
@@ -129,6 +131,7 @@ export const WatchlistItemSchema = z.object({
     quoteCurrency: z.string().optional(),
     hasFutures: z.boolean().optional(),
     futuresSymbol: z.string().optional(),
+    order: z.number().optional(), // Added for sorting
 });
 export type WatchlistItem = z.infer<typeof WatchlistItemSchema>;
 

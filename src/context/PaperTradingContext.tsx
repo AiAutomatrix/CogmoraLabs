@@ -1,4 +1,5 @@
 
+
 "use client";
 import React, {
   createContext,
@@ -66,7 +67,7 @@ const INITIAL_AI_SETTINGS: AiTriggerSettings = {
 
 // --- ONE-TIME DATA RESET ---
 // This key will be used to check if the reset has been performed.
-const RESET_KEY = 'cogmora-profile-reset-v1';
+const RESET_KEY = 'cogmora-profile-reset-v2';
 
 
 interface PaperTradingContextType {
@@ -80,7 +81,7 @@ interface PaperTradingContextType {
   lastAiActionPlan: AgentActionPlan | null;
   isLoaded: boolean;
   equity: number; 
-  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => void;
+  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'status'>) => void;
@@ -205,7 +206,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       });
 
       try {
-        const collectionsToWipe = ['openPositions', 'tradeHistory', 'tradeTriggers', 'priceAlerts'];
+        const collectionsToWipe = ['openPositions', 'tradeHistory', 'tradeTriggers', 'priceAlerts', 'watchlist'];
         const batch = writeBatch(firestore);
 
         for (const collectionName of collectionsToWipe) {
@@ -524,14 +525,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
       
       const newTrade: Omit<PaperTrade, 'id'> = {
-        positionId: positionId,
+        positionId: positionId!,
         positionType: 'spot',
         symbol,
         symbolName,
         size,
         price: currentPrice,
         side: 'buy',
-        leverage: null, // Explicitly set to null for spot trades
+        leverage: null, 
         timestamp: Date.now(),
         status: 'open',
       };
@@ -701,56 +702,33 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
     }
 
-    // This is the crucial fix: delete the trigger after it has been fully processed.
     deleteSubcollectionDoc('tradeTriggers', trigger.id);
 
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
   const closePosition = useCallback((positionId: string) => {
-    setTimeout(() => {
-      const pos = openPositions.find(p => p.id === positionId);
-      if (!pos) return;
-
-      const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
-      let newBalance = balance;
-
-      if (pos.positionType === 'futures' && pos.leverage) {
-        const collateral = (pos.size * pos.averageEntryPrice) / pos.leverage;
-        newBalance += collateral + pnl;
-      } else {
-        newBalance += (pos.size * pos.currentPrice);
-      }
-      
-      saveDataToFirestore({ balance: newBalance });
-
-      const closedTrade: Omit<PaperTrade, 'id'> = {
-        positionId: pos.id,
-        positionType: pos.positionType,
-        symbol: pos.symbol,
-        symbolName: pos.symbolName,
-        size: pos.size,
-        price: pos.currentPrice,
-        side: pos.side === 'buy' ? 'sell' : pos.side,
-        leverage: pos.leverage ?? null, // Ensure leverage is null for spot trades
-        timestamp: Date.now(),
-        status: 'closed',
-        pnl: pnl,
-      };
-      
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), closedTrade);
-      deleteSubcollectionDoc('openPositions', positionId);
-      
-      toast({
-        title: "Position Closed",
-        description: `${pos.symbolName} position closed with P&L: ${formatPrice(pnl)}.`,
-        variant: pnl >= 0 ? "default" : "destructive"
-      });
-    }, 0);
-  }, [openPositions, balance, toast, saveDataToFirestore, deleteSubcollectionDoc, userContextDocRef]);
+    const pos = openPositions.find(p => p.id === positionId);
+    if (!pos) return;
+  
+    // Don't calculate P&L here. Just mark for closing.
+    const updatedDetails: OpenPositionDetails = {
+      ...(pos.details || {}),
+      status: 'closing',
+    };
+  
+    saveSubcollectionDoc('openPositions', positionId, { details: updatedDetails });
+  
+    toast({
+      title: "Closing Position...",
+      description: `${pos.symbolName} position has been marked for closing.`
+    });
+  }, [openPositions, toast, saveSubcollectionDoc]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
-    useEffect(() => {
+  useEffect(() => {
+    const executedTriggerIds = new Set<string>();
+
     processUpdateRef.current = (symbol: string, isSpot: boolean, data: Partial<SpotSnapshotData | FuturesSnapshotData>) => {
         let newPrice: number | undefined, priceChgPct: number | undefined;
 
@@ -766,33 +744,28 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
         
-        // This is now only updating local state for real-time display.
-        // It does NOT write back to Firestore.
-        setOpenPositions(prev => {
-            let positionsChanged = false;
-            const updatedPositions = prev.map(p => {
-                if (p.symbol === symbol) {
-                    positionsChanged = true;
-                    // Check for SL/TP hits
-                    if (p.details?.stopLoss && ( (p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
-                        closePosition(p.id);
-                        return null; // Mark for removal
-                    }
-                    if (p.details?.takeProfit && ( (p.side === 'long' || p.side === 'buy') ? newPrice! >= p.details.takeProfit : newPrice! <= p.details.takeProfit)) {
-                        closePosition(p.id);
-                        return null; // Mark for removal
-                    }
-                    return { 
-                        ...p, 
-                        currentPrice: newPrice!,
-                        unrealizedPnl: (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1),
-                        priceChgPct: priceChgPct ?? p.priceChgPct
-                    };
-                }
-                return p;
-            }).filter(p => p !== null) as OpenPosition[];
-            return positionsChanged ? updatedPositions : prev;
-        });
+        setOpenPositions(prev =>
+          prev.map(p => {
+              if (p.symbol === symbol) {
+                  // Check for SL/TP hits for open positions
+                  if (p.details?.status !== 'closing') {
+                      if (p.details?.stopLoss && ((p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
+                          closePosition(p.id);
+                      } else if (p.details?.takeProfit && ((p.side === 'long' || p.side === 'buy') ? newPrice! >= p.details.takeProfit : newPrice! <= p.details.takeProfit)) {
+                          closePosition(p.id);
+                      }
+                  }
+
+                  return { 
+                      ...p, 
+                      currentPrice: newPrice!,
+                      unrealizedPnl: (newPrice! - p.averageEntryPrice) * p.size * (p.side === 'short' ? -1 : 1),
+                      priceChgPct: priceChgPct ?? p.priceChgPct
+                  };
+              }
+              return p;
+          })
+        );
         
         setWatchlist(prev => prev.map(item => item.symbol === symbol ? {
           ...item,
@@ -801,7 +774,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData,
         } : item));
 
-        // Check and execute price alerts (this is a client-side notification, so it's OK here)
         const alert = priceAlerts[symbol];
         if (alert && !alert.triggered) {
             const conditionMet = (alert.condition === 'above' && newPrice >= alert.price) || (alert.condition === 'below' && newPrice <= alert.price);
@@ -812,10 +784,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
         
-        // Check trade triggers
-        const executedTriggerIds = new Set<string>();
         tradeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol && trigger.status === 'active') {
+            if (trigger.symbol === symbol && !executedTriggerIds.has(trigger.id)) {
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
                     executedTriggerIds.add(trigger.id);
@@ -980,6 +950,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         let finalItems: WatchlistItem[] = [];
         const addedSymbols = new Set<string>();
 
+        let orderIndex = 0;
         config.rules.forEach(rule => {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
             let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
@@ -1002,7 +973,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             if (rule.criteria.startsWith('top')) {
                 selected = sorted.slice(0, rule.count);
             } else { // bottom
-                selected = sorted.slice(-rule.count);
+                selected = sorted.slice(-rule.count).reverse();
             }
 
             selected.forEach(item => {
@@ -1017,6 +988,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
                         high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
                         low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
+                        order: orderIndex++,
                     });
                 }
             });
@@ -1131,8 +1103,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
             setSpotWsStatus("disconnected");
             
-            const reason = event instanceof CloseEvent ? `Code: ${event.code}, Reason: ${event.reason}` : 'Unknown error';
-            console.error(`Spot WS Error/Close:`, reason);
+            console.error("Spot WS Error/Close:", event);
 
             if (spotSubscriptionsRef.current.size > 0) { 
               spotReconnectAttempts.current++;
@@ -1250,23 +1221,28 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     ) => {
       const desiredSubs = new Set(allSymbols);
   
-      if (desiredSubs.size === 0) {
-        if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      if (desiredSubs.size === 0 && wsRef.current) {
+        if (wsRef.current.readyState !== WebSocket.CLOSED && wsRef.current.readyState !== WebSocket.CLOSING) {
           wsRef.current.close();
         }
+        subscriptionsRef.current.clear();
         return;
       }
-  
-      if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+      
+      if (desiredSubs.size > 0 && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
         connectFn();
         return;
       }
       
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        const currentSubs = new Set(subscriptionsRef.current);
-        const toAdd = allSymbols.filter(s => !currentSubs.has(s));
-        const toRemove = Array.from(currentSubs).filter(s => !desiredSubs.has(s));
+        const currentSubs = subscriptionsRef.current;
+        const toAdd = new Set([...desiredSubs].filter(s => !currentSubs.has(s)));
+        const toRemove = new Set([...currentSubs].filter(s => !desiredSubs.has(s)));
   
+        if (toAdd.size === 0 && toRemove.size === 0) {
+            return;
+        }
+
         const topicPrefix = type === 'spot' ? '/market/snapshot:' : '/contractMarket/snapshot:';
   
         toAdd.forEach(symbol => {
@@ -1289,7 +1265,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(() => {
     openPositions.forEach(p => {
-        setTimeout(() => closePosition(p.id), 0);
+        closePosition(p.id);
     });
   }, [openPositions, closePosition]);
 
@@ -1305,7 +1281,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
   }, [toast, deleteSubcollectionDoc]);
 
-  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number) => {
+  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => {
     const existingIndex = watchlist.findIndex(item => item.symbol === symbol);
     
     if (existingIndex > -1) {
@@ -1320,6 +1296,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             high: high ?? undefined, 
             low: low ?? undefined,
             priceChgPct: priceChgPct ?? 0,
+            order: order ?? 0,
         };
         if (type === 'spot' && futuresContracts.length > 0) {
             const baseCurrency = symbolName.split('-')[0]; 
