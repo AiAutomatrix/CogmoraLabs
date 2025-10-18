@@ -1,16 +1,29 @@
 
+// Worker now uses Firebase Admin SDK to write directly to Firestore.
+// This bypasses security rules and prevents PERMISSION_DENIED errors.
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
-import fetch from 'node-fetch'; // Use node-fetch
+import fetch from 'node-fetch'; // Use node-fetch for CommonJS compatibility
 
-// Initialize Firebase Admin SDK for Cloud Run environment
+// Initialize Firebase Admin SDK for the Cloud Run environment
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-  });
+  admin.initializeApp();
 }
 const db = admin.firestore();
+
+// --- Startup Firestore Write Test ---
+(async () => {
+  try {
+    const docRef = await db.collection('test').add({
+      message: 'Startup Firestore write test',
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log(`✅ Startup Firestore write successful: ${docRef.path}`);
+  } catch (err) {
+    console.error('❌ Startup Firestore write failed:', err);
+  }
+})();
 
 
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
@@ -178,9 +191,6 @@ spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    // Add a 5-second delay to give Firestore indexes time to warm up on container start
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
     console.log("Collecting symbols to monitor...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
@@ -220,7 +230,9 @@ async function collectAllSymbols() {
 
 // Check for symbols to monitor every 30 seconds
 setInterval(collectAllSymbols, 30000);
-collectAllSymbols(); // Initial run
+// Initial run with a delay to allow services to warm up
+setTimeout(collectAllSymbols, 5000);
+
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
@@ -229,11 +241,9 @@ async function processPriceUpdate(symbol: string, price: number) {
     let writes = 0;
 
     try {
-        // --- 1. Check for open positions to hit SL/TP ---
-        console.log(`[PROCESS_UPDATE] 1. Checking openPositions for symbol: ${symbol}`);
+        // Check for open positions to hit SL/TP
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
-        console.log(`[PROCESS_UPDATE] Found ${positionsSnapshot.size} openPositions for symbol: ${symbol}`);
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data();
             if (pos.details?.status === 'closing') return;
@@ -248,35 +258,34 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // --- 2. Check for active trade triggers ---
-        console.log(`[PROCESS_UPDATE] 2. Checking tradeTriggers for symbol: ${symbol}`);
+        // Check for active trade triggers
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
-        console.log(`[PROCESS_UPDATE] Found ${triggersSnapshot.size} tradeTriggers for symbol: ${symbol}`);
         triggersSnapshot.forEach((doc) => {
             const trigger = doc.data();
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
             if (conditionMet) {
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                // NOTE: The actual creation of the position based on the trigger
+                // would happen here in a full implementation, likely in another transaction.
+                // For now, we just delete the trigger.
                 batch.delete(doc.ref); 
                 writes++;
             }
         });
 
-        // --- 3. Update watchlist items with the new price ---
-        console.log(`[PROCESS_UPDATE] 3. Checking watchlist for symbol: ${symbol}`);
+        // Update watchlist items with the new price
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
-        console.log(`[PROCESS_UPDATE] Found ${watchlistSnapshot.size} watchlist items for symbol: ${symbol}`);
         watchlistSnapshot.forEach((doc) => {
             batch.update(doc.ref, { currentPrice: price });
             writes++;
         });
 
         if (writes > 0) {
-            console.log(`[DB_WRITE] Committing batch of ${writes} writes for symbol ${symbol} at price ${price}.`);
             await batch.commit();
+            console.log(`[DB_WRITE] Committed batch of ${writes} writes for symbol ${symbol} at price ${price}.`);
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
