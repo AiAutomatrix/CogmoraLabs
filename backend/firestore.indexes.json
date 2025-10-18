@@ -1,0 +1,36 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "openPositions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "details.status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tradeTriggers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "watchlist",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paperTradingContext",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "aiSettings.scheduleInterval", "order": "ASCENDING" },
+        { "fieldPath": "aiSettings.nextRun", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
