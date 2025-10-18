@@ -1,14 +1,15 @@
+// Worker now uses Firebase Admin SDK to write directly to Firestore.
+// This bypasses security rules and prevents PERMISSION_DENIED errors.
 
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
-import fetch from 'node-fetch'; // Use node-fetch
+import fetch from 'node-fetch'; // Use node-fetch for CommonJS compatibility
 
-// Initialize Firebase Admin SDK for Cloud Run environment
+// Initialize Firebase Admin SDK for the Cloud Run environment
+// This uses the service account associated with the Cloud Run instance.
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-  });
+  admin.initializeApp();
 }
 const db = admin.firestore();
 
@@ -84,8 +85,6 @@ class WebSocketManager {
             }
 
             if (price && symbol) {
-                // To avoid spamming logs, we won't log every single price update here.
-                // The processing function will log when it takes action.
                 processPriceUpdate(symbol, price).catch(e => console.error(`Error in processPriceUpdate for ${symbol}:`, e));
             }
         }
@@ -124,7 +123,6 @@ class WebSocketManager {
     
     private resubscribe = () => {
         if (this.ws?.readyState === WebSocket.OPEN) {
-            console.log(`[${this.name}] Resubscribing to ${this.currentSubscriptions.size} symbols.`);
             this.currentSubscriptions.forEach(symbol => {
                 this.ws?.send(JSON.stringify({
                     id: Date.now(),
@@ -133,37 +131,31 @@ class WebSocketManager {
                     response: true
                 }));
             });
+             console.log(`[${this.name}] Resubscribed to ${this.currentSubscriptions.size} symbols.`);
         }
     }
 
     public updateSubscriptions = (newSymbols: Set<string>) => {
         if (this.ws?.readyState !== WebSocket.OPEN) {
             this.currentSubscriptions = newSymbols; // Will be subscribed on connect
-            console.log(`[${this.name}] Connection not open. Subscriptions will be applied on connect.`);
             return;
         }
 
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
-        if (toAdd.size > 0) {
-            console.log(`[${this.name}] Subscribing to new symbols:`, Array.from(toAdd));
-            toAdd.forEach(symbol => {
-                this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
-                this.currentSubscriptions.add(symbol);
-            });
-        }
+        toAdd.forEach(symbol => {
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
+            this.currentSubscriptions.add(symbol);
+        });
 
-        if (toRemove.size > 0) {
-            console.log(`[${this.name}] Unsubscribing from symbols:`, Array.from(toRemove));
-            toRemove.forEach(symbol => {
-                this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
-                this.currentSubscriptions.delete(symbol);
-            });
-        }
+        toRemove.forEach(symbol => {
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
+            this.currentSubscriptions.delete(symbol);
+        });
 
-        if(toAdd.size === 0 && toRemove.size === 0) {
-            // console.log(`[${this.name}] Subscription list is already up to date.`);
+        if(toAdd.size > 0 || toRemove.size > 0) {
+            console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
         }
     }
 }
@@ -178,40 +170,34 @@ spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    // Add a 5-second delay to give Firestore indexes time to warm up on container start
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
     console.log("Collecting symbols to monitor...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
     try {
-        console.log("[collectAllSymbols] Querying 'tradeTriggers'...");
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').select('symbol', 'type').get();
-        triggersSnapshot.forEach((doc) => {
+        // Collect from tradeTriggers
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
             if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
         });
-        console.log(`[collectAllSymbols] Found ${triggersSnapshot.size} trigger(s).`);
 
-        console.log("[collectAllSymbols] Querying 'openPositions'...");
-        const positionsSnapshot = await db.collectionGroup('openPositions').select('symbol', 'positionType').get();
-        positionsSnapshot.forEach((doc) => {
+        // Collect from openPositions
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
-        console.log(`[collectAllSymbols] Found ${positionsSnapshot.size} open position(s).`);
 
-        console.log("[collectAllSymbols] Querying 'watchlist'...");
-        const watchlistSnapshot = await db.collectionGroup('watchlist').select('symbol', 'type').get();
-        watchlistSnapshot.forEach((doc) => {
+        // Collect from watchlist
+        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
+        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const item = doc.data();
             if (item.type === 'spot') spotSymbols.add(item.symbol);
             if (item.type === 'futures') futuresSymbols.add(item.symbol);
         });
-        console.log(`[collectAllSymbols] Found ${watchlistSnapshot.size} watchlist item(s).`);
         
         console.log(`Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
         spotManager.updateSubscriptions(spotSymbols);
@@ -223,7 +209,9 @@ async function collectAllSymbols() {
 
 // Check for symbols to monitor every 30 seconds
 setInterval(collectAllSymbols, 30000);
-collectAllSymbols(); // Initial run
+// Initial run with a delay to allow services to warm up
+setTimeout(collectAllSymbols, 5000);
+
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
@@ -232,7 +220,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     let writes = 0;
 
     try {
-        // --- 1. Check for open positions to hit SL/TP ---
+        // Check for open positions to hit SL/TP
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         positionsSnapshot.forEach((doc) => {
@@ -249,7 +237,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // --- 2. Check for active trade triggers ---
+        // Check for active trade triggers
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
@@ -258,12 +246,15 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             if (conditionMet) {
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                // NOTE: The actual creation of the position based on the trigger
+                // would happen here in a full implementation, likely in another transaction.
+                // For now, we just delete the trigger.
                 batch.delete(doc.ref); 
                 writes++;
             }
         });
 
-        // --- 3. Update watchlist items with the new price ---
+        // Update watchlist items with the new price
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
         watchlistSnapshot.forEach((doc) => {
@@ -272,8 +263,8 @@ async function processPriceUpdate(symbol: string, price: number) {
         });
 
         if (writes > 0) {
-            console.log(`[DB_WRITE] Committing batch of ${writes} writes for symbol ${symbol} at price ${price}.`);
             await batch.commit();
+            console.log(`[DB_WRITE] Committed batch of ${writes} writes for symbol ${symbol} at price ${price}.`);
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
@@ -281,46 +272,8 @@ async function processPriceUpdate(symbol: string, price: number) {
 }
 
 
-// --- HTTP Server for Health Checks and Manual Testing ---
-const server = http.createServer(async (req, res) => {
-  if (req.url === '/test-firestore') {
-    console.log('[/test-firestore] Received test request.');
-    const testId = `test-${Date.now()}`;
-    const testDocRef = db.collection('worker-tests').doc(testId);
-    try {
-      // 1. Write Test
-      console.log(`[/test-firestore] Attempting to WRITE to doc: ${testId}`);
-      await testDocRef.set({
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'written',
-      });
-      console.log(`[/test-firestore] WRITE successful.`);
-
-      // 2. Read Test
-      console.log(`[/test-firestore] Attempting to READ from doc: ${testId}`);
-      const docSnap = await testDocRef.get();
-      if (!docSnap.exists) {
-        throw new Error('Test document does not exist after write.');
-      }
-      console.log(`[/test-firestore] READ successful. Data:`, docSnap.data());
-
-      // 3. Delete Test
-      console.log(`[/test-firestore] Attempting to DELETE doc: ${testId}`);
-      await testDocRef.delete();
-      console.log(`[/test-firestore] DELETE successful.`);
-
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('Firestore test successful (WRITE, READ, DELETE). Check logs for details.');
-
-    } catch (error) {
-      console.error('[/test-firestore] Firestore test FAILED:', error);
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end(`Firestore test FAILED. Check logs for details. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-    return;
-  }
-  
-  // Default health check response
+// --- Basic HTTP Server to satisfy Cloud Run's requirements ---
+const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Real-time paper trading engine is running and connected to WebSockets.\n');
 });
