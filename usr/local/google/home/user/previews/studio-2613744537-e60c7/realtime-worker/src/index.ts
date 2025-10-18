@@ -13,20 +13,18 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// --- Startup Write Test ---
-async function runFirestoreWriteTest() {
-    try {
-        const testDocRef = db.collection('_workerTests').doc(`startup-${Date.now()}`);
-        await testDocRef.set({
-            message: "Startup Firestore write test",
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        console.log(`✅ Startup Firestore write successful. Document path: ${testDocRef.path}`);
-    } catch (error) {
-        console.error('❌ Startup Firestore write failed:', error);
-    }
-}
-runFirestoreWriteTest();
+// --- Startup Firestore Write Test ---
+(async () => {
+  try {
+    const docRef = await db.collection('test').add({
+      message: 'Startup Firestore write test',
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log(`✅ Startup Firestore write successful: ${docRef.path}`);
+  } catch (err) {
+    console.error('❌ Startup Firestore write failed:', err);
+  }
+})();
 // --- End Startup Write Test ---
 
 
@@ -237,12 +235,23 @@ setInterval(collectAllSymbols, 30000);
 // Initial run with a delay to allow services to warm up
 setTimeout(collectAllSymbols, 5000);
 
+const BATCH_LIMIT = 490; // Stay safely below the 500 limit
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
-    
-    const batch = db.batch();
-    let writes = 0;
+
+    let batches: admin.firestore.WriteBatch[] = [db.batch()];
+    let currentBatchIndex = 0;
+    let writesInCurrentBatch = 0;
+
+    const addWrite = () => {
+        writesInCurrentBatch++;
+        if (writesInCurrentBatch >= BATCH_LIMIT) {
+            batches.push(db.batch());
+            currentBatchIndex++;
+            writesInCurrentBatch = 0;
+        }
+    };
 
     try {
         // Check for open positions to hit SL/TP
@@ -257,8 +266,8 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             if (slHit || tpHit) {
                 console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                batch.update(doc.ref, { 'details.status': 'closing' });
-                writes++;
+                batches[currentBatchIndex].update(doc.ref, { 'details.status': 'closing' });
+                addWrite();
             }
         });
 
@@ -274,8 +283,8 @@ async function processPriceUpdate(symbol: string, price: number) {
                 // NOTE: The actual creation of the position based on the trigger
                 // would happen here in a full implementation, likely in another transaction.
                 // For now, we just delete the trigger.
-                batch.delete(doc.ref); 
-                writes++;
+                batches[currentBatchIndex].delete(doc.ref); 
+                addWrite();
             }
         });
 
@@ -283,13 +292,14 @@ async function processPriceUpdate(symbol: string, price: number) {
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
         watchlistSnapshot.forEach((doc) => {
-            batch.update(doc.ref, { currentPrice: price });
-            writes++;
+            batches[currentBatchIndex].update(doc.ref, { currentPrice: price });
+            addWrite();
         });
 
-        if (writes > 0) {
-            await batch.commit();
-            console.log(`[DB_WRITE] Committed batch of ${writes} writes for symbol ${symbol} at price ${price}.`);
+        const totalWrites = (currentBatchIndex * BATCH_LIMIT) + writesInCurrentBatch;
+        if (totalWrites > 0) {
+            await Promise.all(batches.map(batch => batch.commit()));
+            console.log(`[DB_WRITE] Committed ${totalWrites} writes across ${batches.length} batch(es) for symbol ${symbol} at price ${price}.`);
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
