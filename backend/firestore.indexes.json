@@ -1,20 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "openPositions",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "symbol", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "tradeTriggers",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "symbol", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
