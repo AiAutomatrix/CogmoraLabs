@@ -6,7 +6,9 @@ import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 const db = admin.firestore();
 
 // Define a runtime option for the scheduler function

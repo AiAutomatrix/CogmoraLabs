@@ -1,7 +1,6 @@
 
 // Worker now uses Firebase Admin SDK to write directly to Firestore.
 // This bypasses security rules and prevents PERMISSION_DENIED errors.
-
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
@@ -200,28 +199,23 @@ async function collectAllSymbols() {
     try {
         // Collect from tradeTriggers
         const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
-        triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const trigger = doc.data();
-            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-        });
+        if (!triggersSnapshot.empty) {
+            triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+                const trigger = doc.data();
+                if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+                if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            });
+        }
 
         // Collect from openPositions
         const positionsSnapshot = await db.collectionGroup('openPositions').get();
-        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const position = doc.data();
-            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-        });
-
-        // Collect from watchlist
-        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const item = doc.data();
-            // Assuming watchlist items have a 'type' field ('spot' or 'futures')
-            if (item.type === 'spot') spotSymbols.add(item.symbol);
-            if (item.type === 'futures') futuresSymbols.add(item.symbol);
-        });
+        if (!positionsSnapshot.empty) {
+            positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+                const position = doc.data();
+                if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+                if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            });
+        }
         
         console.log(`Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
         spotManager.updateSubscriptions(spotSymbols);
@@ -236,79 +230,44 @@ setInterval(collectAllSymbols, 30000);
 // Initial run with a delay to allow services to warm up
 setTimeout(collectAllSymbols, 5000);
 
-const BATCH_LIMIT = 490; // Stay safely below the 500 limit
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
+    
+    // Check for open positions to hit SL/TP
+    const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+    const positionsSnapshot = await positionsQuery.get();
+    if (!positionsSnapshot.empty) {
+        positionsSnapshot.forEach((doc) => {
+            const pos = doc.data();
+            if (pos.details?.status === 'closing') return;
 
-    let batches: admin.firestore.WriteBatch[] = [db.batch()];
-    let currentBatchIndex = 0;
-    let writesInCurrentBatch = 0;
+            const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+            const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-    const addWrite = () => {
-        writesInCurrentBatch++;
-        if (writesInCurrentBatch >= BATCH_LIMIT) {
-            batches.push(db.batch());
-            currentBatchIndex++;
-            writesInCurrentBatch = 0;
-        }
-    };
+            if (slHit || tpHit) {
+                console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                // The onDocumentWritten function will handle the rest.
+                doc.ref.update({ 'details.status': 'closing', currentPrice: price });
+            }
+        });
+    }
 
-    try {
-        // Check for open positions to hit SL/TP
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
-        const positionsSnapshot = await positionsQuery.get();
-        if (!positionsSnapshot.empty) {
-            positionsSnapshot.forEach((doc) => {
-                const pos = doc.data();
-                if (pos.details?.status === 'closing') return;
+    // Check for active trade triggers
+    const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
+    const triggersSnapshot = await triggersQuery.get();
+    if (!triggersSnapshot.empty) {
+        triggersSnapshot.forEach((doc) => {
+            const trigger = doc.data();
+            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
-                const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-                const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
-
-                if (slHit || tpHit) {
-                    console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                    batches[currentBatchIndex].update(doc.ref, { 'details.status': 'closing' });
-                    addWrite();
-                }
-            });
-        }
-
-
-        // Check for active trade triggers
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
-        const triggersSnapshot = await triggersQuery.get();
-        if (!triggersSnapshot.empty) {
-            triggersSnapshot.forEach((doc) => {
-                const trigger = doc.data();
-                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-                if (conditionMet) {
-                    console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-                    batches[currentBatchIndex].delete(doc.ref); 
-                    addWrite();
-                }
-            });
-        }
-
-
-        // Update watchlist items with the new price
-        const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
-        const watchlistSnapshot = await watchlistQuery.get();
-        if (!watchlistSnapshot.empty) {
-            watchlistSnapshot.forEach((doc) => {
-                batches[currentBatchIndex].update(doc.ref, { currentPrice: price });
-                addWrite();
-            });
-        }
-
-        const totalWrites = (currentBatchIndex * BATCH_LIMIT) + writesInCurrentBatch;
-        if (totalWrites > 0) {
-            await Promise.all(batches.map(batch => batch.commit()));
-            console.log(`[DB_WRITE] Committed ${totalWrites} writes across ${batches.length} batch(es) for symbol ${symbol} at price ${price}.`);
-        }
-    } catch (err) {
-        console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
+            if (conditionMet) {
+                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                // Here we would create the position. This is complex and requires a transaction.
+                // For now, we will just update the trigger status. A separate function could handle execution.
+                doc.ref.update({ status: 'executed' });
+            }
+        });
     }
 }
 
