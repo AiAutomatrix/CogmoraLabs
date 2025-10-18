@@ -3,18 +3,26 @@
 set -e
 
 # Variables
-PROJECT_ID="studio-2613744537"   # Correct project ID
+PROJECT_ID="studio-2613744537"
 REGION="us-central1"
 SERVICE_NAME="realtime-worker"
-IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$SERVICE_NAME:latest"
+DOCKER_REPO="docker-repo"
+IMAGE_TAG="latest"
+IMAGE_NAME="$REGION-docker.pkg.dev/$PROJECT_ID/$DOCKER_REPO/$SERVICE_NAME:$IMAGE_TAG"
 SOURCE_DIR="realtime-worker"
 
-echo "🔨 Building Docker image..."
-gcloud builds submit --tag $IMAGE $SOURCE_DIR
+echo "🔐 Configuring Docker to authenticate with Google Artifact Registry..."
+gcloud auth configure-docker $REGION-docker.pkg.dev
+
+echo "🔨 Building Docker image locally..."
+docker build -t $IMAGE_NAME $SOURCE_DIR
+
+echo "📤 Pushing Docker image to Artifact Registry..."
+docker push $IMAGE_NAME
 
 echo "🚀 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
-  --image $IMAGE \
+  --image $IMAGE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
