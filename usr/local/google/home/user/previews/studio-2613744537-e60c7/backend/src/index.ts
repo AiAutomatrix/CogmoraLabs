@@ -45,7 +45,6 @@ export const mainScheduler = onSchedule({
  */
 async function handleAiAgentTasks(currentTime: number) {
   // CORRECTED QUERY: Use only one range filter on 'nextRun'.
-  // The 'scheduleInterval' check will be done in the code.
   const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
     .where("aiSettings.nextRun", "<=", currentTime)
     .get();
@@ -61,8 +60,10 @@ async function handleAiAgentTasks(currentTime: number) {
     const userId = doc.ref.parent.parent?.id;
     const aiSettings = doc.data().aiSettings;
 
-    // Perform the second filter in the code.
-    if (!userId || !aiSettings || !aiSettings.scheduleInterval) continue;
+    // Perform the second filter in the code, which is valid.
+    if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
+        continue; // Skip if scheduleInterval is not set.
+    }
 
     logger.info(`Processing AI task for user: ${userId}`);
 
