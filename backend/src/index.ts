@@ -7,7 +7,7 @@ import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
-    admin.initializeApp();
+  admin.initializeApp();
 }
 const db = admin.firestore();
 
@@ -45,7 +45,6 @@ export const mainScheduler = onSchedule({
  * @param {number} currentTime The current timestamp in milliseconds.
  */
 async function handleAiAgentTasks(currentTime: number) {
-  // CORRECTED QUERY: Use only one range filter on 'nextRun'.
   const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
     .where("aiSettings.nextRun", "<=", currentTime)
     .get();
@@ -61,21 +60,15 @@ async function handleAiAgentTasks(currentTime: number) {
     const userId = doc.ref.parent.parent?.id;
     const aiSettings = doc.data().aiSettings;
 
-    // Perform the second filter in the code, which is valid.
     if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
-        continue; // Skip if scheduleInterval is not set.
+      continue;
     }
 
     logger.info(`Processing AI task for user: ${userId}`);
 
     // In a real implementation, you would invoke the Genkit flow here.
-    // This is a placeholder for that logic.
-    // For example:
-    // const genkitFlow = getGenkitFlow('proposeTradeTriggers');
-    // const flowResult = await genkitFlow.invoke({ userId, context... });
-    // ... then apply the results.
+    // ...
 
-    // Update the nextRun timestamp
     const nextRun = currentTime + aiSettings.scheduleInterval;
     await doc.ref.update({"aiSettings.nextRun": nextRun});
 
@@ -101,9 +94,8 @@ async function handleWatchlistScraperTasks(currentTime: number) {
 
   for (const doc of scraperUsersSnapshot.docs) {
     const config = doc.data().automationConfig;
-    // Check if the task is due
     if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
-      continue; // Skip if not due
+      continue;
     }
 
     const userId = doc.ref.parent.parent?.id;
@@ -111,11 +103,9 @@ async function handleWatchlistScraperTasks(currentTime: number) {
 
     logger.info(`Processing watchlist scraper task for user: ${userId}`);
 
-    // In a real implementation, you would invoke the scraping logic here.
-    // This could involve calling external APIs (e.g., KuCoin) and then
-    // updating the user's 'watchlist' subcollection in Firestore.
+    // In a real implementation, you would invoke scraping logic here.
+    // ...
 
-    // Update the lastRun timestamp
     await doc.ref.update({"automationConfig.lastRun": currentTime});
     logger.info(`Watchlist scraper task for user ${userId} completed.`);
   }
@@ -133,7 +123,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   const dataAfter = change.after.data();
   const dataBefore = change.before.data();
 
-  // Check if the position's status was just changed to 'closing'
   if (dataAfter?.details?.status !== "closing" || dataBefore?.details?.status === "closing") {
     return;
   }
@@ -156,7 +145,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       if (position.positionType === "spot") {
         pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
-        collateralToReturn = position.size * position.averageEntryPrice; // The initial cost basis is returned
+        collateralToReturn = position.size * position.averageEntryPrice;
       } else { // Futures
         const contractValue = position.size * position.averageEntryPrice;
         collateralToReturn = contractValue / position.leverage;
@@ -169,13 +158,9 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       const newBalance = currentBalance + collateralToReturn + pnl;
 
-      // 1. Update the user's balance
       transaction.update(userContextRef, {balance: newBalance});
-
-      // 2. Delete the open position
       transaction.delete(change.after.ref);
 
-      // 3. Find the most recent 'open' trade history record for this positionId and update it.
       const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
         .where("positionId", "==", positionId)
         .where("status", "==", "open")
@@ -185,7 +170,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const historySnapshot = await transaction.get(historyQuery);
       if (!historySnapshot.empty) {
         const historyDocRef = historySnapshot.docs[0].ref;
-        // Update the single trade history document with the final PNL.
         transaction.update(historyDocRef, {status: "closed", pnl});
       }
 
@@ -193,7 +177,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
-    // Optionally, revert the 'closing' status to allow for a retry
     await change.after.ref.update({"details.status": "open"});
   }
 });
