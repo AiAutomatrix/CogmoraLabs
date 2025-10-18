@@ -2,13 +2,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "paperTradingContext",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "aiSettings.nextRun", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "openPositions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
