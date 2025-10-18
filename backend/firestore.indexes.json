@@ -1,3 +1,4 @@
+
 {
   "indexes": [
     {
@@ -14,13 +15,6 @@
       "fields": [
         { "fieldPath": "symbol", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "watchlist",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "symbol", "order": "ASCENDING" }
       ]
     },
     {
