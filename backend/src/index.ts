@@ -1,4 +1,3 @@
-
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -186,5 +185,3 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await change.after.ref.update({"details.status": "open"});
   }
 });
-
-    
