@@ -280,7 +280,14 @@ export default function AllTickersScreener({
                       variant="ghost"
                       size="icon"
                       className={`h-8 w-8 ${watchedSymbols.has(token.symbol) ? 'text-primary' : ''}`}
-                      onClick={() => toggleWatchlist(token.symbol, token.symbolName, 'spot')}
+                      onClick={() => toggleWatchlist(
+                        token.symbol, 
+                        token.symbolName, 
+                        'spot',
+                        parseFloat(token.high),
+                        parseFloat(token.low),
+                        parseFloat(token.changeRate)
+                      )}
                     >
                         <Eye className="h-4 w-4" />
                     </Button>
@@ -297,5 +304,7 @@ export default function AllTickersScreener({
     </>
   );
 }
+
+    
 
     
