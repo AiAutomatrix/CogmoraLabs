@@ -1,151 +1,18 @@
-/**
- * @fileoverview Firestore Security Rules for Cogmora Labs Application
- *
- * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for all data stored under the `/users/{userId}` path.
- * All data is nested under this path, ensuring that only the authenticated user can access their own data.
- * A Cloud Run service with the email `cogmoralabs@gmail.com` is allowed to write to any collection for automated processes.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profile information. Only the user can read/write their own profile.
- * - /users/{userId}/paperTradingContexts/{paperTradingContextId}: Stores paper trading context data. Only the user can read/write.
- * - /users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId}: Stores open position data. Only the user can read/write.
- * - /users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeHistories/{tradeHistoryId}: Stores trade history data. Only the user can read/write.
- * - /users/{userId}/paperTradingContexts/{paperTradingContextId}/triggers/{triggerId}: Stores trading trigger data. Only the user can read/write.
- *
- * Key Security Decisions:
- * - User listing is disallowed to protect user privacy.
- * - All write operations are strictly controlled by user ownership.
- * - Data validation is relaxed to facilitate rapid prototyping, focusing on authorization and relational integrity.
- * - The Cloud Run service is granted full write access for automated processes.
- */
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper Functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    function isCloudRunService() {
-      return request.auth.token.email == 'cogmoralabs@gmail.com';
-    }
-
-    /**
-     * @description Allows users to read and write their own profile data.
-     * @path /users/{userId}
-     * @allow (create) User with ID matching auth.uid can create their profile.
-     * @allow (get) Authenticated user can read their own profile.
-     * @allow (update) Authenticated user can update their own profile.
-     * @allow (delete) Authenticated user can delete their own profile.
-     * @deny (create) User attempts to create a profile with an ID that does not match their auth.uid.
-     * @deny (get) User attempts to read another user's profile.
-     * @deny (update) User attempts to update another user's profile.
-     * @deny (delete) User attempts to delete another user's profile.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
-     */
+    
+    // Rule 1: Allow users to create their own user document upon sign-up.
     match /users/{userId} {
-      allow get: if isOwner(userId) || isCloudRunService();
-      allow list: if false; // User listing is not allowed
-
-      // Self-creation: User can create their own profile
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      // Owner-only updates and deletes
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id || isCloudRunService();
-      allow delete: if isExistingOwner(userId) || isCloudRunService();
+      allow create: if request.auth.uid == userId;
     }
 
-    /**
-     * @description Allows users to read and write their own paper trading context.
-     * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}
-     * @allow (create) User can create a paper trading context under their user ID.
-     * @allow (get) Authenticated user can read their own paper trading context.
-     * @allow (update) Authenticated user can update their own paper trading context.
-     * @allow (delete) Authenticated user can delete their own paper trading context.
-     * @deny (create) User attempts to create a paper trading context under another user's ID.
-     * @deny (get) User attempts to read another user's paper trading context.
-     * @deny (update) User attempts to update another user's paper trading context.
-     * @deny (delete) User attempts to delete another user's paper trading context.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
-     */
-    match /users/{userId}/paperTradingContexts/{paperTradingContextId} {
-      allow get: if isOwner(userId) || isCloudRunService();
-      allow list: if isOwner(userId) || isCloudRunService();
-      allow create: if isOwner(userId) || isCloudRunService();
-      allow update: if isExistingOwner(userId) || isCloudRunService();
-      allow delete: if isExistingOwner(userId) || isCloudRunService();
-    }
-
-    /**
-     * @description Allows users to read and write their own open positions.
-     * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId}
-     * @allow (create) User can create an open position under their paper trading context.
-     * @allow (get) Authenticated user can read their own open position.
-     * @allow (update) Authenticated user can update their own open position.
-     * @allow (delete) Authenticated user can delete their own open position.
-     * @deny (create) User attempts to create an open position under another user's paper trading context.
-     * @deny (get) User attempts to read another user's open position.
-     * @deny (update) User attempts to update another user's open position.
-     * @deny (delete) User attempts to delete another user's open position.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
-     */
-    match /users/{userId}/paperTradingContexts/{paperTradingContextId}/openPositions/{openPositionId} {
-      allow get: if isOwner(userId) || isCloudRunService();
-      allow list: if isOwner(userId) || isCloudRunService();
-      allow create: if isOwner(userId) || isCloudRunService();
-      allow update: if isExistingOwner(userId) || isCloudRunService();
-      allow delete: if isExistingOwner(userId) || isCloudRunService();
-    }
-
-    /**
-     * @description Allows users to read and write their own trade history.
-     * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeHistories/{tradeHistoryId}
-     * @allow (create) User can create a trade history entry under their paper trading context.
-     * @allow (get) Authenticated user can read their own trade history.
-     * @allow (update) Authenticated user can update their own trade history.
-     * @allow (delete) Authenticated user can delete their own trade history.
-     * @deny (create) User attempts to create a trade history entry under another user's paper trading context.
-     * @deny (get) User attempts to read another user's trade history.
-     * @deny (update) User attempts to update another user's trade history.
-     * @deny (delete) User attempts to delete another user's trade history.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
-     */
-    match /users/{userId}/paperTradingContexts/{paperTradingContextId}/tradeHistories/{tradeHistoryId} {
-      allow get: if isOwner(userId) || isCloudRunService();
-      allow list: if isOwner(userId) || isCloudRunService();
-      allow create: if isOwner(userId) || isCloudRunService();
-      allow update: if isExistingOwner(userId) || isCloudRunService();
-      allow delete: if isExistingOwner(userId) || isCloudRunService();
-    }
-
-    /**
-     * @description Allows users to read and write their own triggers.
-     * @path /users/{userId}/paperTradingContexts/{paperTradingContextId}/triggers/{triggerId}
-     * @allow (create) User can create a trigger under their paper trading context.
-     * @allow (get) Authenticated user can read their own trigger.
-     * @allow (update) Authenticated user can update their own trigger.
-     * @allow (delete) Authenticated user can delete their own trigger.
-     * @deny (create) User attempts to create a trigger under another user's paper trading context.
-     * @deny (get) User attempts to read another user's trigger.
-     * @deny (update) User attempts to update another user's trigger.
-     * @deny (delete) User attempts to delete another user's trigger.
-     * @principle Enforces document ownership for writes and restricts access to a user's own data tree.
-     */
-    match /users/{userId}/paperTradingContexts/{paperTradingContextId}/triggers/{triggerId} {
-      allow get: if isOwner(userId) || isCloudRunService();
-      allow list: if isOwner(userId) || isCloudRunService();
-      allow create: if isOwner(userId) || isCloudRunService();
-      allow update: if isExistingOwner(userId) || isCloudRunService();
-      allow delete: if isExistingOwner(userId) || isCloudRunService();
+    // Rule 2: Allow a user to read, write, and list documents within their own user directory.
+    // This recursive rule is the key that grants access to all subcollections like 
+    // 'paperTradingContext', 'watchlist', 'openPositions', etc.
+    match /users/{userId}/{path=**} {
+      allow read, write: if request.auth.uid == userId;
     }
   }
 }

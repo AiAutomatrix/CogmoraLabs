@@ -10,7 +10,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // Define a runtime option for the scheduler function
-const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", 10);
+const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 
 /**
  * Main scheduler function that runs every minute to orchestrate autonomous tasks.
@@ -183,3 +183,4 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await change.after.ref.update({"details.status": "open"});
   }
 });
+
