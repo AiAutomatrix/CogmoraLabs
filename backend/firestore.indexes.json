@@ -2,6 +2,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "openPositions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -10,11 +19,46 @@
       ]
     },
     {
+      "collectionGroup": "tradeHistory",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tradeTriggers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "triggerType", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "automationConfig.updateMode", "order": "ASCENDING" },
         { "fieldPath": "automationConfig.lastRun", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "watchlist",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "volume", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paperTradingContext",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "aiSettings.nextRun", "order": "ASCENDING" },
+        { "fieldPath": "aiSettings.scheduleInterval", "order": "ASCENDING" }
       ]
     },
     {
