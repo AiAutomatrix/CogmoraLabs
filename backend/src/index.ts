@@ -1,3 +1,4 @@
+
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -5,7 +6,9 @@ import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 const db = admin.firestore();
 
 // Define a runtime option for the scheduler function
@@ -19,21 +22,22 @@ export const mainScheduler = onSchedule({
   schedule: "every 1 minutes",
   maxInstances,
 }, async () => {
-  logger.info("Main scheduler waking up...", {structuredData: true});
+  logger.info("Main scheduler waking up...");
   const now = admin.firestore.Timestamp.now();
   const currentTime = now.toMillis();
 
-  try {
-    // We can run queries in parallel
-    const aiTaskPromise = handleAiAgentTasks(currentTime);
-    const scraperTaskPromise = handleWatchlistScraperTasks(currentTime);
+  // Run tasks in parallel with specific error handling
+  const aiTaskPromise = handleAiAgentTasks(currentTime).catch((error) => {
+    logger.error("Error in AI agent tasks execution:", error);
+  });
+  
+  const scraperTaskPromise = handleWatchlistScraperTasks(currentTime).catch((error) => {
+    logger.error("Error in watchlist scraper tasks execution:", error);
+  });
 
-    await Promise.all([aiTaskPromise, scraperTaskPromise]);
+  await Promise.all([aiTaskPromise, scraperTaskPromise]);
 
-    logger.info("Scheduler run completed successfully.");
-  } catch (error) {
-    logger.error("Error in main scheduler execution:", error);
-  }
+  logger.info("Scheduler run finished.");
 });
 
 /**
@@ -41,8 +45,8 @@ export const mainScheduler = onSchedule({
  * @param {number} currentTime The current timestamp in milliseconds.
  */
 async function handleAiAgentTasks(currentTime: number) {
+  // CORRECTED QUERY: Use only one range filter on 'nextRun'.
   const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-    .where("aiSettings.scheduleInterval", "!=", null)
     .where("aiSettings.nextRun", "<=", currentTime)
     .get();
 
@@ -51,13 +55,16 @@ async function handleAiAgentTasks(currentTime: number) {
     return;
   }
 
-  logger.info(`Found ${aiUsersSnapshot.docs.length} users with due AI tasks.`);
+  logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
 
   for (const doc of aiUsersSnapshot.docs) {
     const userId = doc.ref.parent.parent?.id;
     const aiSettings = doc.data().aiSettings;
 
-    if (!userId || !aiSettings) continue;
+    // Perform the second filter in the code, which is valid.
+    if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
+        continue; // Skip if scheduleInterval is not set.
+    }
 
     logger.info(`Processing AI task for user: ${userId}`);
 
@@ -89,14 +96,19 @@ async function handleWatchlistScraperTasks(currentTime: number) {
     logger.info("No due watchlist scraper tasks found.");
     return;
   }
+  
+  logger.info(`Found ${scraperUsersSnapshot.docs.length} users with auto-refreshing watchlists.`);
 
   for (const doc of scraperUsersSnapshot.docs) {
     const config = doc.data().automationConfig;
+    // Check if the task is due
     if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
       continue; // Skip if not due
     }
 
     const userId = doc.ref.parent.parent?.id;
+    if (!userId) continue;
+
     logger.info(`Processing watchlist scraper task for user: ${userId}`);
 
     // In a real implementation, you would invoke the scraping logic here.
