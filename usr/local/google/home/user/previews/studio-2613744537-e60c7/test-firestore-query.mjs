@@ -1,74 +1,66 @@
-// A manual test script to diagnose Firestore write permissions.
-// To run:
-// 1. Replace 'REPLACE_WITH_A_REAL_USER_ID' with a valid UID from your Firebase Auth.
-// 2. Run `node test-firestore-query.mjs` in your terminal.
 
+// test-firestore-query.mjs
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { getApps } from "firebase/app";
 
-// --- CONFIGURATION ---
-
-// Your actual Firebase project configuration.
+// --- 1. Firebase config with your project's actual credentials ---
 const firebaseConfig = {
-  projectId: "studio-2613744537-e60c7",
-  apiKey: "AIzaSyCtkTPALNPLwJxBFuAjJlwWZmG9djJSfGc",
-  authDomain: "studio-2613744537-e60c7.firebaseapp.com",
+  "projectId": "studio-2613744537-e60c7",
+  "appId": "1:1084135620241:web:8d9b766b81cf970c900930",
+  "apiKey": "AIzaSyCtkTPALNPLwJxBFuAjJlwWZmG9djJSfGc",
+  "authDomain": "studio-2613744537-e60c7.firebaseapp.com",
 };
 
-// **IMPORTANT**: Replace this with a real User ID from your Firebase Authentication console.
-const TEST_USER_ID = "REPLACE_WITH_A_REAL_USER_ID";
+// --- 2. Initialize Firebase ---
+if (!getApps().length) {
+  initializeApp(firebaseConfig);
+}
 
-// --- SCRIPT LOGIC ---
+const db = getFirestore();
 
-async function testFirestoreWrite() {
-  if (TEST_USER_ID === "REPLACE_WITH_A_REAL_USER_ID") {
-    console.error(
-      "\n❌ ERROR: Please replace 'REPLACE_WITH_A_REAL_USER_ID' with a real User ID in the script.\n"
-    );
-    return;
-  }
-
-  console.log(`▶️ Initializing Firebase app for project: ${firebaseConfig.projectId}...`);
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-
-  const positionId = `test-pos-${Date.now()}`;
-  const docPath = `users/${TEST_USER_ID}/paperTradingContext/main/openPositions/${positionId}`;
-
-  console.log(`\n▶️ Preparing to write to path: ${docPath}`);
-
-  const newPosition = {
-    id: positionId,
-    averageEntryPrice: 50000,
-    currentPrice: 50000,
-    positionType: "spot",
-    side: "buy",
-    size: 0.1,
-    symbol: "BTC-USDT",
-    symbolName: "BTC-USDT",
-    unrealizedPnl: 0,
-    details: {
-      triggeredBy: "manual-test-script",
-      status: "open",
-    },
-  };
-
+// --- 3. Function to test writing to the watchlist ---
+async function runWriteTest() {
   try {
-    const docRef = doc(db, docPath);
-    await setDoc(docRef, newPosition);
-    console.log(
-      `\n✅ SUCCESS: Document successfully written to Firestore!`
-    );
-    console.log(`You can verify it at path: ${docPath}`);
-  } catch (error) {
-    console.error("\n❌ FAILED: An error occurred while writing to Firestore.");
-    console.error("-------------------- ERROR DETAILS --------------------");
-    console.error(error);
-    console.error("-----------------------------------------------------");
-    if (error.code === 'permission-denied' || error.code === 'failed-precondition') {
-        console.error("\n💡 This looks like a permission or index issue. If the error message contains a link to create an index, please follow it.");
+    // IMPORTANT: Replace this with a REAL User ID from your Firebase Authentication
+    const testUserId = 'REPLACE_WITH_A_REAL_USER_ID';
+    if (testUserId === 'REPLACE_WITH_A_REAL_USER_ID') {
+        console.error("❌ ERROR: Please replace 'REPLACE_WITH_A_REAL_USER_ID' in the script with a real User ID from your Firebase project.");
+        return;
+    }
+
+    // This simulates the worker updating a price on a watchlist item.
+    const symbolToTest = 'BTC-USDT';
+    const docRef = doc(db, 'users', testUserId, 'paperTradingContext', 'main', 'watchlist', symbolToTest);
+
+    const dataToWrite = {
+      currentPrice: 65000.12,
+      priceChgPct: 0.01,
+      symbol: "BTC-USDT",
+      symbolName: "Bitcoin",
+      type: "spot",
+      updatedAt: Date.now()
+    };
+    
+    console.log(`\nAttempting to write to path: ${docRef.path}`);
+    console.log('With data:', dataToWrite);
+
+    await setDoc(docRef, dataToWrite, { merge: true });
+
+    console.log(`\n✅ SUCCESS: Successfully wrote/updated document for '${symbolToTest}' in the watchlist.`);
+    console.log("This confirms that the worker has the correct permissions and the database is ready.");
+
+  } catch (err) {
+    console.error("\n❌ WRITE FAILED:", err.message);
+    if (err.message && err.message.includes("permission-denied")) {
+      console.error("Reason: This is a Firestore Security Rules issue. The rules are blocking this write operation.");
+    } else if (err.message && err.message.includes("create index")) {
+      console.log("⚠️ Firestore will print a URL below — click it to create the missing index.");
+    } else {
+      console.error("An unexpected error occurred. Check your Firebase config and network connection.", err);
     }
   }
 }
 
-testFirestoreWrite();
+// --- 4. Run the test ---
+runWriteTest();
