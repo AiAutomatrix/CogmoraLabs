@@ -44,8 +44,9 @@ export const mainScheduler = onSchedule({
  * @param {number} currentTime The current timestamp in milliseconds.
  */
 async function handleAiAgentTasks(currentTime: number) {
+  // CORRECTED QUERY: Use only one range filter on 'nextRun'.
+  // The 'scheduleInterval' check will be done in the code.
   const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-    .where("aiSettings.scheduleInterval", "!=", null)
     .where("aiSettings.nextRun", "<=", currentTime)
     .get();
 
@@ -54,13 +55,14 @@ async function handleAiAgentTasks(currentTime: number) {
     return;
   }
 
-  logger.info(`Found ${aiUsersSnapshot.docs.length} users with due AI tasks.`);
+  logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
 
   for (const doc of aiUsersSnapshot.docs) {
     const userId = doc.ref.parent.parent?.id;
     const aiSettings = doc.data().aiSettings;
 
-    if (!userId || !aiSettings) continue;
+    // Perform the second filter in the code.
+    if (!userId || !aiSettings || !aiSettings.scheduleInterval) continue;
 
     logger.info(`Processing AI task for user: ${userId}`);
 
