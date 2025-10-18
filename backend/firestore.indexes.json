@@ -22,9 +22,9 @@
       "collectionGroup": "openPositions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "positionData.symbol", "order": "ASCENDING" },
-        { "fieldPath": "positionData.status", "order": "ASCENDING" },
-        { "fieldPath": "positionData.updatedAt", "order": "ASCENDING" },
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
@@ -32,9 +32,9 @@
       "collectionGroup": "tradeTriggers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "triggerConfig.symbol", "order": "ASCENDING" },
-        { "fieldPath": "triggerConfig.triggerType", "order": "ASCENDING" },
-        { "fieldPath": "triggerConfig.updatedAt", "order": "ASCENDING" },
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "triggerType", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
@@ -42,9 +42,19 @@
       "collectionGroup": "watchlist",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "token.symbol", "order": "ASCENDING" },
-        { "fieldPath": "token.volume", "order": "ASCENDING" },
-        { "fieldPath": "token.updatedAt", "order": "ASCENDING" },
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "volume", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tradeHistory",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     }

@@ -144,7 +144,7 @@ class WebSocketManager {
         }
 
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
-        const toRemove = new Set([...this.currentSubscriptions].filter(s => !this.currentSubscriptions.has(s)));
+        const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
         if (toAdd.size > 0) {
             console.log(`[${this.name}] Subscribing to new symbols:`, Array.from(toAdd));
@@ -233,10 +233,8 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     try {
         // --- 1. Check for open positions to hit SL/TP ---
-        console.log(`[PROCESS_UPDATE] 1. Checking openPositions for symbol: ${symbol}`);
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
-        console.log(`[PROCESS_UPDATE] Found ${positionsSnapshot.size} openPositions for symbol: ${symbol}`);
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data();
             if (pos.details?.status === 'closing') return;
@@ -252,10 +250,8 @@ async function processPriceUpdate(symbol: string, price: number) {
         });
 
         // --- 2. Check for active trade triggers ---
-        console.log(`[PROCESS_UPDATE] 2. Checking tradeTriggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
-        console.log(`[PROCESS_UPDATE] Found ${triggersSnapshot.size} tradeTriggers for symbol: ${symbol}`);
         triggersSnapshot.forEach((doc) => {
             const trigger = doc.data();
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
@@ -268,10 +264,8 @@ async function processPriceUpdate(symbol: string, price: number) {
         });
 
         // --- 3. Update watchlist items with the new price ---
-        console.log(`[PROCESS_UPDATE] 3. Checking watchlist for symbol: ${symbol}`);
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
-        console.log(`[PROCESS_UPDATE] Found ${watchlistSnapshot.size} watchlist items for symbol: ${symbol}`);
         watchlistSnapshot.forEach((doc) => {
             batch.update(doc.ref, { currentPrice: price });
             writes++;
