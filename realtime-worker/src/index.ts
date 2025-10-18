@@ -284,46 +284,8 @@ async function processPriceUpdate(symbol: string, price: number) {
 }
 
 
-// --- HTTP Server for Health Checks and Manual Testing ---
-const server = http.createServer(async (req, res) => {
-  if (req.url === '/test-firestore') {
-    console.log('[/test-firestore] Received test request.');
-    const testId = `test-${Date.now()}`;
-    const testDocRef = db.collection('worker-tests').doc(testId);
-    try {
-      // 1. Write Test
-      console.log(`[/test-firestore] Attempting to WRITE to doc: ${testId}`);
-      await testDocRef.set({
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        status: 'written',
-      });
-      console.log(`[/test-firestore] WRITE successful.`);
-
-      // 2. Read Test
-      console.log(`[/test-firestore] Attempting to READ from doc: ${testId}`);
-      const docSnap = await testDocRef.get();
-      if (!docSnap.exists) {
-        throw new Error('Test document does not exist after write.');
-      }
-      console.log(`[/test-firestore] READ successful. Data:`, docSnap.data());
-
-      // 3. Delete Test
-      console.log(`[/test-firestore] Attempting to DELETE doc: ${testId}`);
-      await testDocRef.delete();
-      console.log(`[/test-firestore] DELETE successful.`);
-
-      res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end('Firestore test successful (WRITE, READ, DELETE). Check logs for details.');
-
-    } catch (error) {
-      console.error('[/test-firestore] Firestore test FAILED:', error);
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end(`Firestore test FAILED. Check logs for details. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-    return;
-  }
-  
-  // Default health check response
+// --- Basic HTTP Server to satisfy Cloud Run's requirements ---
+const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Real-time paper trading engine is running and connected to WebSockets.\n');
 });
