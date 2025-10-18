@@ -11,115 +11,100 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Define a runtime option for the scheduler function
+// Define a runtime option for the scheduler functions
 const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 
 /**
- * Main scheduler function that runs every minute to orchestrate autonomous tasks.
- * It queries for users whose AI agent or watchlist scraper tasks are due.
+ * Scheduled function that runs every minute to execute due AI agent tasks.
  */
-export const mainScheduler = onSchedule({
+export const aiAgentScheduler = onSchedule({
   schedule: "every 1 minutes",
   maxInstances,
 }, async () => {
-  logger.info("Main scheduler waking up...");
-  const now = admin.firestore.Timestamp.now();
-  const currentTime = now.toMillis();
+    logger.info("AI Agent Scheduler waking up...");
+    const now = admin.firestore.Timestamp.now();
+    const currentTime = now.toMillis();
 
-  // Run tasks in parallel with specific error handling
-  const aiTaskPromise = handleAiAgentTasks(currentTime).catch((error) => {
-    logger.error("Error in AI agent tasks execution:", error);
-  });
-  
-  const scraperTaskPromise = handleWatchlistScraperTasks(currentTime).catch((error) => {
-    logger.error("Error in watchlist scraper tasks execution:", error);
-  });
+    try {
+        const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
+            .where("aiSettings.nextRun", "<=", currentTime)
+            .get();
 
-  await Promise.all([aiTaskPromise, scraperTaskPromise]);
+        if (aiUsersSnapshot.empty) {
+            logger.info("No due AI agent tasks found.");
+            return;
+        }
 
-  logger.info("Scheduler run finished.");
+        logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
+
+        for (const doc of aiUsersSnapshot.docs) {
+            const userId = doc.ref.parent.parent?.id;
+            const aiSettings = doc.data().aiSettings;
+
+            if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
+                continue;
+            }
+
+            logger.info(`Processing AI task for user: ${userId}`);
+
+            // In a real implementation, you would invoke the Genkit flow here.
+            // ...
+
+            const nextRun = currentTime + aiSettings.scheduleInterval;
+            await doc.ref.update({"aiSettings.nextRun": nextRun});
+
+            logger.info(`AI task for user ${userId} completed. Next run scheduled for ${new Date(nextRun).toISOString()}`);
+        }
+    } catch (error) {
+        logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
+    }
 });
 
-/**
- * Handles running the AI agent for all due users.
- * @param {number} currentTime The current timestamp in milliseconds.
- */
-async function handleAiAgentTasks(currentTime: number) {
-  // CORRECTED QUERY: Use only one range filter on 'nextRun'.
-  const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-    .where("aiSettings.nextRun", "<=", currentTime)
-    .get();
-
-  if (aiUsersSnapshot.empty) {
-    logger.info("No due AI agent tasks found.");
-    return;
-  }
-
-  logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
-
-  for (const doc of aiUsersSnapshot.docs) {
-    const userId = doc.ref.parent.parent?.id;
-    const aiSettings = doc.data().aiSettings;
-
-    // Perform the second filter in the code, which is valid.
-    if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
-        continue; // Skip if scheduleInterval is not set.
-    }
-
-    logger.info(`Processing AI task for user: ${userId}`);
-
-    // In a real implementation, you would invoke the Genkit flow here.
-    // This is a placeholder for that logic.
-    // For example:
-    // const genkitFlow = getGenkitFlow('proposeTradeTriggers');
-    // const flowResult = await genkitFlow.invoke({ userId, context... });
-    // ... then apply the results.
-
-    // Update the nextRun timestamp
-    const nextRun = currentTime + aiSettings.scheduleInterval;
-    await doc.ref.update({"aiSettings.nextRun": nextRun});
-
-    logger.info(`AI task for user ${userId} completed. Next run scheduled for ${new Date(nextRun).toISOString()}`);
-  }
-}
 
 /**
- * Handles running the watchlist scraper for all due users.
- * @param {number} currentTime The current timestamp in milliseconds.
+ * Scheduled function that runs every minute to execute due watchlist scraper tasks.
  */
-async function handleWatchlistScraperTasks(currentTime: number) {
-  const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
-    .where("automationConfig.updateMode", "==", "auto-refresh")
-    .get();
+export const watchlistScraperScheduler = onSchedule({
+  schedule: "every 1 minutes",
+  maxInstances,
+}, async () => {
+    logger.info("Watchlist Scraper Scheduler waking up...");
+    const now = admin.firestore.Timestamp.now();
+    const currentTime = now.toMillis();
 
-  if (scraperUsersSnapshot.empty) {
-    logger.info("No due watchlist scraper tasks found.");
-    return;
-  }
-  
-  logger.info(`Found ${scraperUsersSnapshot.docs.length} users with auto-refreshing watchlists.`);
+    try {
+        const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
+            .where("automationConfig.updateMode", "==", "auto-refresh")
+            .get();
 
-  for (const doc of scraperUsersSnapshot.docs) {
-    const config = doc.data().automationConfig;
-    // Check if the task is due
-    if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
-      continue; // Skip if not due
+        if (scraperUsersSnapshot.empty) {
+            logger.info("No due watchlist scraper tasks found.");
+            return;
+        }
+
+        logger.info(`Found ${scraperUsersSnapshot.docs.length} users with auto-refreshing watchlists.`);
+
+        for (const doc of scraperUsersSnapshot.docs) {
+            const config = doc.data().automationConfig;
+            if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
+                continue;
+            }
+
+            const userId = doc.ref.parent.parent?.id;
+            if (!userId) continue;
+
+            logger.info(`Processing watchlist scraper task for user: ${userId}`);
+
+            // In a real implementation, you would invoke scraping logic here.
+            // ...
+
+            await doc.ref.update({"automationConfig.lastRun": currentTime});
+            logger.info(`Watchlist scraper task for user ${userId} completed.`);
+        }
+    } catch (error) {
+        logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
     }
-
-    const userId = doc.ref.parent.parent?.id;
-    if (!userId) continue;
-
-    logger.info(`Processing watchlist scraper task for user: ${userId}`);
-
-    // In a real implementation, you would invoke the scraping logic here.
-    // This could involve calling external APIs (e.g., KuCoin) and then
-    // updating the user's 'watchlist' subcollection in Firestore.
-
-    // Update the lastRun timestamp
-    await doc.ref.update({"automationConfig.lastRun": currentTime});
-    logger.info(`Watchlist scraper task for user ${userId} completed.`);
-  }
-}
+});
 
 
 /**
@@ -133,7 +118,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   const dataAfter = change.after.data();
   const dataBefore = change.before.data();
 
-  // Check if the position's status was just changed to 'closing'
   if (dataAfter?.details?.status !== "closing" || dataBefore?.details?.status === "closing") {
     return;
   }
@@ -156,7 +140,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       if (position.positionType === "spot") {
         pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
-        collateralToReturn = position.size * position.averageEntryPrice; // The initial cost basis is returned
+        collateralToReturn = position.size * position.averageEntryPrice;
       } else { // Futures
         const contractValue = position.size * position.averageEntryPrice;
         collateralToReturn = contractValue / position.leverage;
@@ -169,13 +153,9 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       const newBalance = currentBalance + collateralToReturn + pnl;
 
-      // 1. Update the user's balance
       transaction.update(userContextRef, {balance: newBalance});
-
-      // 2. Delete the open position
       transaction.delete(change.after.ref);
 
-      // 3. Find the most recent 'open' trade history record for this positionId and update it.
       const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
         .where("positionId", "==", positionId)
         .where("status", "==", "open")
@@ -185,7 +165,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const historySnapshot = await transaction.get(historyQuery);
       if (!historySnapshot.empty) {
         const historyDocRef = historySnapshot.docs[0].ref;
-        // Update the single trade history document with the final PNL.
         transaction.update(historyDocRef, {status: "closed", pnl});
       }
 
@@ -193,7 +172,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
-    // Optionally, revert the 'closing' status to allow for a retry
     await change.after.ref.update({"details.status": "open"});
   }
 });
