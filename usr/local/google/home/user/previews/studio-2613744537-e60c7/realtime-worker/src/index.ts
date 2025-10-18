@@ -144,7 +144,7 @@ class WebSocketManager {
         }
 
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
-        const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
+        const toRemove = new Set([...this.currentSubscriptions].filter(s => !this.currentSubscriptions.has(s)));
 
         if (toAdd.size > 0) {
             console.log(`[${this.name}] Subscribing to new symbols:`, Array.from(toAdd));
@@ -186,29 +186,32 @@ async function collectAllSymbols() {
     const futuresSymbols = new Set<string>();
 
     try {
-        // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
-        triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+        console.log("[collectAllSymbols] Querying 'tradeTriggers'...");
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').select('symbol', 'type').get();
+        triggersSnapshot.forEach((doc) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
             if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
         });
+        console.log(`[collectAllSymbols] Found ${triggersSnapshot.size} trigger(s).`);
 
-        // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
-        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+        console.log("[collectAllSymbols] Querying 'openPositions'...");
+        const positionsSnapshot = await db.collectionGroup('openPositions').select('symbol', 'positionType').get();
+        positionsSnapshot.forEach((doc) => {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
+        console.log(`[collectAllSymbols] Found ${positionsSnapshot.size} open position(s).`);
 
-        // Collect from watchlist
-        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+        console.log("[collectAllSymbols] Querying 'watchlist'...");
+        const watchlistSnapshot = await db.collectionGroup('watchlist').select('symbol', 'type').get();
+        watchlistSnapshot.forEach((doc) => {
             const item = doc.data();
             if (item.type === 'spot') spotSymbols.add(item.symbol);
             if (item.type === 'futures') futuresSymbols.add(item.symbol);
         });
+        console.log(`[collectAllSymbols] Found ${watchlistSnapshot.size} watchlist item(s).`);
         
         console.log(`Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
         spotManager.updateSubscriptions(spotSymbols);

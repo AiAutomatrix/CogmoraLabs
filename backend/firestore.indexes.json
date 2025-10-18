@@ -1,47 +1,30 @@
-
 {
   "indexes": [
     {
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        {
-          "fieldPath": "aiSettings.scheduleInterval",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "aiSettings.nextRun",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "aiSettings.scheduleInterval", "order": "ASCENDING" },
+        { "fieldPath": "aiSettings.nextRun", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        {
-          "fieldPath": "automationConfig.updateMode",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "automationConfig.lastRun",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "automationConfig.updateMode", "order": "ASCENDING" },
+        { "fieldPath": "automationConfig.lastRun", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "openPositions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "positionData.symbol", "order": "ASCENDING" },
+        { "fieldPath": "positionData.status", "order": "ASCENDING" },
+        { "fieldPath": "positionData.updatedAt", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
@@ -49,7 +32,9 @@
       "collectionGroup": "tradeTriggers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "triggerConfig.symbol", "order": "ASCENDING" },
+        { "fieldPath": "triggerConfig.triggerType", "order": "ASCENDING" },
+        { "fieldPath": "triggerConfig.updatedAt", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
@@ -57,7 +42,9 @@
       "collectionGroup": "watchlist",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "symbol", "order": "ASCENDING" },
+        { "fieldPath": "token.symbol", "order": "ASCENDING" },
+        { "fieldPath": "token.volume", "order": "ASCENDING" },
+        { "fieldPath": "token.updatedAt", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     }
