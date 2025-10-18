@@ -218,6 +218,7 @@ async function collectAllSymbols() {
         const watchlistSnapshot = await db.collectionGroup('watchlist').get();
         watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const item = doc.data();
+            // Assuming watchlist items have a 'type' field ('spot' or 'futures')
             if (item.type === 'spot') spotSymbols.add(item.symbol);
             if (item.type === 'futures') futuresSymbols.add(item.symbol);
         });
@@ -257,44 +258,49 @@ async function processPriceUpdate(symbol: string, price: number) {
         // Check for open positions to hit SL/TP
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
-        positionsSnapshot.forEach((doc) => {
-            const pos = doc.data();
-            if (pos.details?.status === 'closing') return;
+        if (!positionsSnapshot.empty) {
+            positionsSnapshot.forEach((doc) => {
+                const pos = doc.data();
+                if (pos.details?.status === 'closing') return;
 
-            const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+                const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-            if (slHit || tpHit) {
-                console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                batches[currentBatchIndex].update(doc.ref, { 'details.status': 'closing' });
-                addWrite();
-            }
-        });
+                if (slHit || tpHit) {
+                    console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                    batches[currentBatchIndex].update(doc.ref, { 'details.status': 'closing' });
+                    addWrite();
+                }
+            });
+        }
+
 
         // Check for active trade triggers
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
-        triggersSnapshot.forEach((doc) => {
-            const trigger = doc.data();
-            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+        if (!triggersSnapshot.empty) {
+            triggersSnapshot.forEach((doc) => {
+                const trigger = doc.data();
+                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
-            if (conditionMet) {
-                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-                // NOTE: The actual creation of the position based on the trigger
-                // would happen here in a full implementation, likely in another transaction.
-                // For now, we just delete the trigger.
-                batches[currentBatchIndex].delete(doc.ref); 
-                addWrite();
-            }
-        });
+                if (conditionMet) {
+                    console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                    batches[currentBatchIndex].delete(doc.ref); 
+                    addWrite();
+                }
+            });
+        }
+
 
         // Update watchlist items with the new price
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
-        watchlistSnapshot.forEach((doc) => {
-            batches[currentBatchIndex].update(doc.ref, { currentPrice: price });
-            addWrite();
-        });
+        if (!watchlistSnapshot.empty) {
+            watchlistSnapshot.forEach((doc) => {
+                batches[currentBatchIndex].update(doc.ref, { currentPrice: price });
+                addWrite();
+            });
+        }
 
         const totalWrites = (currentBatchIndex * BATCH_LIMIT) + writesInCurrentBatch;
         if (totalWrites > 0) {
