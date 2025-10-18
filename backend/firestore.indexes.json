@@ -5,8 +5,14 @@
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "aiSettings.scheduleInterval", "order": "ASCENDING" },
         { "fieldPath": "aiSettings.nextRun", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paperTradingContext",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "automationConfig.updateMode", "order": "ASCENDING" }
       ]
     },
     {
