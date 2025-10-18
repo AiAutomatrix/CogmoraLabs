@@ -16,11 +16,15 @@
       ]
     },
     {
-      "collectionGroup": "tradeTriggers",
+      "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "symbol",
+          "fieldPath": "automationConfig.updateMode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "automationConfig.lastRun",
           "order": "ASCENDING"
         }
       ]
@@ -31,6 +35,24 @@
       "fields": [
         {
           "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "details.status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tradeTriggers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "targetPrice",
           "order": "ASCENDING"
         }
       ]
