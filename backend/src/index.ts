@@ -28,11 +28,17 @@ export const mainScheduler = onSchedule({
 
   // Run tasks in parallel with specific error handling
   const aiTaskPromise = handleAiAgentTasks(currentTime).catch((error) => {
-    logger.error("Error in AI agent tasks execution:", error);
+    logger.error("--- ERROR IN AI AGENT TASK ---");
+    logger.error("This likely means you are missing a Firestore index for the 'paperTradingContext' collection group.");
+    logger.error("Required Index: Field 'aiSettings.nextRun', Order: Ascending, Scope: Collection Group");
+    logger.error("Full Error:", error);
   });
 
   const scraperTaskPromise = handleWatchlistScraperTasks(currentTime).catch((error) => {
-    logger.error("Error in watchlist scraper tasks execution:", error);
+    logger.error("--- ERROR IN WATCHLIST SCRAPER TASK ---");
+    logger.error("This likely means you are missing a Firestore index for the 'paperTradingContext' collection group.");
+    logger.error("Required Index: Field 'automationConfig.updateMode', Order: Ascending, Scope: Collection Group");
+    logger.error("Full Error:", error);
   });
 
   await Promise.all([aiTaskPromise, scraperTaskPromise]);
