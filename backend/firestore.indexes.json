@@ -1,43 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "paperTradingContext",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "aiSettings.scheduleInterval",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "aiSettings.nextRun",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "paperTradingContext",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "automationConfig.updateMode",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "automationConfig.lastRun",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "tradeTriggers",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "symbol",
-          "order": "ASCENDING"
-        }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }
