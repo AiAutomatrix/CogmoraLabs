@@ -30,7 +30,7 @@ export const mainScheduler = onSchedule({
   const aiTaskPromise = handleAiAgentTasks(currentTime).catch((error) => {
     logger.error("Error in AI agent tasks execution:", error);
   });
-  
+
   const scraperTaskPromise = handleWatchlistScraperTasks(currentTime).catch((error) => {
     logger.error("Error in watchlist scraper tasks execution:", error);
   });
@@ -89,7 +89,7 @@ async function handleWatchlistScraperTasks(currentTime: number) {
     logger.info("No due watchlist scraper tasks found.");
     return;
   }
-  
+
   logger.info(`Found ${scraperUsersSnapshot.docs.length} users with auto-refreshing watchlists.`);
 
   for (const doc of scraperUsersSnapshot.docs) {
