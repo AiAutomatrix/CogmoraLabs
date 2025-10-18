@@ -4,9 +4,14 @@ import WebSocket from 'ws';
 import http from 'http';
 import fetch from 'node-fetch'; // Use node-fetch
 
-// Initialize Firebase Admin SDK
-admin.initializeApp();
+// Initialize Firebase Admin SDK for Cloud Run environment
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+}
 const db = admin.firestore();
+
 
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = "https://api-futures.kucoin.com/api/v1/bullet-public";
@@ -79,6 +84,8 @@ class WebSocketManager {
             }
 
             if (price && symbol) {
+                // To avoid spamming logs, we won't log every single price update here.
+                // The processing function will log when it takes action.
                 processPriceUpdate(symbol, price).catch(e => console.error(`Error in processPriceUpdate for ${symbol}:`, e));
             }
         }
@@ -117,6 +124,7 @@ class WebSocketManager {
     
     private resubscribe = () => {
         if (this.ws?.readyState === WebSocket.OPEN) {
+            console.log(`[${this.name}] Resubscribing to ${this.currentSubscriptions.size} symbols.`);
             this.currentSubscriptions.forEach(symbol => {
                 this.ws?.send(JSON.stringify({
                     id: Date.now(),
@@ -125,31 +133,37 @@ class WebSocketManager {
                     response: true
                 }));
             });
-             console.log(`[${this.name}] Resubscribed to ${this.currentSubscriptions.size} symbols.`);
         }
     }
 
     public updateSubscriptions = (newSymbols: Set<string>) => {
         if (this.ws?.readyState !== WebSocket.OPEN) {
             this.currentSubscriptions = newSymbols; // Will be subscribed on connect
+            console.log(`[${this.name}] Connection not open. Subscriptions will be applied on connect.`);
             return;
         }
 
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
-        toAdd.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
-            this.currentSubscriptions.add(symbol);
-        });
+        if (toAdd.size > 0) {
+            console.log(`[${this.name}] Subscribing to new symbols:`, Array.from(toAdd));
+            toAdd.forEach(symbol => {
+                this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
+                this.currentSubscriptions.add(symbol);
+            });
+        }
 
-        toRemove.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
-            this.currentSubscriptions.delete(symbol);
-        });
+        if (toRemove.size > 0) {
+            console.log(`[${this.name}] Unsubscribing from symbols:`, Array.from(toRemove));
+            toRemove.forEach(symbol => {
+                this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
+                this.currentSubscriptions.delete(symbol);
+            });
+        }
 
-        if(toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
+        if(toAdd.size === 0 && toRemove.size === 0) {
+            // console.log(`[${this.name}] Subscription list is already up to date.`);
         }
     }
 }
@@ -255,6 +269,7 @@ async function processPriceUpdate(symbol: string, price: number) {
         });
 
         if (writes > 0) {
+            console.log(`[DB_WRITE] Committing batch of ${writes} writes for symbol ${symbol} at price ${price}.`);
             await batch.commit();
         }
     } catch (err) {
