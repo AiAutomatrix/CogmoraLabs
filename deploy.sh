@@ -6,26 +6,26 @@ set -e
 PROJECT_ID="studio-2613744537"
 REGION="us-central1"
 SERVICE_NAME="realtime-worker"
-DOCKER_REPO="docker-repo"
-IMAGE_TAG="latest"
-IMAGE_NAME="$REGION-docker.pkg.dev/$PROJECT_ID/$DOCKER_REPO/$SERVICE_NAME:$IMAGE_TAG"
+IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$SERVICE_NAME:latest"
 SOURCE_DIR="realtime-worker"
+CLOUDBUILD_SERVICE_ACCOUNT="1084135620241@cloudbuild.gserviceaccount.com"
 
-echo "🔐 Configuring Docker to authenticate with Google Artifact Registry..."
-gcloud auth configure-docker $REGION-docker.pkg.dev
+echo "🔐 Granting Artifact Registry Writer role to Cloud Build service account..."
+gcloud projects add-iam-policy-binding "studio-2613744537-e60c7" \
+  --member="serviceAccount:$CLOUDBUILD_SERVICE_ACCOUNT" \
+  --role="roles/artifactregistry.writer" \
+  --condition=None
 
-echo "🔨 Building Docker image locally..."
-docker build -t $IMAGE_NAME $SOURCE_DIR
-
-echo "📤 Pushing Docker image to Artifact Registry..."
-docker push $IMAGE_NAME
+echo "🔨 Building Docker image using Cloud Build..."
+gcloud builds submit --tag $IMAGE $SOURCE_DIR --project=$PROJECT_ID
 
 echo "🚀 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
-  --image $IMAGE_NAME \
+  --image $IMAGE \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
-  --port 8080
+  --port 8080 \
+  --project=$PROJECT_ID
 
 echo "✅ Deployment complete!"
