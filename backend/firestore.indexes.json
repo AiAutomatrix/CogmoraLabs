@@ -4,8 +4,14 @@
       "collectionGroup": "paperTradingContext",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
-        { "fieldPath": "aiSettings.scheduleInterval", "order": "ASCENDING" },
-        { "fieldPath": "aiSettings.nextRun", "order": "ASCENDING" }
+        {
+          "fieldPath": "aiSettings.scheduleInterval",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "aiSettings.nextRun",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],
