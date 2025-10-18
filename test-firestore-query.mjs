@@ -3,22 +3,27 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { getApps } from "firebase/app";
 
-// --- 1. Firebase config with your actual project credentials ---
+// --- 1. Firebase config with your project's actual credentials ---
 const firebaseConfig = {
   "projectId": "studio-2613744537-e60c7",
   "appId": "1:1084135620241:web:8d9b766b81cf970c900930",
   "apiKey": "AIzaSyCtkTPALNPLwJxBFuAjJlwWZmG9djJSfGc",
   "authDomain": "studio-2613744537-e60c7.firebaseapp.com",
+  "measurementId": "",
+  "messagingSenderId": "1084135620241"
 };
 
 // --- 2. Initialize Firebase ---
+let app;
 if (!getApps().length) {
-  initializeApp(firebaseConfig);
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0];
 }
 
-const db = getFirestore();
+const db = getFirestore(app);
 
-// --- 3. Function to test writing a document ---
+// --- 3. Function to test writing to the watchlist ---
 async function runWriteTest() {
   try {
     // IMPORTANT: Replace this with a REAL User ID from your Firebase Authentication
@@ -27,38 +32,31 @@ async function runWriteTest() {
         console.error("❌ ERROR: Please replace 'REPLACE_WITH_A_REAL_USER_ID' in the script with a real User ID from your Firebase project.");
         return;
     }
-    
-    const positionId = `test-position-${Date.now()}`;
-    const docPath = `/users/${testUserId}/paperTradingContext/main/openPositions/${positionId}`;
-    const docRef = doc(db, docPath);
 
-    const newPositionData = {
-      id: positionId,
-      positionType: 'spot',
-      symbol: 'TEST-USDT',
-      symbolName: 'Test Coin',
-      size: 100,
-      averageEntryPrice: 1.0,
-      currentPrice: 1.0,
-      side: 'buy',
-      details: {
-        triggeredBy: 'manual-test'
-      }
+    // This simulates the worker updating the price of a watchlist item.
+    // We are writing to the path: /users/{testUserId}/paperTradingContext/main/watchlist/BTC-USDT
+    const watchlistDocRef = doc(db, 'users', testUserId, 'paperTradingContext', 'main', 'watchlist', 'BTC-USDT');
+    
+    const watchlistItemData = {
+        currentPrice: 65000.123,
+        symbol: "BTC-USDT",
+        symbolName: "BTC-USDT",
+        type: "spot",
+        // Add other fields to make it a valid WatchlistItem
     };
 
-    console.log(`Attempting to write to: ${docPath}`);
-    await setDoc(docRef, newPositionData);
-    
-    console.log("✅ Firestore write successful!");
-    console.log("Document ID:", positionId);
-    console.log("Please check your Firestore database to confirm the data was written correctly.");
+    console.log(`Attempting to write to: ${watchlistDocRef.path}`);
+    await setDoc(watchlistDocRef, watchlistItemData, { merge: true });
+
+    console.log("✅ SUCCESS: Document write operation was successful!");
+    console.log("This confirms the realtime-worker has the necessary permissions to update watchlist items.");
 
   } catch (err) {
-    console.error("❌ Firestore write FAILED:", err.message);
-    if (err.message.includes("permission-denied")) {
-        console.log("Hint: This is a permission error. Check your Firestore Security Rules and ensure the user ID you are using is correct.");
-    } else if (err.code === 'failed-precondition' && err.message.includes('index')) {
-        console.log("Hint: The query part of this operation requires an index. The error message should contain a link to create it.");
+    console.error("❌ WRITE FAILED:", err.message);
+    if (err.code === 'permission-denied') {
+        console.error("This is a Firestore Security Rules issue. The currently 'authenticated' user (or lack thereof) cannot write to this path.");
+    } else if (err.message && err.message.includes("create index")) {
+      console.log("⚠️ This is an indexing issue. Firestore will print a URL below — click it to create the missing index.");
     }
   }
 }
