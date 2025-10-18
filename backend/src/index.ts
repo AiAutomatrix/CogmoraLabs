@@ -164,14 +164,17 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       // 2. Delete the open position
       transaction.delete(change.after.ref);
 
-      // 3. Update all related trade history records
+      // 3. Find the most recent 'open' trade history record for this positionId and update it.
       const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
         .where("positionId", "==", positionId)
-        .where("status", "==", "open");
+        .where("status", "==", "open")
+        .orderBy("timestamp", "desc")
+        .limit(1);
 
       const historySnapshot = await transaction.get(historyQuery);
       if (!historySnapshot.empty) {
         const historyDocRef = historySnapshot.docs[0].ref;
+        // Update the single trade history document with the final PNL.
         transaction.update(historyDocRef, {status: "closed", pnl});
       }
 
@@ -184,3 +187,4 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   }
 });
 
+    
