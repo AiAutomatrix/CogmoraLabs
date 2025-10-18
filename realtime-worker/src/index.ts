@@ -229,8 +229,8 @@ async function processPriceUpdate(symbol: string, price: number) {
     let writes = 0;
 
     try {
-        // Check for open positions to hit SL/TP
-        console.log(`[PROCESS_UPDATE] Checking openPositions for symbol: ${symbol}`);
+        // --- 1. Check for open positions to hit SL/TP ---
+        console.log(`[PROCESS_UPDATE] 1. Checking openPositions for symbol: ${symbol}`);
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         console.log(`[PROCESS_UPDATE] Found ${positionsSnapshot.size} openPositions for symbol: ${symbol}`);
@@ -248,8 +248,8 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // Check for active trade triggers
-        console.log(`[PROCESS_UPDATE] Checking tradeTriggers for symbol: ${symbol}`);
+        // --- 2. Check for active trade triggers ---
+        console.log(`[PROCESS_UPDATE] 2. Checking tradeTriggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
         console.log(`[PROCESS_UPDATE] Found ${triggersSnapshot.size} tradeTriggers for symbol: ${symbol}`);
@@ -264,8 +264,8 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // Update watchlist items with the new price
-        console.log(`[PROCESS_UPDATE] Checking watchlist for symbol: ${symbol}`);
+        // --- 3. Update watchlist items with the new price ---
+        console.log(`[PROCESS_UPDATE] 3. Checking watchlist for symbol: ${symbol}`);
         const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
         const watchlistSnapshot = await watchlistQuery.get();
         console.log(`[PROCESS_UPDATE] Found ${watchlistSnapshot.size} watchlist items for symbol: ${symbol}`);
