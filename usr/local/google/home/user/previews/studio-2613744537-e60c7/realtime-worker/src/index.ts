@@ -203,13 +203,13 @@ async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
 
     try {
-        // 1️⃣ Evaluate open positions to see if SL/TP is hit
+        // 1️⃣ Evaluate open positions in memory
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         if (!positionsSnapshot.empty) {
-            positionsSnapshot.forEach(doc => {
+            for (const doc of positionsSnapshot.docs) {
                 const pos = doc.data();
-                if (pos.details?.status === 'closing') return;
+                if (pos.details?.status === 'closing') continue;
 
                 const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
                 const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
@@ -217,18 +217,16 @@ async function processPriceUpdate(symbol: string, price: number) {
                 if (slHit || tpHit) {
                     console.log(`[EXECUTION] Marking position ${doc.id} for closure due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
                     // The onDocumentWritten Cloud Function will handle the closing logic.
-                    doc.ref.update({ 'details.status': 'closing' }).catch(err => {
-                         console.error(`[EXECUTION_FAIL] Failed to mark position ${doc.id} for closing:`, err);
-                    });
+                    await doc.ref.update({ 'details.status': 'closing' });
                 }
-            });
+            }
         }
 
         // 2️⃣ Evaluate active triggers
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
         if (!triggersSnapshot.empty) {
-            triggersSnapshot.forEach(doc => {
+            for (const doc of triggersSnapshot.docs) {
                 const trigger = doc.data();
                 const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
                 
@@ -236,14 +234,10 @@ async function processPriceUpdate(symbol: string, price: number) {
                     console.log(`[EXECUTION] Deleting executed trigger ${doc.id}`);
                     // The actual trade execution will be handled by another function or by the client observing this change.
                     // For now, we just delete the trigger to prevent re-firing.
-                     doc.ref.delete().catch(err => {
-                        console.error(`[EXECUTION_FAIL] Failed to delete trigger ${doc.id}:`, err);
-                     });
+                     await doc.ref.delete();
                 }
-            });
+            }
         }
-
-        // ✅ Note: No high-frequency watchlist or currentPrice updates are written to Firestore.
 
     } catch (err) {
         console.error(`Failed to process price update for ${symbol}:`, err);
