@@ -350,7 +350,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 
                 if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
                     console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                    return; // Continue to next position in loop
+                    return; // This is the log that was missing. 'return' is correct here, as it's inside a forEach loop. It acts like a 'continue'.
                 }
 
                 const isLong = pos.side === 'long' || pos.side === 'buy';
