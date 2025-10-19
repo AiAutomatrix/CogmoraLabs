@@ -36,10 +36,44 @@
         {
           "fieldPath": "symbol",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tradeTriggers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "watchlist",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tradeHistory",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "positionId",
+          "order": "ASCENDING"
         },
         {
-          "fieldPath": "details.status",
+          "fieldPath": "status",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
         }
       ]
     }
