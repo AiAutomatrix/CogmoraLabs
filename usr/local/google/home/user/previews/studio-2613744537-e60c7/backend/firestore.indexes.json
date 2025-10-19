@@ -30,22 +30,20 @@
       ]
     },
     {
-      "collectionGroup": "tradeTriggers",
+      "collectionGroup": "tradeHistory",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "symbol",
+          "fieldPath": "positionId",
           "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "openPositions",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
+        },
         {
-          "fieldPath": "symbol",
+          "fieldPath": "status",
           "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
         }
       ]
     }
