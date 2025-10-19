@@ -20,11 +20,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "automationConfig.updateMode",
+          "fieldPath": "automationConfig.lastRun",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "automationConfig.lastRun",
+          "fieldPath": "automationConfig.updateMode",
           "order": "ASCENDING"
         }
       ]
