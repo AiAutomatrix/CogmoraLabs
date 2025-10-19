@@ -36,10 +36,6 @@
         {
           "fieldPath": "symbol",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "details.status",
-          "order": "ASCENDING"
         }
       ]
     },
