@@ -21,8 +21,8 @@ Our data structure blueprint is defined in `docs/backend.json` and looks like th
 
 -   `/users/{userId}`
     -   This document stores the user's core profile information (email, display name, etc.). The `{userId}` is the user's actual `uid` from Firebase Authentication.
-    -   **Subcollections**: All of the user's paper trading data is stored in subcollections *within* this document.
-        -   `/users/{userId}/paperTradingContext/main`: A special document holding the main trading state like balance and automation settings.
+    -   **Subcollections**: All of the user's paper trading data is stored in subcollections *within* a special `paperTradingContext` path.
+        -   `/users/{userId}/paperTradingContext/main`: This is the **Account Metrics Document**. It holds the user's main trading state like `balance`, `automationConfig`, and `aiSettings`. It is the source of truth for all top-level account data.
         -   `/users/{userId}/paperTradingContext/main/openPositions/{positionId}`: A collection of the user's open trades.
         -   `/users/{userId}/paperTradingContext/main/watchlist/{symbol}`: A collection for their watchlist items.
         -   `/users/{userId}/paperTradingContext/main/tradeHistory/{tradeId}`: A log of all their past trades.
@@ -63,7 +63,7 @@ service cloud.firestore {
 
 2.  **Rule 2 (Full Data Ownership)**:
     -   This is the most important rule for the paper trading engine.
-    -   `match /users/{userId}/{path=**}` is a recursive wildcard. It matches the user's main document AND any document in any subcollection underneath it (e.g., a watchlist item, an open position, etc.).
+    -   `match /users/{userId}/{path=**}` is a recursive wildcard. It matches the user's main document AND any document in any subcollection underneath it (e.g., the `main` account metrics document, a watchlist item, an open position, etc.).
     -   `allow read, write: if request.auth.uid == userId;` is the core security check. It allows a user to **read** or **write** to any of these documents *if and only if* their authenticated `uid` matches the `userId` in the path.
 
 ### Why It Works Now:
