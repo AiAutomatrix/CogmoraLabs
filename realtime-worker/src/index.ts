@@ -228,13 +228,13 @@ spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    console.log("[WORKER] Collecting symbols to monitor...");
+    console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
@@ -242,19 +242,11 @@ async function collectAllSymbols() {
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-        });
-        
-        // Collect from watchlist
-        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const item = doc.data();
-            if (item.type === 'spot') spotSymbols.add(item.symbol);
-            if (item.type === 'futures') futuresSymbols.add(item.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -457,3 +449,5 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
+
+    
