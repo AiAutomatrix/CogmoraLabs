@@ -27,6 +27,7 @@ export const aiAgentScheduler = onSchedule({
 
   try {
     const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
+      .where("aiSettings.scheduleInterval", ">", 0) // Ensures we only get users with scheduling enabled
       .where("aiSettings.nextRun", "<=", currentTime)
       .get();
 
@@ -57,8 +58,7 @@ export const aiAgentScheduler = onSchedule({
     }
   } catch (error) {
     logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
-    // This detailed log helps identify missing indexes for this specific task
-    logger.error("This likely means you are missing a Firestore index for 'paperTradingContext' collection group with the field 'aiSettings.nextRun' (Ascending).");
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.scheduleInterval, ASCENDING), (aiSettings.nextRun, ASCENDING)]");
   }
 });
 
@@ -75,8 +75,10 @@ export const watchlistScraperScheduler = onSchedule({
   const currentTime = now.toMillis();
 
   try {
+    // Corrected query to use both fields in the composite index.
     const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
       .where("automationConfig.updateMode", "==", "auto-refresh")
+      .where("automationConfig.lastRun", "<=", currentTime - 60000) // 1-minute buffer
       .get();
 
     if (scraperUsersSnapshot.empty) {
@@ -84,10 +86,11 @@ export const watchlistScraperScheduler = onSchedule({
       return;
     }
 
-    logger.info(`Found ${scraperUsersSnapshot.docs.length} users with auto-refreshing watchlists.`);
+    logger.info(`Found ${scraperUsersSnapshot.docs.length} users with due auto-refreshing watchlists.`);
 
     for (const doc of scraperUsersSnapshot.docs) {
       const config = doc.data().automationConfig;
+      // The main time check is now in the query, but we add a small buffer here to be safe.
       if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
         continue;
       }
@@ -105,8 +108,7 @@ export const watchlistScraperScheduler = onSchedule({
     }
   } catch (error) {
     logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
-    // This detailed log helps identify missing indexes for this specific task
-    logger.error("This likely means you are missing a Firestore index for 'paperTradingContext' collection group with the field 'automationConfig.updateMode' (Ascending).");
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(automationConfig.updateMode, ASCENDING), (automationConfig.lastRun, ASCENDING)]");
   }
 });
 
