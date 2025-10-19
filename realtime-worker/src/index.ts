@@ -175,6 +175,7 @@ class WebSocketManager {
     
     private resubscribe = () => {
         if (this.ws?.readyState === WebSocket.OPEN) {
+            console.log(`[${this.name}] Resubscribing to ${this.currentSubscriptions.size} symbols.`);
             this.currentSubscriptions.forEach(symbol => {
                 this.ws?.send(JSON.stringify({
                     id: Date.now(),
@@ -183,7 +184,6 @@ class WebSocketManager {
                     response: true
                 }));
             });
-             console.log(`[${this.name}] Resubscribed to ${this.currentSubscriptions.size} symbols.`);
         }
     }
 
@@ -197,17 +197,19 @@ class WebSocketManager {
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
         toAdd.forEach(symbol => {
+            console.log(`[${this.name}] Subscribing to ${symbol}`);
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.add(symbol);
         });
 
         toRemove.forEach(symbol => {
+            console.log(`[${this.name}] Unsubscribing from ${symbol}`);
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.delete(symbol);
         });
 
         if(toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change: +${toAdd.size} symbols, -${toRemove.size} symbols.`);
+            console.log(`[${this.name}] Subscription change complete: +${toAdd.size} / -${toRemove.size}`);
         }
     }
 }
@@ -336,7 +338,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     // --- Block 1: Handle SL/TP on Open Positions ---
     try {
         console.log(`[WORKER_INFO] Querying open positions for symbol: ${symbol}`);
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
         if (!positionsSnapshot.empty) {
@@ -345,17 +347,15 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
-                if (pos.details?.status === 'closing') {
-                    return; // Already being closed, skip.
-                }
-
+                
                 if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
                     console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                    return;
+                    return; // Continue to next position in loop
                 }
 
-                const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-                const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+                const isLong = pos.side === 'long' || pos.side === 'buy';
+                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
                 if (slHit || tpHit) {
                     console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
@@ -369,7 +369,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
             }
         }
-    } catch(e) {
+    } catch (e) {
         console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
     }
 
@@ -427,6 +427,8 @@ async function processPriceUpdate(symbol: string, price: number) {
     } catch (e) {
          console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
     }
+    
+    console.log(`[WORKER_INFO] Finished processing price update for ${symbol}.`);
 }
 
 
@@ -440,5 +442,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
-
-    
