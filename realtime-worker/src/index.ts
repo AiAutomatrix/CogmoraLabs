@@ -228,7 +228,7 @@ spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
+    console.log("[WORKER] Collecting symbols to monitor...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
@@ -247,6 +247,14 @@ async function collectAllSymbols() {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+        });
+        
+        // Collect from watchlist
+        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
+        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+            const item = doc.data();
+            if (item.type === 'spot') spotSymbols.add(item.symbol);
+            if (item.type === 'futures') futuresSymbols.add(item.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -449,5 +457,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
-
-    
