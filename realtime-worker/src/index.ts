@@ -234,7 +234,7 @@ async function collectAllSymbols() {
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
@@ -242,7 +242,7 @@ async function collectAllSymbols() {
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
@@ -339,47 +339,44 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
 
-    // --- Block 1: Handle SL/TP on Open Positions ---
+    // --- Block 1: Handle SL/TP on Open Positions and update P&L ---
     try {
-        console.log(`[WORKER_INFO] Querying open positions for symbol: ${symbol}`);
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
         if (!positionsSnapshot.empty) {
-            const sltpBatch = db.batch();
-            let hasSltpUpdates = false;
+            const updateBatch = db.batch();
+            let hasUpdates = false;
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
                 
-                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
-                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                    return; // This is correct, acts as 'continue' in forEach
-                }
-
                 const isLong = pos.side === 'long' || pos.side === 'buy';
                 const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
                 const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
                 if (slHit || tpHit) {
                     console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
-                    sltpBatch.update(doc.ref, { 'details.status': 'closing' });
-                    hasSltpUpdates = true;
+                    updateBatch.update(doc.ref, { 'details.status': 'closing' });
+                    hasUpdates = true;
+                } else {
+                    // If not closing, update P&L
+                    const unrealizedPnl = (price - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
+                    updateBatch.update(doc.ref, { currentPrice: price, unrealizedPnl: unrealizedPnl });
+                    hasUpdates = true;
                 }
             });
 
-            if (hasSltpUpdates) {
-                await sltpBatch.commit();
-                console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
+            if (hasUpdates) {
+                await updateBatch.commit();
             }
         }
     } catch (e) {
-        console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
+        console.error(`[WORKER_ERROR] Failed to process updates for symbol ${symbol}:`, e);
     }
 
     // --- Block 2: Handle Trade Trigger Executions ---
     try {
-        console.log(`[WORKER_INFO] Querying trade triggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers')
             .where('symbol', '==', symbol)
             .where('details.status', '==', 'active');
@@ -434,8 +431,6 @@ async function processPriceUpdate(symbol: string, price: number) {
     } catch (e) {
          console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
     }
-    
-    console.log(`[WORKER_INFO] Finished processing price update for ${symbol}.`);
 }
 
 
@@ -449,5 +444,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
-
-    
