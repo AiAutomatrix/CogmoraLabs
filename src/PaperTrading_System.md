@@ -10,8 +10,8 @@ The paper trading engine is a sophisticated hybrid system that intelligently com
 
 This is the heart and brain of the user-facing application, providing an instant, responsive experience. Its primary job is to make the app *feel* live for the active user.
 
--   **State Management**: It subscribes to the user's data in Firestore using real-time `onSnapshot` listeners. This means it's always displaying the most current state of the user's `balance`, `openPositions`, `watchlist`, etc.
--   **Live UI Updates**: For the symbols the user is actively trading or watching, it establishes its *own* direct WebSocket connections to KuCoin's spot and futures feeds. This allows the UI to display live prices and P&L updates without waiting for a backend round-trip, creating a snappy, real-time feel.
+-   **State Management & Hydration**: On initial load, it subscribes to the user's data in Firestore using real-time `onSnapshot` listeners. This "hydrates" the local React state with the latest account information (`balance`, `openPositions`, `watchlist`, etc.), ensuring the app starts with the most current data.
+-   **Live UI Updates**: For the symbols the user is actively trading or watching, it establishes its *own* direct WebSocket connections to KuCoin's spot and futures feeds. This allows the UI to display live prices and P&L updates without waiting for a backend round-trip, creating a snappy, real-time feel. All price-tick updates happen directly in the client's state.
 -   **Trade Initiation**: When a user manually initiates a trade or sets a trigger, the `PaperTradingContext` executes the initial write to the Firestore database.
 
 ### 2. The Backend Engine (Cloud Functions & Cloud Run)
