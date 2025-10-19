@@ -28,6 +28,7 @@ interface OpenPosition {
   details?: OpenPositionDetails;
 }
 
+/*
 interface PaperTrade {
   id?: string;
   positionId: string;
@@ -58,6 +59,7 @@ interface TradeTrigger {
   stopLoss?: number;
   takeProfit?: number;
 }
+*/
 
 
 // Initialize Firebase Admin SDK for Cloud Run environment
@@ -224,19 +226,11 @@ spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
+    console.log("[WORKER] Collecting symbols to monitor from open positions...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
     try {
-        // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
-        triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const trigger = doc.data();
-            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-        });
-
         // Collect from openPositions
         const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
@@ -259,6 +253,7 @@ setInterval(collectAllSymbols, 30000);
 setTimeout(collectAllSymbols, 5000);
 
 
+/*
 async function executeSpotBuy(transaction: admin.firestore.Transaction, trigger: TradeTrigger, currentPrice: number, userContextRef: admin.firestore.DocumentReference, userContextData: admin.firestore.DocumentData) {
     const { symbol, symbolName, amount } = trigger;
     const balance = userContextData.balance || 0;
@@ -330,6 +325,7 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
     transaction.update(userContextRef, { balance: newBalance });
     console.log(`[EXECUTION_SUCCESS] Futures ${side} for ${symbol} for user ${userContextRef.parent.parent?.id}`);
 }
+*/
 
 
 async function processPriceUpdate(symbol: string, price: number) {
@@ -348,7 +344,11 @@ async function processPriceUpdate(symbol: string, price: number) {
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
                 
-                // Corrected SL/TP logic
+                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
+                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
+                    return; // This is the log that was missing. 'return' is correct here, as it's inside a forEach loop. It acts like a 'continue'.
+                }
+
                 const isLong = pos.side === 'long' || pos.side === 'buy';
                 const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
                 const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
@@ -369,6 +369,7 @@ async function processPriceUpdate(symbol: string, price: number) {
         console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
     }
 
+    /*
     // --- Block 2: Handle Trade Trigger Executions ---
     try {
         console.log(`[WORKER_INFO] Querying trade triggers for symbol: ${symbol}`);
@@ -423,6 +424,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     } catch (e) {
          console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
     }
+    */
     
     console.log(`[WORKER_INFO] Finished processing price update for ${symbol}.`);
 }
