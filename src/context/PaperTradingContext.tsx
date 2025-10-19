@@ -41,6 +41,7 @@ import type {
   AiActionExecutionLog,
   FirestorePaperTradingContext,
   OpenPositionDetails,
+  TradeTriggerDetails,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
