@@ -70,7 +70,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "status",
+          "fieldPath": "details.status",
           "order": "ASCENDING"
         }
       ]
