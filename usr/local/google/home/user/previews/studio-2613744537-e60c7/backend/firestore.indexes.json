@@ -6,11 +6,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "aiSettings.scheduleInterval",
+          "fieldPath": "aiSettings.nextRun",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "aiSettings.nextRun",
+          "fieldPath": "aiSettings.scheduleInterval",
           "order": "ASCENDING"
         }
       ]
@@ -35,6 +35,10 @@
       "fields": [
         {
           "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "details.status",
           "order": "ASCENDING"
         }
       ]
