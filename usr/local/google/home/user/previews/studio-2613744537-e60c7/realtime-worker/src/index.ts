@@ -128,16 +128,12 @@ class WebSocketManager {
             let price: number | undefined;
 
             if (this.name === 'SPOT') {
-                if (message.topic === '/market/ticker:all') {
-                    symbol = priceData.symbol; // For /market/ticker:all
-                    price = parseFloat(priceData.price);
-                } else { // For /market/snapshot:{symbol}
-                    symbol = message.topic.replace('/market/snapshot:', '');
-                    price = parseFloat(priceData?.data?.lastTradedPrice);
-                }
+                symbol = message.topic.replace('/market/snapshot:', '');
+                price = parseFloat(priceData?.data?.lastTradedPrice);
+
             } else { // FUTURES
-                symbol = message.topic.replace('/contractMarket/tickerV2:', '');
-                price = priceData.markPrice;
+                symbol = message.topic.replace('/contractMarket/snapshot:', '');
+                price = message.data.markPrice;
             }
 
             if (price && symbol) {
@@ -179,6 +175,7 @@ class WebSocketManager {
     
     private resubscribe = () => {
         if (this.ws?.readyState === WebSocket.OPEN) {
+            console.log(`[${this.name}] Resubscribing to ${this.currentSubscriptions.size} symbols.`);
             this.currentSubscriptions.forEach(symbol => {
                 this.ws?.send(JSON.stringify({
                     id: Date.now(),
@@ -187,7 +184,6 @@ class WebSocketManager {
                     response: true
                 }));
             });
-             console.log(`[${this.name}] Resubscribed to ${this.currentSubscriptions.size} symbols.`);
         }
     }
 
@@ -201,17 +197,19 @@ class WebSocketManager {
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
         toAdd.forEach(symbol => {
+            console.log(`[${this.name}] Subscribing to ${symbol}`);
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.add(symbol);
         });
 
         toRemove.forEach(symbol => {
+            console.log(`[${this.name}] Unsubscribing from ${symbol}`);
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.delete(symbol);
         });
 
         if(toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change: +${toAdd.size} symbols, -${toRemove.size} symbols.`);
+            console.log(`[${this.name}] Subscription change complete: +${toAdd.size} / -${toRemove.size}`);
         }
     }
 }
@@ -219,7 +217,7 @@ class WebSocketManager {
 // --- Main Application Logic ---
 
 const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (symbol) => `/market/snapshot:${symbol}`);
-const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/tickerV2:${symbol}`);
+const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
 
 
 spotManager.connect();
@@ -337,8 +335,9 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
-    // --- Block 1: Handle SL/TP on Open Positions (Batch Write) ---
+    // --- Block 1: Handle SL/TP on Open Positions ---
     try {
+        console.log(`[WORKER_INFO] Processing price ${price} for ${symbol}. Querying open positions...`);
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         
@@ -348,6 +347,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
+                // Explicitly check status inside the loop for safety
                 if (pos.details?.status === 'closing') {
                     return; // Already being closed, skip.
                 }
@@ -361,7 +361,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
                 if (slHit || tpHit) {
-                    console.log(`[WORKER_ACTION] Closing position ${doc.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                    console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
                     sltpBatch.update(doc.ref, { 'details.status': 'closing' });
                     hasSltpUpdates = true;
                 }
@@ -377,8 +377,9 @@ async function processPriceUpdate(symbol: string, price: number) {
     }
 
 
-    // --- Block 2: Handle Trade Trigger Executions (Atomic Transactions) ---
+    // --- Block 2: Handle Trade Trigger Executions ---
     try {
+        console.log(`[WORKER_INFO] Querying triggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
 
@@ -388,10 +389,12 @@ async function processPriceUpdate(symbol: string, price: number) {
                 const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
                 if (conditionMet) {
-                    console.log(`[WORKER_ACTION] Firing trigger ${doc.id}. Starting transaction...`);
+                    console.log(`[WORKER_ACTION] Firing trigger ${doc.id} for ${symbol}. Starting transaction...`);
                     try {
                         await db.runTransaction(async (transaction) => {
                             const userContextRef = doc.ref.parent.parent!;
+                            if (!userContextRef) throw new Error("Could not determine user context from trigger ref.");
+                            
                             const userContextSnap = await transaction.get(userContextRef);
                             if (!userContextSnap.exists) throw new Error("User context not found during trigger execution.");
                             
@@ -427,7 +430,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         }
     } catch (e) {
-         console.error(`[WORKER_ERROR] Failed to process triggers for symbol ${symbol}:`, e);
+         console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
     }
 }
 
