@@ -13,7 +13,6 @@ import React, {
 import {
   doc,
   setDoc,
-  getDoc,
   collection,
   writeBatch,
   deleteDoc,
@@ -64,11 +63,6 @@ const INITIAL_AI_SETTINGS: AiTriggerSettings = {
   justUpdate: false,
   manageOpenPositions: false,
 };
-
-// --- ONE-TIME DATA RESET ---
-// This key will be used to check if the reset has been performed.
-const RESET_KEY = 'cogmora-profile-reset-v2';
-
 
 interface PaperTradingContextType {
   balance: number;
@@ -168,14 +162,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const spotSubscriptionsRef = useRef(new Set<string>());
   const spotReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const spotReconnectAttempts = useRef(0);
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const futuresSubscriptionsRef = useRef(new Set<string>());
   const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectAttempts = useRef(0);
 
@@ -185,64 +177,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
     return null;
   }, [user, firestore]);
-  
-  useEffect(() => {
-    const performResetIfNeeded = async () => {
-      if (!userContextDocRef || !firestore || isLoaded) return;
-
-      const hasBeenReset = localStorage.getItem(RESET_KEY);
-      if (hasBeenReset === 'true') {
-        return;
-      }
-      
-      console.warn("PERFORMING ONE-TIME PROFILE RESET.");
-      toast({
-        title: "Profile Reset",
-        description: "Your paper trading account is being reset to a clean state.",
-        duration: 10000,
-      });
-
-      try {
-        const collectionsToWipe = ['openPositions', 'tradeHistory', 'tradeTriggers', 'priceAlerts', 'watchlist'];
-        const batch = writeBatch(firestore);
-
-        for (const collectionName of collectionsToWipe) {
-          const collectionRef = collection(userContextDocRef, collectionName);
-          const snapshot = await getDocs(collectionRef);
-          snapshot.forEach(doc => batch.delete(doc.ref));
-        }
-
-        const initialContext: FirestorePaperTradingContext = {
-          balance: INITIAL_BALANCE,
-          automationConfig: INITIAL_AUTOMATION_CONFIG,
-          aiSettings: INITIAL_AI_SETTINGS,
-          lastAiActionPlan: null,
-          aiActionLogs: [],
-        };
-        batch.set(userContextDocRef, initialContext);
-
-        await batch.commit();
-
-        localStorage.setItem(RESET_KEY, 'true');
-        toast({
-          title: "Profile Reset Complete",
-          description: "Your account has been reset. You can now continue trading.",
-          variant: 'default',
-        });
-        console.log("ONE-TIME PROFILE RESET COMPLETE.");
-      } catch (error) {
-        console.error("FAILED TO PERFORM ONE-TIME PROFILE RESET:", error);
-        toast({
-          title: "Profile Reset Failed",
-          description: "Could not reset your profile. Please contact support.",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    performResetIfNeeded();
-  }, [userContextDocRef, firestore, isLoaded, toast]);
-
 
   // Combined listener setup
   useEffect(() => {
@@ -265,7 +199,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setLastAiActionPlan(data.lastAiActionPlan ?? null);
           setAiActionLogs(data.aiActionLogs ?? []);
         } else {
-            // Document doesn't exist, create it with initial values
             const initialContext: FirestorePaperTradingContext = {
                 balance: INITIAL_BALANCE,
                 automationConfig: INITIAL_AUTOMATION_CONFIG,
@@ -295,7 +228,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     unsubscribers.push(unsubContext);
 
     // Generic function to create listeners for subcollections
-    const createSubcollectionListener = <T extends {id: string}>(collectionName: string, setState: React.Dispatch<React.SetStateAction<T[]>>) => {
+    const createSubcollectionListener = <T extends {id?: string}>(collectionName: string, setState: React.Dispatch<React.SetStateAction<T[]>>) => {
       const collectionRef = collection(userContextDocRef, collectionName);
       const unsub = onSnapshot(collectionRef, 
         (snapshot) => {
@@ -340,10 +273,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     createSubcollectionListener('tradeTriggers', setTradeTriggers);
     createRecordListener('priceAlerts', setPriceAlerts);
 
-    // Cleanup on unmount or user change
     return () => {
       unsubscribers.forEach(unsub => unsub());
-      setIsLoaded(false); // Reset loaded state for next user
+      setIsLoaded(false);
       dataLoadedRef.current = false;
     };
   }, [userContextDocRef, firestore]);
@@ -471,6 +403,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       takeProfit?: number,
       triggeredBy = 'manual'
     ) => {
+      if (!userContextDocRef) return;
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
         return;
@@ -533,7 +466,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         timestamp: Date.now(),
         status: 'open',
       };
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), newTrade);
+      addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
       
       toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
     },
@@ -549,6 +482,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     takeProfit?: number,
     triggeredBy = 'manual'
   ) => {
+      if (!userContextDocRef) return;
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -593,7 +527,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           timestamp: Date.now(),
           status: "open",
       };
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), newTrade);
+      addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
@@ -607,6 +541,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     takeProfit?: number,
     triggeredBy = 'manual'
   ) => {
+      if (!userContextDocRef) return;
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -651,7 +586,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           timestamp: Date.now(),
           status: "open",
       };
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), newTrade);
+      addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
@@ -706,7 +641,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const pos = openPositions.find(p => p.id === positionId);
     if (!pos) return;
   
-    // Update the position status to 'closing' which will be handled by the backend function
     saveSubcollectionDoc('openPositions', positionId, { details: { ...pos.details, status: 'closing' } });
     
     toast({
@@ -736,7 +670,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setOpenPositions(prev =>
           prev.map(p => {
               if (p.symbol === symbol) {
-                  // Check for SL/TP hits for open positions
                   if (p.details?.status !== 'closing') {
                       if (p.details?.stopLoss && ((p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
                           positionsToCloseIds.current.add(p.id);
@@ -781,7 +714,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
   }, [priceAlerts, tradeTriggers]);
 
-  // Effect to process the queues of side effects
   useEffect(() => {
     if (executedTriggerIds.current.size > 0) {
       const triggersToExecute = Array.from(executedTriggerIds.current);
@@ -822,13 +754,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, closePosition, saveSubcollectionDoc, toast]);
 
 
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
-    const newTrigger: Omit<TradeTrigger, 'id'> & { id: string } = {
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id'>) => {
+    const newTrigger: TradeTrigger = {
       ...trigger,
       id: crypto.randomUUID(),
-      details: {
-        status: 'active'
-      },
+      details: { status: 'active' },
     };
 
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
@@ -943,7 +873,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     const newConfig: AutomationConfig = { ...config };
-    // Only update lastRun if it's an auto-refresh schedule being set or saved
     if (config.updateMode === 'auto-refresh') {
         newConfig.lastRun = Date.now();
     } else {
@@ -1066,8 +995,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
 
-  // Frontend WebSocket management is now only for open positions and triggers.
-  // The backend worker handles watchlist updates.
   const symbolsToWatch = useMemo(() => {
     if (!isLoaded) return { spot: [], futures: [] };
     const spot = new Set<string>();
@@ -1158,7 +1085,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   useEffect(() => {
-    setupWebSocket(spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts, getSpotWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleSpotMessage, symbolsToWatch.spot, (s) => `/market/snapshot:${s}`);
+    if (symbolsToWatch.spot.length > 0) {
+        setupWebSocket(spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts, getSpotWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleSpotMessage, symbolsToWatch.spot, (s) => `/market/snapshot:${s}`);
+    }
     return () => {
         spotWs.current?.close();
         if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
@@ -1167,7 +1096,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [symbolsToWatch.spot, setupWebSocket, handleSpotMessage]);
 
   useEffect(() => {
-    setupWebSocket(futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts, getFuturesWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleFuturesMessage, symbolsToWatch.futures, (s) => `/contractMarket/snapshot:${s}`);
+    if (symbolsToWatch.futures.length > 0) {
+        setupWebSocket(futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts, getFuturesWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleFuturesMessage, symbolsToWatch.futures, (s) => `/contractMarket/snapshot:${s}`);
+    }
      return () => {
         futuresWs.current?.close();
         if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
@@ -1275,5 +1206,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
