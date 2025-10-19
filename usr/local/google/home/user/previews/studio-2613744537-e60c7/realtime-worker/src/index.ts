@@ -128,12 +128,16 @@ class WebSocketManager {
             let price: number | undefined;
 
             if (this.name === 'SPOT') {
-                symbol = message.topic.replace('/market/snapshot:', '');
-                price = parseFloat(priceData?.data?.lastTradedPrice);
-
+                if (message.topic === '/market/ticker:all') {
+                    symbol = priceData.symbol; // For /market/ticker:all
+                    price = parseFloat(priceData.price);
+                } else { // For /market/snapshot:{symbol}
+                    symbol = message.topic.replace('/market/snapshot:', '');
+                    price = parseFloat(priceData?.data?.lastTradedPrice);
+                }
             } else { // FUTURES
-                symbol = message.topic.replace('/contractMarket/snapshot:', '');
-                price = message.data.markPrice;
+                symbol = message.topic.replace('/contractMarket/tickerV2:', '');
+                price = priceData.markPrice;
             }
 
             if (price && symbol) {
@@ -215,14 +219,14 @@ class WebSocketManager {
 // --- Main Application Logic ---
 
 const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (symbol) => `/market/snapshot:${symbol}`);
-const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
+const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/tickerV2:${symbol}`);
 
 
 spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    console.log("[WORKER] Collecting symbols to monitor...");
+    console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
@@ -241,14 +245,6 @@ async function collectAllSymbols() {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-        });
-
-        // Collect from watchlist
-        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const item = doc.data();
-            if (item.type === 'spot') spotSymbols.add(item.symbol);
-            if (item.type === 'futures') futuresSymbols.add(item.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -341,94 +337,97 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
-    const batch = db.batch();
-    let writesInBatch = 0;
+    // --- Block 1: Handle SL/TP on Open Positions (Batch Write) ---
+    try {
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsSnapshot = await positionsQuery.get();
+        
+        if (!positionsSnapshot.empty) {
+            const sltpBatch = db.batch();
+            let hasSltpUpdates = false;
 
-    // Check for open positions to hit SL/TP
-    const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
-    const positionsSnapshot = await positionsQuery.get();
-    positionsSnapshot.forEach((doc) => {
-        try {
-            const pos = doc.data() as OpenPosition;
-            if (pos.details?.status === 'closing') return;
-
-            // Gracefully handle positions with no SL/TP set
-            if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
-                // console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                return;
-            }
-
-            const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
-
-            if (slHit || tpHit) {
-                console.log(`[WORKER_ACTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                batch.update(doc.ref, { 'details.status': 'closing' });
-                writesInBatch++;
-            } else {
-                 // console.log(`[WORKER_INFO] Monitored position ${doc.id} for ${symbol}. Price: ${price}. SL: ${pos.details?.stopLoss}, TP: ${pos.details?.takeProfit}. No action taken.`);
-            }
-        } catch (e) {
-            console.error(`[WORKER_ERROR] Failed to process position ${doc.id} for symbol ${symbol}:`, e);
-        }
-    });
-
-    // Check for active trade triggers
-    const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
-    const triggersSnapshot = await triggersQuery.get();
-    for (const doc of triggersSnapshot.docs) {
-        const trigger = doc.data() as TradeTrigger;
-        const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-        if (conditionMet) {
-            console.log(`[WORKER_ACTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-            try {
-                await db.runTransaction(async (transaction) => {
-                    const userContextRef = doc.ref.parent.parent!;
-                    const userContextSnap = await transaction.get(userContextRef);
-                    if (!userContextSnap.exists) throw new Error("User context not found");
-                    
-                    if (trigger.type === 'spot') {
-                        await executeSpotBuy(transaction, trigger, price, userContextRef, userContextSnap.data()!);
-                    } else { // futures
-                        await executeFuturesTrade(transaction, trigger, price, userContextRef, userContextSnap.data()!);
-                    }
-                    
-                    // Always delete the trigger after processing
-                    transaction.delete(doc.ref);
-                });
-
-                 if (trigger.cancelOthers) {
-                    const otherTriggersQuery = doc.ref.parent.where('symbol', '==', trigger.symbol);
-                    const otherTriggersSnapshot = await otherTriggersQuery.get();
-                    otherTriggersSnapshot.forEach(otherDoc => {
-                        if(otherDoc.id !== doc.id) {
-                            console.log(`[WORKER_ACTION] Cancelling other trigger ${otherDoc.id} for symbol ${trigger.symbol}`);
-                            batch.delete(otherDoc.ref);
-                            writesInBatch++;
-                        }
-                    });
+            positionsSnapshot.forEach((doc) => {
+                const pos = doc.data() as OpenPosition;
+                if (pos.details?.status === 'closing') {
+                    return; // Already being closed, skip.
                 }
 
-            } catch (error) {
-                console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, error);
-                // Optionally delete the faulty trigger to prevent re-firing
-                batch.delete(doc.ref);
-                writesInBatch++;
+                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
+                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
+                    return;
+                }
+
+                const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+
+                if (slHit || tpHit) {
+                    console.log(`[WORKER_ACTION] Closing position ${doc.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                    sltpBatch.update(doc.ref, { 'details.status': 'closing' });
+                    hasSltpUpdates = true;
+                }
+            });
+
+            if (hasSltpUpdates) {
+                await sltpBatch.commit();
+                console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
             }
         }
+    } catch(e) {
+        console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
     }
 
-    // Update watchlist items with the new price
-    const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
-    const watchlistSnapshot = await watchlistQuery.get();
-    watchlistSnapshot.forEach((doc) => {
-        batch.update(doc.ref, { currentPrice: price });
-        writesInBatch++;
-    });
 
-    if (writesInBatch > 0) {
-        await batch.commit();
+    // --- Block 2: Handle Trade Trigger Executions (Atomic Transactions) ---
+    try {
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
+        const triggersSnapshot = await triggersQuery.get();
+
+        if (!triggersSnapshot.empty) {
+            for (const doc of triggersSnapshot.docs) {
+                const trigger = doc.data() as TradeTrigger;
+                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+
+                if (conditionMet) {
+                    console.log(`[WORKER_ACTION] Firing trigger ${doc.id}. Starting transaction...`);
+                    try {
+                        await db.runTransaction(async (transaction) => {
+                            const userContextRef = doc.ref.parent.parent!;
+                            const userContextSnap = await transaction.get(userContextRef);
+                            if (!userContextSnap.exists) throw new Error("User context not found during trigger execution.");
+                            
+                            if (trigger.type === 'spot') {
+                                await executeSpotBuy(transaction, trigger, price, userContextRef, userContextSnap.data()!);
+                            } else { // futures
+                                await executeFuturesTrade(transaction, trigger, price, userContextRef, userContextSnap.data()!);
+                            }
+                            
+                            transaction.delete(doc.ref); // Delete the trigger as part of the transaction
+                        });
+                        console.log(`[EXECUTION_SUCCESS] Transaction for trigger ${doc.id} completed.`);
+
+                        if (trigger.cancelOthers) {
+                            const cancellationBatch = db.batch();
+                            const otherTriggersQuery = doc.ref.parent.where('symbol', '==', trigger.symbol);
+                            const otherTriggersSnapshot = await otherTriggersQuery.get();
+                            otherTriggersSnapshot.forEach(otherDoc => {
+                                if(otherDoc.id !== doc.id) {
+                                    console.log(`[WORKER_ACTION] Cancelling other trigger ${otherDoc.id} for symbol ${trigger.symbol}`);
+                                    cancellationBatch.delete(otherDoc.ref);
+                                }
+                            });
+                            await cancellationBatch.commit();
+                        }
+
+                    } catch (error) {
+                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, error);
+                        // To prevent re-firing, delete the trigger outside the failed transaction.
+                        await doc.ref.delete();
+                    }
+                }
+            }
+        }
+    } catch (e) {
+         console.error(`[WORKER_ERROR] Failed to process triggers for symbol ${symbol}:`, e);
     }
 }
 
