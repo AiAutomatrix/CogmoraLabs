@@ -334,7 +334,7 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
-    
+
     // --- Block 1: Handle SL/TP on Open Positions ---
     try {
         console.log(`[WORKER_INFO] Querying open positions for symbol: ${symbol}`);
@@ -347,11 +347,6 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
-
-                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
-                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                    return;
-                }
                 
                 // Corrected SL/TP logic
                 const isLong = pos.side === 'long' || pos.side === 'buy';
@@ -370,7 +365,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
             }
         }
-    } catch(e) {
+    } catch (e) {
         console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
     }
 

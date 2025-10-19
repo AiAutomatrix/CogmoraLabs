@@ -1,4 +1,3 @@
-
 {
   "indexes": [
     {
@@ -6,11 +5,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "aiSettings.scheduleInterval",
+          "fieldPath": "aiSettings.nextRun",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "aiSettings.nextRun",
+          "fieldPath": "aiSettings.scheduleInterval",
           "order": "ASCENDING"
         }
       ]
@@ -25,6 +24,30 @@
         },
         {
           "fieldPath": "automationConfig.lastRun",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "openPositions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "details.status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "tradeTriggers",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
           "order": "ASCENDING"
         }
       ]
