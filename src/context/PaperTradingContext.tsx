@@ -754,7 +754,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, closePosition, saveSubcollectionDoc, toast]);
 
 
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id'>) => {
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
       id: crypto.randomUUID(),
@@ -772,7 +772,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     if (shouldExecuteImmediately && currentPrice) {
-        executeTrigger(newTrigger as TradeTrigger, currentPrice);
+        executeTrigger(newTrigger, currentPrice);
     } else {
         saveSubcollectionDoc('tradeTriggers', newTrigger.id, newTrigger);
         toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
