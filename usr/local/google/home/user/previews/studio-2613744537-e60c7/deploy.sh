@@ -1,3 +1,4 @@
+
 #!/bin/bash
 # Stop on any error
 set -e
@@ -10,8 +11,8 @@ IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$SERVICE_NAME:latest"
 SOURCE_DIR="realtime-worker"
 
 echo "🔨 Building Docker image using Cloud Build..."
-# Explicitly pass the full project ID to the build command
-gcloud builds submit --tag $IMAGE $SOURCE_DIR --project=$PROJECT_ID
+# Point the build command to the directory containing the Dockerfile
+gcloud builds submit $SOURCE_DIR --tag $IMAGE --project=$PROJECT_ID
 
 echo "🚀 Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
@@ -23,3 +24,5 @@ gcloud run deploy $SERVICE_NAME \
   --project=$PROJECT_ID
 
 echo "✅ Deployment complete!"
+
+    
