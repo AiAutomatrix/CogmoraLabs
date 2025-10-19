@@ -1,0 +1,24 @@
+
+{
+  "name": "realtime-worker",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "ws": "^8.18.0",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.9",
+    "@types/ws": "^8.5.10",
+    "@types/node-fetch": "^2.6.11",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": "20"
+  }
+}
