@@ -3,7 +3,61 @@ import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import fetch from 'node-fetch'; // Use node-fetch for CommonJS compatibility
-import type { OpenPosition, OpenPositionDetails, PaperTrade, TradeTrigger } from '@/types';
+
+// Type definitions moved here to make the worker self-contained.
+interface OpenPositionDetails {
+  stopLoss?: number;
+  takeProfit?: number;
+  triggeredBy?: string;
+  status?: 'open' | 'closing';
+}
+
+interface OpenPosition {
+  id: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  side: 'buy' | 'long' | 'short';
+  leverage?: number | null;
+  unrealizedPnl?: number;
+  priceChgPct?: number;
+  liquidationPrice?: number;
+  details?: OpenPositionDetails;
+}
+
+interface PaperTrade {
+  id?: string;
+  positionId: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  price: number;
+  side: 'buy' | 'sell' | 'long' | 'short';
+  leverage: number | null;
+  timestamp: number;
+  status: 'open' | 'closed';
+  pnl?: number | null;
+}
+
+interface TradeTrigger {
+  id: string;
+  symbol: string;
+  symbolName: string;
+  type: 'spot' | 'futures';
+  condition: 'above' | 'below';
+  targetPrice: number;
+  action: 'buy' | 'long' | 'short';
+  amount: number;
+  leverage: number;
+  status: 'active' | 'executed' | 'canceled';
+  cancelOthers?: boolean;
+  stopLoss?: number;
+  takeProfit?: number;
+}
 
 
 // Initialize Firebase Admin SDK for Cloud Run environment
@@ -377,5 +431,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
-
-    
