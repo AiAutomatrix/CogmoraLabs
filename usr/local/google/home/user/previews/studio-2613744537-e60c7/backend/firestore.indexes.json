@@ -30,7 +30,7 @@
       ]
     },
     {
-      "collectionGroup": "openPositions",
+      "collectionGroup": "tradeTriggers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
@@ -40,7 +40,7 @@
       ]
     },
     {
-      "collectionGroup": "tradeTriggers",
+      "collectionGroup": "watchlist",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
@@ -64,6 +64,20 @@
         {
           "fieldPath": "timestamp",
           "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "openPositions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "details.status",
+          "order": "ASCENDING"
         }
       ]
     }

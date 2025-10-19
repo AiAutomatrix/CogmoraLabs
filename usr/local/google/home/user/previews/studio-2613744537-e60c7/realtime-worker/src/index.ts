@@ -337,8 +337,9 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     // --- Block 1: Handle SL/TP on Open Positions ---
     try {
-        console.log(`[WORKER_INFO] Processing price ${price} for ${symbol}. Querying open positions...`);
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsQuery = db.collectionGroup('openPositions')
+            .where('symbol', '==', symbol)
+            .where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
         if (!positionsSnapshot.empty) {
@@ -347,10 +348,6 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
-                // Explicitly check status inside the loop for safety
-                if (pos.details?.status === 'closing') {
-                    return; // Already being closed, skip.
-                }
 
                 if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
                     console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
@@ -379,7 +376,6 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     // --- Block 2: Handle Trade Trigger Executions ---
     try {
-        console.log(`[WORKER_INFO] Querying triggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
 
@@ -423,7 +419,6 @@ async function processPriceUpdate(symbol: string, price: number) {
 
                     } catch (error) {
                         console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, error);
-                        // To prevent re-firing, delete the trigger outside the failed transaction.
                         await doc.ref.delete();
                     }
                 }
