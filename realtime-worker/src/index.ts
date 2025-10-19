@@ -63,7 +63,9 @@ interface TradeTrigger {
   details: TradeTriggerDetails;
 }
 
+
 // Initialize Firebase Admin SDK for Cloud Run environment
+// This uses the service account associated with the Cloud Run instance
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
@@ -231,20 +233,20 @@ async function collectAllSymbols() {
     const futuresSymbols = new Set<string>();
 
     try {
-        // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
-        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const position = doc.data();
-            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-        });
-
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
             if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+        });
+
+        // Collect from openPositions
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+            const position = doc.data();
+            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -337,44 +339,47 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
 
-    // --- Block 1: Handle SL/TP on Open Positions and update P&L ---
+    // --- Block 1: Handle SL/TP on Open Positions ---
     try {
+        console.log(`[WORKER_INFO] Querying open positions for symbol: ${symbol}`);
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
         if (!positionsSnapshot.empty) {
-            const updateBatch = db.batch();
-            let hasUpdates = false;
+            const sltpBatch = db.batch();
+            let hasSltpUpdates = false;
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
                 
+                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
+                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
+                    return; // This is correct, acts as 'continue' in forEach
+                }
+
                 const isLong = pos.side === 'long' || pos.side === 'buy';
                 const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
                 const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
                 if (slHit || tpHit) {
                     console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
-                    updateBatch.update(doc.ref, { 'details.status': 'closing' });
-                    hasUpdates = true;
-                } else {
-                    // If not closing, update P&L
-                    const unrealizedPnl = (price - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
-                    updateBatch.update(doc.ref, { currentPrice: price, unrealizedPnl });
-                    hasUpdates = true;
+                    sltpBatch.update(doc.ref, { 'details.status': 'closing' });
+                    hasSltpUpdates = true;
                 }
             });
 
-            if (hasUpdates) {
-                await updateBatch.commit();
+            if (hasSltpUpdates) {
+                await sltpBatch.commit();
+                console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
             }
         }
     } catch (e) {
-        console.error(`[WORKER_ERROR] Failed to process updates for symbol ${symbol}:`, e);
+        console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
     }
 
     // --- Block 2: Handle Trade Trigger Executions ---
     try {
+        console.log(`[WORKER_INFO] Querying trade triggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers')
             .where('symbol', '==', symbol)
             .where('details.status', '==', 'active');
@@ -429,6 +434,8 @@ async function processPriceUpdate(symbol: string, price: number) {
     } catch (e) {
          console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
     }
+    
+    console.log(`[WORKER_INFO] Finished processing price update for ${symbol}.`);
 }
 
 
@@ -442,3 +449,5 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
+
+    

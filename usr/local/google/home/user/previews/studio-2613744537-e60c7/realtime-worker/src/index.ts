@@ -360,7 +360,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 } else {
                     // If not closing, update P&L
                     const unrealizedPnl = (price - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
-                    updateBatch.update(doc.ref, { currentPrice: price, unrealizedPnl });
+                    updateBatch.update(doc.ref, { currentPrice: price, unrealizedPnl: unrealizedPnl });
                     hasUpdates = true;
                 }
             });
