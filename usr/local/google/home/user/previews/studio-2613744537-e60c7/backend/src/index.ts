@@ -7,7 +7,7 @@ import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
-    admin.initializeApp();
+  admin.initializeApp();
 }
 const db = admin.firestore();
 
@@ -21,43 +21,45 @@ export const aiAgentScheduler = onSchedule({
   schedule: "every 1 minutes",
   maxInstances,
 }, async () => {
-    logger.info("AI Agent Scheduler waking up...");
-    const now = admin.firestore.Timestamp.now();
-    const currentTime = now.toMillis();
+  logger.info("AI Agent Scheduler waking up...");
+  const now = admin.firestore.Timestamp.now();
+  const currentTime = now.toMillis();
 
-    try {
-        const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-            .where("aiSettings.nextRun", "<=", currentTime)
-            .get();
+  try {
+    const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
+      .where("aiSettings.scheduleInterval", ">", 0) // Ensures we only get users with scheduling enabled
+      .where("aiSettings.nextRun", "<=", currentTime)
+      .get();
 
-        if (aiUsersSnapshot.empty) {
-            logger.info("No due AI agent tasks found.");
-            return;
-        }
-
-        logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
-
-        for (const doc of aiUsersSnapshot.docs) {
-            const userId = doc.ref.parent.parent?.id;
-            const aiSettings = doc.data().aiSettings;
-
-            if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
-                continue;
-            }
-
-            logger.info(`Processing AI task for user: ${userId}`);
-
-            // In a real implementation, you would invoke the Genkit flow here.
-            // ...
-
-            const nextRun = currentTime + aiSettings.scheduleInterval;
-            await doc.ref.update({"aiSettings.nextRun": nextRun});
-
-            logger.info(`AI task for user ${userId} completed. Next run scheduled for ${new Date(nextRun).toISOString()}`);
-        }
-    } catch (error) {
-        logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
+    if (aiUsersSnapshot.empty) {
+      logger.info("No due AI agent tasks found.");
+      return;
     }
+
+    logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
+
+    for (const doc of aiUsersSnapshot.docs) {
+      const userId = doc.ref.parent.parent?.id;
+      const aiSettings = doc.data().aiSettings;
+
+      if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
+        continue;
+      }
+
+      logger.info(`Processing AI task for user: ${userId}`);
+
+      // In a real implementation, you would invoke the Genkit flow here.
+      // ...
+
+      const nextRun = currentTime + aiSettings.scheduleInterval;
+      await doc.ref.update({"aiSettings.nextRun": nextRun});
+
+      logger.info(`AI task for user ${userId} completed. Next run scheduled for ${new Date(nextRun).toISOString()}`);
+    }
+  } catch (error) {
+    logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.scheduleInterval, ASCENDING), (aiSettings.nextRun, ASCENDING)]");
+  }
 });
 
 
@@ -68,42 +70,47 @@ export const watchlistScraperScheduler = onSchedule({
   schedule: "every 1 minutes",
   maxInstances,
 }, async () => {
-    logger.info("Watchlist Scraper Scheduler waking up...");
-    const now = admin.firestore.Timestamp.now();
-    const currentTime = now.toMillis();
+  logger.info("Watchlist Scraper Scheduler waking up...");
+  const now = admin.firestore.Timestamp.now();
+  const currentTime = now.toMillis();
 
-    try {
-        const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
-            .where("automationConfig.updateMode", "==", "auto-refresh")
-            .get();
+  try {
+    // Query for users with auto-refresh enabled AND whose last run was long enough ago
+    const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
+      .where("automationConfig.updateMode", "==", "auto-refresh")
+      .where("automationConfig.lastRun", "<=", currentTime - 60000) // only run if last run was at least a minute ago
+      .get();
 
-        if (scraperUsersSnapshot.empty) {
-            logger.info("No due watchlist scraper tasks found.");
-            return;
-        }
 
-        logger.info(`Found ${scraperUsersSnapshot.docs.length} users with auto-refreshing watchlists.`);
-
-        for (const doc of scraperUsersSnapshot.docs) {
-            const config = doc.data().automationConfig;
-            if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
-                continue;
-            }
-
-            const userId = doc.ref.parent.parent?.id;
-            if (!userId) continue;
-
-            logger.info(`Processing watchlist scraper task for user: ${userId}`);
-
-            // In a real implementation, you would invoke scraping logic here.
-            // ...
-
-            await doc.ref.update({"automationConfig.lastRun": currentTime});
-            logger.info(`Watchlist scraper task for user ${userId} completed.`);
-        }
-    } catch (error) {
-        logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
+    if (scraperUsersSnapshot.empty) {
+      logger.info("No due watchlist scraper tasks found.");
+      return;
     }
+
+    logger.info(`Found ${scraperUsersSnapshot.docs.length} users with due auto-refreshing watchlists.`);
+
+    for (const doc of scraperUsersSnapshot.docs) {
+      const config = doc.data().automationConfig;
+      // The main time check is now in the query, but we add a small buffer here to be safe.
+      if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
+        continue;
+      }
+
+      const userId = doc.ref.parent.parent?.id;
+      if (!userId) continue;
+
+      logger.info(`Processing watchlist scraper task for user: ${userId}`);
+
+      // In a real implementation, you would invoke scraping logic here.
+      // ...
+
+      await doc.ref.update({"automationConfig.lastRun": currentTime});
+      logger.info(`Watchlist scraper task for user ${userId} completed.`);
+    }
+  } catch (error) {
+    logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(automationConfig.updateMode, ASCENDING), (automationConfig.lastRun, ASCENDING)]");
+  }
 });
 
 
