@@ -50,16 +50,6 @@
       ]
     },
     {
-      "collectionGroup": "watchlist",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "symbol",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "tradeHistory",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
