@@ -30,16 +30,6 @@
       ]
     },
     {
-      "collectionGroup": "openPositions",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "symbol",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "tradeTriggers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
