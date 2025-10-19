@@ -58,7 +58,7 @@ export const aiAgentScheduler = onSchedule({
     }
   } catch (error) {
     logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
-    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.scheduleInterval, ASCENDING), (aiSettings.nextRun, ASCENDING)]");
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.nextRun, ASCENDING), (aiSettings.scheduleInterval, ASCENDING)]");
   }
 });
 
@@ -136,10 +136,21 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
   try {
     await db.runTransaction(async (transaction) => {
+      // --- READS FIRST ---
       const userContextDoc = await transaction.get(userContextRef);
+      const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
+        .where("positionId", "==", positionId)
+        .where("status", "==", "open")
+        .orderBy("timestamp", "desc")
+        .limit(1);
+      const historySnapshot = await transaction.get(historyQuery);
+
+      // --- VALIDATION ---
       if (!userContextDoc.exists) {
         throw new Error("User context document does not exist!");
       }
+
+      // --- CALCULATIONS ---
       const currentBalance = userContextDoc.data()?.balance ?? 0;
       let pnl = 0;
       let collateralToReturn = 0;
@@ -156,19 +167,12 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
           pnl = (position.averageEntryPrice - position.currentPrice) * position.size;
         }
       }
-
       const newBalance = currentBalance + collateralToReturn + pnl;
 
+      // --- WRITES LAST ---
       transaction.update(userContextRef, {balance: newBalance});
       transaction.delete(change.after.ref);
 
-      const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
-        .where("positionId", "==", positionId)
-        .where("status", "==", "open")
-        .orderBy("timestamp", "desc")
-        .limit(1);
-
-      const historySnapshot = await transaction.get(historyQuery);
       if (!historySnapshot.empty) {
         const historyDocRef = historySnapshot.docs[0].ref;
         transaction.update(historyDocRef, {status: "closed", pnl});
@@ -178,6 +182,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
+    // Revert status to 'open' on failure
     await change.after.ref.update({"details.status": "open"});
   }
 });
