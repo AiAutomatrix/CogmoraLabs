@@ -1,5 +1,4 @@
 
-
 import { z } from 'zod';
 
 //==========================================================================
@@ -143,6 +142,11 @@ export const PriceAlertSchema = z.object({
 });
 export type PriceAlert = z.infer<typeof PriceAlertSchema>;
 
+export const TradeTriggerDetailsSchema = z.object({
+  status: z.enum(['active', 'executed', 'canceled']),
+});
+export type TradeTriggerDetails = z.infer<typeof TradeTriggerDetailsSchema>;
+
 export const TradeTriggerSchema = z.object({
   id: z.string(),
   symbol: z.string(),
@@ -153,16 +157,17 @@ export const TradeTriggerSchema = z.object({
   action: z.enum(['buy', 'long', 'short']),
   amount: z.number(), // For spot, this is USD amount. For futures, this is collateral.
   leverage: z.number(), // Only for futures
-  status: z.enum(['active', 'executed', 'canceled']),
   cancelOthers: z.boolean().optional(),
   stopLoss: z.number().optional(),
   takeProfit: z.number().optional(),
+  details: TradeTriggerDetailsSchema,
 });
 export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 
 // This is the type for the AI output, omitting fields the AI should not generate
-export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
+export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, details: true });
 export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
+
 
 //==========================================================================
 // AI AGENT SCHEMAS
@@ -486,6 +491,14 @@ export const KucoinFuturesContractSchema = z.object({
     highPrice: z.number(),
     priceChgPct: z.number(),
     priceChg: z.number(),
+    k: z.number(),
+    m: z.number(),
+    f: z.number(),
+    mmrLimit: z.number(),
+    mmrLevConstant: z.number(),
+    supportCross: z.boolean(),
+    buyLimit: z.number(),
+    sellLimit: z.number(),
 });
 export type KucoinFuturesContract = z.infer<typeof KucoinFuturesContractSchema>;
 
@@ -598,7 +611,7 @@ export type FuturesSnapshotData = {
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot.24h';
+    subject: 'snapshot.24h' | 'snapshot'; // Added 'snapshot'
     id: string;
     data: FuturesSnapshotData;
 };
@@ -621,3 +634,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    

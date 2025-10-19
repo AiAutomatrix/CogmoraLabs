@@ -43,6 +43,10 @@ interface PaperTrade {
   pnl?: number | null;
 }
 
+interface TradeTriggerDetails {
+    status: 'active' | 'executed' | 'canceled';
+}
+
 interface TradeTrigger {
   id: string;
   symbol: string;
@@ -53,10 +57,10 @@ interface TradeTrigger {
   action: 'buy' | 'long' | 'short';
   amount: number;
   leverage: number;
-  status: 'active' | 'executed' | 'canceled';
   cancelOthers?: boolean;
   stopLoss?: number;
   takeProfit?: number;
+  details: TradeTriggerDetails;
 }
 
 
@@ -350,7 +354,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 
                 if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
                     console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                    return; // This is the log that was missing. 'return' is correct here, as it's inside a forEach loop. It acts like a 'continue'.
+                    return; // This is correct, acts as 'continue' in forEach
                 }
 
                 const isLong = pos.side === 'long' || pos.side === 'buy';
@@ -376,7 +380,9 @@ async function processPriceUpdate(symbol: string, price: number) {
     // --- Block 2: Handle Trade Trigger Executions ---
     try {
         console.log(`[WORKER_INFO] Querying trade triggers for symbol: ${symbol}`);
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
+        const triggersQuery = db.collectionGroup('tradeTriggers')
+            .where('symbol', '==', symbol)
+            .where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
 
         if (!triggersSnapshot.empty) {
@@ -419,6 +425,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
                     } catch (error) {
                         console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, error);
+                        // Optionally delete the failed trigger to prevent retries, or add error handling logic
                         await doc.ref.delete();
                     }
                 }
@@ -442,3 +449,5 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
+
+    

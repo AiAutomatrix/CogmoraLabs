@@ -83,7 +83,7 @@ interface PaperTradingContextType {
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
-  addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'status'>) => void;
+  addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'details'>) => void;
   updateTradeTrigger: (triggerId: string, updates: Partial<TradeTrigger>) => void;
   removeTradeTrigger: (triggerId: string) => void;
   buy: (
@@ -487,7 +487,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const totalValue = (existingPosition.size * existingPosition.averageEntryPrice) + (size * currentPrice);
           const newAverageEntry = totalValue / totalSize;
 
-          const details: OpenPositionDetails = { ...(existingPosition.details || {}), triggeredBy };
+          const details: OpenPositionDetails = { ...(existingPosition.details || {}), triggeredBy, status: 'open' };
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
           
@@ -500,7 +500,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       } else {
           positionId = crypto.randomUUID();
           
-          const details: OpenPositionDetails = { triggeredBy };
+          const details: OpenPositionDetails = { triggeredBy, status: 'open' };
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
@@ -556,7 +556,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
 
-      const details: OpenPositionDetails = { triggeredBy };
+      const details: OpenPositionDetails = { triggeredBy, status: 'open' };
       if (stopLoss !== undefined) details.stopLoss = stopLoss;
       if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
@@ -614,7 +614,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
 
-      const details: OpenPositionDetails = { triggeredBy };
+      const details: OpenPositionDetails = { triggeredBy, status: 'open' };
       if (stopLoss !== undefined) details.stopLoss = stopLoss;
       if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
@@ -754,6 +754,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               return p;
           })
         );
+        
+        setWatchlist(prev => prev.map(item =>
+          item.symbol === symbol
+            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct }
+            : item
+        ));
 
         const alert = priceAlerts[symbol];
         if (alert && !alert.triggered) {
@@ -815,11 +821,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, closePosition, saveSubcollectionDoc, toast]);
 
 
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
-    const newTrigger: TradeTrigger = {
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
+    const newTrigger: Omit<TradeTrigger, 'id'> & { id: string } = {
       ...trigger,
       id: crypto.randomUUID(),
-      status: 'active',
+      details: {
+        status: 'active'
+      },
     };
 
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
@@ -833,7 +841,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     if (shouldExecuteImmediately && currentPrice) {
-        executeTrigger(newTrigger, currentPrice);
+        executeTrigger(newTrigger as TradeTrigger, currentPrice);
     } else {
         saveSubcollectionDoc('tradeTriggers', newTrigger.id, newTrigger);
         toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
@@ -1065,8 +1073,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const futures = new Set<string>();
     openPositions.forEach(p => (p.positionType === 'spot' ? spot : futures).add(p.symbol));
     tradeTriggers.forEach(t => (t.type === 'spot' ? spot : futures).add(t.symbol));
+    watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
     return { spot: Array.from(spot), futures: Array.from(futures) };
-  }, [isLoaded, openPositions, tradeTriggers]);
+  }, [isLoaded, openPositions, tradeTriggers, watchlist]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
@@ -1142,7 +1151,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === 'snapshot.24h') {
+      if (message.type === 'message' && message.subject === 'snapshot') {
           processUpdateRef.current(message.data.symbol, false, message.data as any);
       }
   }, []);
@@ -1265,3 +1274,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
