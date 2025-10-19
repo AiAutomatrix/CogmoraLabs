@@ -234,7 +234,7 @@ async function collectAllSymbols() {
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
@@ -242,7 +242,7 @@ async function collectAllSymbols() {
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);

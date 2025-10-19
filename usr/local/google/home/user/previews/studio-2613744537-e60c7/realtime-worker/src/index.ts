@@ -63,7 +63,9 @@ interface TradeTrigger {
   details: TradeTriggerDetails;
 }
 
+
 // Initialize Firebase Admin SDK for Cloud Run environment
+// This uses the service account associated with the Cloud Run instance
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
@@ -231,20 +233,20 @@ async function collectAllSymbols() {
     const futuresSymbols = new Set<string>();
 
     try {
-        // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
-        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const position = doc.data();
-            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-        });
-
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
             if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+        });
+
+        // Collect from openPositions
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
+            const position = doc.data();
+            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -442,5 +444,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
-
-    
