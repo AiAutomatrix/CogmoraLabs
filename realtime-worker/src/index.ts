@@ -242,14 +242,6 @@ async function collectAllSymbols() {
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
-
-        // Collect from watchlist
-        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const item = doc.data();
-            if (item.type === 'spot') spotSymbols.add(item.symbol);
-            if (item.type === 'futures') futuresSymbols.add(item.symbol);
-        });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
         spotManager.updateSubscriptions(spotSymbols);
@@ -374,21 +366,13 @@ async function processPriceUpdate(symbol: string, price: number) {
         }
     });
 
-    // --- Block 2: Handle Watchlist Price Updates (Simple Batch Update) ---
-    const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
-    const watchlistSnapshot = await watchlistQuery.get();
-    watchlistSnapshot.forEach((doc) => {
-        simpleUpdateBatch.update(doc.ref, { currentPrice: price });
-        hasSimpleUpdates = true;
-    });
-
-    // Commit all the simple, non-critical updates together.
+    // Commit SL/TP updates if any.
     if (hasSimpleUpdates) {
-        await simpleUpdateBatch.commit().catch(err => console.error("[WORKER_ERROR] Batch update for SL/TP/Watchlist failed:", err));
+        await simpleUpdateBatch.commit().catch(err => console.error("[WORKER_ERROR] Batch update for SL/TP failed:", err));
     }
 
 
-    // --- Block 3: Handle Trade Trigger Executions (Atomic Transactions) ---
+    // --- Block 2: Handle Trade Trigger Executions (Atomic Transactions) ---
     const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
     const triggersSnapshot = await triggersQuery.get();
 
@@ -448,4 +432,3 @@ server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
 
-    
