@@ -20,11 +20,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "automationConfig.updateMode",
+          "fieldPath": "automationConfig.lastRun",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "automationConfig.lastRun",
+          "fieldPath": "automationConfig.updateMode",
           "order": "ASCENDING"
         }
       ]
@@ -39,20 +39,6 @@
         },
         {
           "fieldPath": "details.status",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "tradeTriggers",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "symbol",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
