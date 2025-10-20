@@ -232,7 +232,20 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const collectionRef = collection(userContextDocRef, collectionName);
       const unsub = onSnapshot(collectionRef, 
         (snapshot) => {
-          const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
+          const items = snapshot.docs.map(doc => {
+            const docData = doc.data();
+             // For open positions, initialize currentPrice with entry price and PNL at 0.
+             // This prevents showing stale data before the websocket connects.
+            if (collectionName === 'openPositions') {
+              return { 
+                ...docData, 
+                id: doc.id,
+                currentPrice: docData.averageEntryPrice, // Start with entry price
+                unrealizedPnl: 0, // Start with 0 PNL
+              } as T;
+            }
+            return { ...docData, id: doc.id } as T
+          });
           setState(items);
         }, 
         (error) => {
@@ -412,13 +425,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
       
       const newBalance = balance - amountUSD;
-      const unrealizedPnl = accountMetrics.unrealizedPnl; // This doesn't change on open, it's based on existing positions
-      const newEquity = newBalance + unrealizedPnl;
-
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newEquity,
-        unrealizedPnl: unrealizedPnl // Save the current total unrealized PNL
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
       });
 
       let positionId = existingPosition?.id;
@@ -477,7 +489,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       
       toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
     },
-    [balance, openPositions, accountMetrics.unrealizedPnl, toast, saveSubcollectionDoc, saveDataToFirestore, userContextDocRef]
+    [balance, openPositions, toast, saveSubcollectionDoc, saveDataToFirestore, userContextDocRef]
   );
 
   const futuresBuy = useCallback((
@@ -519,13 +531,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const newUnrealizedPnl = accountMetrics.unrealizedPnl; // PNL from other positions
-      const newEquity = newBalance + newUnrealizedPnl;
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newEquity,
-        unrealizedPnl: newUnrealizedPnl
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -544,7 +555,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, accountMetrics.unrealizedPnl, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
+  }, [balance, openPositions, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
 
   const futuresSell = useCallback((
     symbol: string,
@@ -585,13 +596,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const newUnrealizedPnl = accountMetrics.unrealizedPnl; // PNL from other positions
-      const newEquity = newBalance + newUnrealizedPnl;
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newEquity,
-        unrealizedPnl: newUnrealizedPnl
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -610,7 +620,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, accountMetrics.unrealizedPnl, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
+  }, [balance, openPositions, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
   
   const formatPrice = (price?: number) => {
     if (price === undefined || isNaN(price)) return "N/A";
