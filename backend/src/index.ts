@@ -185,7 +185,7 @@ export const onTradeEvent = onDocumentWritten("/users/{userId}/paperTradingConte
                     }
                     const newBalance = currentBalance + collateralToReturn + pnl;
 
-                    const historyQuery = db.collection(userContextRef, "tradeHistory")
+                    const historyQuery = userContextRef.collection("tradeHistory")
                         .where("positionId", "==", positionId)
                         .where("status", "==", "open")
                         .orderBy("timestamp", "desc").limit(1);
