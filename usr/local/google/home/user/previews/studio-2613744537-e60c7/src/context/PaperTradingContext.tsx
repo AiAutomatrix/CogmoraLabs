@@ -41,6 +41,7 @@ import type {
   AiActionExecutionLog,
   FirestorePaperTradingContext,
   OpenPositionDetails,
+  TradeTriggerDetails,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
@@ -64,11 +65,6 @@ const INITIAL_AI_SETTINGS: AiTriggerSettings = {
   manageOpenPositions: false,
 };
 
-// --- ONE-TIME DATA RESET ---
-// This key will be used to check if the reset has been performed.
-const RESET_KEY = 'cogmora-profile-reset-v2';
-
-
 interface PaperTradingContextType {
   balance: number;
   openPositions: OpenPosition[];
@@ -83,7 +79,7 @@ interface PaperTradingContextType {
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
-  addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'status'>) => void;
+  addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'details'>) => void;
   updateTradeTrigger: (triggerId: string, updates: Partial<TradeTrigger>) => void;
   removeTradeTrigger: (triggerId: string) => void;
   buy: (
@@ -167,14 +163,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const spotSubscriptionsRef = useRef(new Set<string>());
   const spotReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const spotReconnectAttempts = useRef(0);
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const futuresSubscriptionsRef = useRef(new Set<string>());
   const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectAttempts = useRef(0);
 
@@ -184,64 +178,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
     return null;
   }, [user, firestore]);
-  
-  useEffect(() => {
-    const performResetIfNeeded = async () => {
-      if (!userContextDocRef || !firestore || isLoaded) return;
-
-      const hasBeenReset = localStorage.getItem(RESET_KEY);
-      if (hasBeenReset === 'true') {
-        return;
-      }
-      
-      console.warn("PERFORMING ONE-TIME PROFILE RESET.");
-      toast({
-        title: "Profile Reset",
-        description: "Your paper trading account is being reset to a clean state.",
-        duration: 10000,
-      });
-
-      try {
-        const collectionsToWipe = ['openPositions', 'tradeHistory', 'tradeTriggers', 'priceAlerts', 'watchlist'];
-        const batch = writeBatch(firestore);
-
-        for (const collectionName of collectionsToWipe) {
-          const collectionRef = collection(userContextDocRef, collectionName);
-          const snapshot = await getDocs(collectionRef);
-          snapshot.forEach(doc => batch.delete(doc.ref));
-        }
-
-        const initialContext: FirestorePaperTradingContext = {
-          balance: INITIAL_BALANCE,
-          automationConfig: INITIAL_AUTOMATION_CONFIG,
-          aiSettings: INITIAL_AI_SETTINGS,
-          lastAiActionPlan: null,
-          aiActionLogs: [],
-        };
-        batch.set(userContextDocRef, initialContext);
-
-        await batch.commit();
-
-        localStorage.setItem(RESET_KEY, 'true');
-        toast({
-          title: "Profile Reset Complete",
-          description: "Your account has been reset. You can now continue trading.",
-          variant: 'default',
-        });
-        console.log("ONE-TIME PROFILE RESET COMPLETE.");
-      } catch (error) {
-        console.error("FAILED TO PERFORM ONE-TIME PROFILE RESET:", error);
-        toast({
-          title: "Profile Reset Failed",
-          description: "Could not reset your profile. Please contact support.",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    performResetIfNeeded();
-  }, [userContextDocRef, firestore, isLoaded, toast]);
-
 
   // Combined listener setup
   useEffect(() => {
@@ -264,7 +200,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setLastAiActionPlan(data.lastAiActionPlan ?? null);
           setAiActionLogs(data.aiActionLogs ?? []);
         } else {
-            // Document doesn't exist, create it with initial values
             const initialContext: FirestorePaperTradingContext = {
                 balance: INITIAL_BALANCE,
                 automationConfig: INITIAL_AUTOMATION_CONFIG,
@@ -294,7 +229,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     unsubscribers.push(unsubContext);
 
     // Generic function to create listeners for subcollections
-    const createSubcollectionListener = <T extends {id: string}>(collectionName: string, setState: React.Dispatch<React.SetStateAction<T[]>>) => {
+    const createSubcollectionListener = <T extends {id?: string}>(collectionName: string, setState: React.Dispatch<React.SetStateAction<T[]>>) => {
       const collectionRef = collection(userContextDocRef, collectionName);
       const unsub = onSnapshot(collectionRef, 
         (snapshot) => {
@@ -339,10 +274,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     createSubcollectionListener('tradeTriggers', setTradeTriggers);
     createRecordListener('priceAlerts', setPriceAlerts);
 
-    // Cleanup on unmount or user change
     return () => {
       unsubscribers.forEach(unsub => unsub());
-      setIsLoaded(false); // Reset loaded state for next user
+      setIsLoaded(false);
       dataLoadedRef.current = false;
     };
   }, [userContextDocRef, firestore]);
@@ -470,6 +404,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       takeProfit?: number,
       triggeredBy = 'manual'
     ) => {
+      if (!userContextDocRef) return;
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
         return;
@@ -532,7 +467,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         timestamp: Date.now(),
         status: 'open',
       };
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), newTrade);
+      addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
       
       toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
     },
@@ -548,6 +483,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     takeProfit?: number,
     triggeredBy = 'manual'
   ) => {
+      if (!userContextDocRef) return;
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -592,7 +528,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           timestamp: Date.now(),
           status: "open",
       };
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), newTrade);
+      addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
@@ -606,6 +542,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     takeProfit?: number,
     triggeredBy = 'manual'
   ) => {
+      if (!userContextDocRef) return;
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -650,7 +587,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           timestamp: Date.now(),
           status: "open",
       };
-      addDocumentNonBlocking(collection(userContextDocRef!, 'tradeHistory'), newTrade);
+      addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
@@ -701,18 +638,76 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
-  const closePosition = useCallback((positionId: string) => {
-    const pos = openPositions.find(p => p.id === positionId);
-    if (!pos) return;
-  
-    // Update the position status to 'closing' which will be handled by the backend function
-    saveSubcollectionDoc('openPositions', positionId, { details: { ...pos.details, status: 'closing' } });
+  const closePosition = useCallback(async (positionId: string) => {
+    if (!firestore || !userContextDocRef) return;
     
-    toast({
-        title: "Position Closing",
-        description: `${pos.symbolName} position is being processed for closure.`
-    });
-  }, [openPositions, toast, saveSubcollectionDoc]);
+    const pos = openPositions.find(p => p.id === positionId);
+    if (!pos) {
+      toast({ title: "Error", description: "Position not found.", variant: "destructive" });
+      return;
+    }
+  
+    try {
+      let pnl = 0;
+      let collateralToReturn = 0;
+  
+      if (pos.positionType === 'spot') {
+        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        collateralToReturn = pos.size * pos.averageEntryPrice;
+      } else { // Futures
+        const contractValue = pos.size * pos.averageEntryPrice;
+        collateralToReturn = contractValue / (pos.leverage || 1);
+        if (pos.side === "long") {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        } else { // short
+          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+        }
+      }
+      
+      const newBalance = balance + collateralToReturn + pnl;
+  
+      const batch = writeBatch(firestore);
+  
+      // 1. Update main context balance
+      batch.update(userContextDocRef, { balance: newBalance });
+  
+      // 2. Create history record
+      const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
+      const historyRecord: Omit<PaperTrade, 'id'> = {
+        positionId: pos.id,
+        positionType: pos.positionType,
+        symbol: pos.symbol,
+        symbolName: pos.symbolName,
+        size: pos.size,
+        price: pos.currentPrice, // Use final price
+        side: pos.side === 'buy' || pos.side === 'long' ? 'sell' : 'buy',
+        leverage: pos.leverage || null,
+        timestamp: Date.now(),
+        status: 'closed',
+        pnl: pnl,
+      };
+      batch.set(historyRef, historyRecord);
+  
+      // 3. Delete the open position
+      const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+      batch.delete(positionRef);
+  
+      await batch.commit();
+  
+      toast({
+        title: "Position Closed",
+        description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
+      });
+  
+    } catch (error) {
+      console.error("Failed to manually close position:", error);
+      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: doc(userContextDocRef, 'openPositions', positionId).path,
+        operation: 'write',
+      }));
+    }
+  }, [firestore, userContextDocRef, openPositions, balance, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -735,15 +730,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setOpenPositions(prev =>
           prev.map(p => {
               if (p.symbol === symbol) {
-                  // Check for SL/TP hits for open positions
-                  if (p.details?.status !== 'closing') {
-                      if (p.details?.stopLoss && ((p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
-                          positionsToCloseIds.current.add(p.id);
-                      } else if (p.details?.takeProfit && ((p.side === 'long' || p.side === 'buy') ? newPrice! >= p.details.takeProfit : newPrice! <= p.details.takeProfit)) {
-                          positionsToCloseIds.current.add(p.id);
-                      }
-                  }
-
                   return { 
                       ...p, 
                       currentPrice: newPrice!,
@@ -770,7 +756,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
         
         tradeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol) {
+            if (trigger.symbol === symbol && trigger.details.status === 'active') {
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
                     executedTriggerIds.current.add(trigger.id);
@@ -780,7 +766,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
   }, [priceAlerts, tradeTriggers]);
 
-  // Effect to process the queues of side effects
   useEffect(() => {
     if (executedTriggerIds.current.size > 0) {
       const triggersToExecute = Array.from(executedTriggerIds.current);
@@ -795,15 +780,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       });
     }
 
-    if (positionsToCloseIds.current.size > 0) {
-      const positionsToActOn = Array.from(positionsToCloseIds.current);
-      positionsToCloseIds.current.clear();
-
-      positionsToActOn.forEach(positionId => {
-        closePosition(positionId);
-      });
-    }
-    
     if (triggeredAlerts.current.size > 0) {
         const alertsToFire = Array.from(triggeredAlerts.current);
         triggeredAlerts.current.clear();
@@ -818,14 +794,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
     }
 
-  }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, closePosition, saveSubcollectionDoc, toast]);
+  }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, saveSubcollectionDoc, toast]);
 
 
-  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'status'>) => {
+  const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
     const newTrigger: TradeTrigger = {
       ...trigger,
       id: crypto.randomUUID(),
-      status: 'active',
+      details: { status: 'active' },
     };
 
     const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
@@ -940,7 +916,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     const newConfig: AutomationConfig = { ...config };
-    // Only update lastRun if it's an auto-refresh schedule being set or saved
     if (config.updateMode === 'auto-refresh') {
         newConfig.lastRun = Date.now();
     } else {
@@ -1063,8 +1038,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
 
-  // Frontend WebSocket management is now only for open positions and triggers.
-  // The backend worker handles watchlist updates.
   const symbolsToWatch = useMemo(() => {
     if (!isLoaded) return { spot: [], futures: [] };
     const spot = new Set<string>();
@@ -1149,13 +1122,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === 'snapshot') { // Corrected subject
+      if (message.type === 'message' && message.subject === 'snapshot') {
           processUpdateRef.current(message.data.symbol, false, message.data as any);
       }
   }, []);
 
   useEffect(() => {
-    setupWebSocket(spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts, getSpotWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleSpotMessage, symbolsToWatch.spot, (s) => `/market/snapshot:${s}`);
+    if (symbolsToWatch.spot.length > 0) {
+        setupWebSocket(spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts, getSpotWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleSpotMessage, symbolsToWatch.spot, (s) => `/market/snapshot:${s}`);
+    }
     return () => {
         spotWs.current?.close();
         if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
@@ -1164,7 +1139,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [symbolsToWatch.spot, setupWebSocket, handleSpotMessage]);
 
   useEffect(() => {
-    setupWebSocket(futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts, getFuturesWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleFuturesMessage, symbolsToWatch.futures, (s) => `/contractMarket/snapshot:${s}`);
+    if (symbolsToWatch.futures.length > 0) {
+        setupWebSocket(futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts, getFuturesWsToken, (token, s) => `${s.endpoint}?token=${token}`, handleFuturesMessage, symbolsToWatch.futures, (s) => `/contractMarket/snapshot:${s}`);
+    }
      return () => {
         futuresWs.current?.close();
         if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
@@ -1272,3 +1249,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    

@@ -672,7 +672,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
       // 2. Create history record
       const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
-      const historyRecord = {
+      const historyRecord: Omit<PaperTrade, 'id'> = {
         positionId: pos.id,
         positionType: pos.positionType,
         symbol: pos.symbol,
@@ -757,7 +757,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
         
         tradeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol) {
+            if (trigger.symbol === symbol && trigger.details.status === 'active') {
                 const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
                 if (conditionMet) {
                     executedTriggerIds.current.add(trigger.id);
@@ -795,7 +795,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
     }
 
-  }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, closePosition, saveSubcollectionDoc, toast]);
+  }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, saveSubcollectionDoc, toast]);
 
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
@@ -1054,7 +1054,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       statusSetter: React.Dispatch<React.SetStateAction<string>>,
       pingRef: React.MutableRefObject<NodeJS.Timeout | null>,
       reconnectTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>,
-      reconnectAttemptsRef: React.MutableRefObject<number>>,
+      reconnectAttemptsRef: React.MutableRefObject<number>,
       tokenFetcher: () => Promise<any>,
       urlBuilder: (token: string, instance: any) => string,
       onMessageHandler: (event: MessageEvent) => void,
