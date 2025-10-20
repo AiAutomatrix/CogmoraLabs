@@ -412,12 +412,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
       
       const newBalance = balance - amountUSD;
-      const unrealizedPnl = accountMetrics.unrealizedPnl; // PNL doesn't change on open
+      const unrealizedPnl = accountMetrics.unrealizedPnl; // This doesn't change on open, it's based on existing positions
       const newEquity = newBalance + unrealizedPnl;
 
       saveDataToFirestore({ 
         balance: newBalance,
         equity: newEquity,
+        unrealizedPnl: unrealizedPnl // Save the current total unrealized PNL
       });
 
       let positionId = existingPosition?.id;
@@ -518,11 +519,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const newEquity = newBalance + accountMetrics.unrealizedPnl;
-
+      const newUnrealizedPnl = accountMetrics.unrealizedPnl; // PNL from other positions
+      const newEquity = newBalance + newUnrealizedPnl;
+      
       saveDataToFirestore({ 
         balance: newBalance,
         equity: newEquity,
+        unrealizedPnl: newUnrealizedPnl
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -582,11 +585,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const newEquity = newBalance + accountMetrics.unrealizedPnl;
+      const newUnrealizedPnl = accountMetrics.unrealizedPnl; // PNL from other positions
+      const newEquity = newBalance + newUnrealizedPnl;
       
       saveDataToFirestore({ 
         balance: newBalance,
         equity: newEquity,
+        unrealizedPnl: newUnrealizedPnl
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
