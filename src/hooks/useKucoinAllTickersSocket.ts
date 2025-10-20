@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -9,6 +8,7 @@ const KUCOIN_TICKERS_PROXY_URL = "/api/kucoin-tickers";
 
 export function useKucoinTickers() {
   const [tickers, setTickers] = useState<KucoinTicker[]>([]);
+  const [tickersMap, setTickersMap] = useState<Map<string, KucoinTicker>>(new Map());
   const [loading, setLoading] = useState(true);
   const [wsStatus, setWsStatus] = useState('idle');
 
@@ -31,6 +31,9 @@ export function useKucoinTickers() {
       if (initialData && initialData.code === "200000" && initialData.data && initialData.data.ticker) {
         const usdtTickers = initialData.data.ticker.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
         setTickers(usdtTickers);
+        const map = new Map<string, KucoinTicker>();
+        usdtTickers.forEach((t: KucoinTicker) => map.set(t.symbol, t));
+        setTickersMap(map);
       }
       setLoading(false);
 
@@ -73,6 +76,17 @@ export function useKucoinTickers() {
                 }
                 return newTickers;
             });
+            
+            setTickersMap(prevMap => {
+              const newMap = new Map(prevMap);
+              const existing = newMap.get(updatedTickerData.symbol);
+              newMap.set(updatedTickerData.symbol, {
+                ...existing,
+                ...updatedTickerData,
+                last: updatedTickerData.price || existing?.last,
+              } as KucoinTicker);
+              return newMap;
+            });
         }
       };
 
@@ -94,5 +108,5 @@ export function useKucoinTickers() {
     }
   }, [connectToAllTickers]);
 
-  return { tickers, loading, wsStatus };
+  return { tickers, tickersMap, loading, wsStatus };
 }

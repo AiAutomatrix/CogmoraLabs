@@ -44,6 +44,7 @@ import type {
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
 import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
+import { useKucoinTickers } from "@/hooks/useKucoinAllTickersSocket";
 
 
 const INITIAL_BALANCE = 100000;
@@ -134,6 +135,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const { toast } = useToast();
   const firestore = useFirestore();
   const { user } = useUser();
+  const { tickers: initialSpotTickers, tickersMap: initialSpotTickersMap } = useKucoinTickers();
+
 
   // State for core context data (not subcollections)
   const [balance, setBalance] = useState<number>(INITIAL_BALANCE);
@@ -233,16 +236,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     // Specific listener for openPositions
     const unsubOpenPositions = onSnapshot(collection(userContextDocRef, 'openPositions'), (snapshot) => {
-        const items = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                currentPrice: data.averageEntryPrice, // Initialize with entry price
-                unrealizedPnl: 0, // Initialize with 0 PnL
-            } as OpenPosition;
-        });
-        setOpenPositions(items);
+      const items = snapshot.docs.map(doc => {
+          const data = doc.data() as Omit<OpenPosition, 'id'>;
+          const initialTicker = initialSpotTickersMap.get(data.symbol);
+          const initialPrice = initialTicker ? parseFloat(initialTicker.last) : data.averageEntryPrice;
+          
+          return {
+              ...data,
+              id: doc.id,
+              currentPrice: initialPrice,
+              unrealizedPnl: (initialPrice - data.averageEntryPrice) * data.size * (data.side === 'short' ? -1 : 1),
+          } as OpenPosition;
+      });
+      setOpenPositions(items);
     }, (error) => {
         console.error(`Error listening to openPositions:`, error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -297,7 +303,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       setIsLoaded(false);
       dataLoadedRef.current = false;
     };
-  }, [userContextDocRef, firestore]);
+  }, [userContextDocRef, firestore, initialSpotTickersMap]);
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -1006,9 +1012,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-        const spotResponse = await fetch('/api/kucoin-tickers');
-        const spotData = await spotResponse.json();
-        const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        const allSpotTickers: KucoinTicker[] = initialSpotTickers.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
 
         if (!allSpotTickers.length && !futuresContracts.length) {
             throw new Error('Could not fetch any screener data.');
@@ -1031,8 +1035,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
 
             const sorted = [...sourceData].sort((a, b) => {
-                const valA = parseFloat((a as any)[sortKey]) || 0;
-                const valB = parseFloat((b as any)[sortKey]) || 0;
+                const valA = parseFloat((a as any)[sortKey] as string) || 0;
+                const valB = parseFloat((b as any)[sortKey] as string) || 0;
                 return valB - valA;
             });
 
@@ -1091,7 +1095,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
       }
     }
-  }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
+  }, [toast, futuresContracts, userContextDocRef, firestore, watchlist, initialSpotTickers]);
 
   const symbolsToWatch = useMemo(() => {
     if (!isLoaded) return { spot: [], futures: [] };
@@ -1177,9 +1181,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && (message.subject === 'snapshot' || message.subject === 'snapshot.24h')) {
-          const symbol = (message.data as FuturesSnapshotData).symbol || message.topic.split(':')[1];
-          processUpdateRef.current(symbol, false, message.data as any);
+      if (message.type === 'message' && (message.subject === 'snapshot')) {
+          const data = message.data as FuturesSnapshotData;
+          const symbol = data.symbol || message.topic.split(':')[1];
+          if (symbol) {
+             processUpdateRef.current(symbol, false, data);
+          }
       }
   }, []);
 
@@ -1305,5 +1312,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
