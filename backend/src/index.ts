@@ -130,8 +130,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
   const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
 
   // --- Handle Position Closing Logic ---
-  // This block only runs if a document in 'openPositions' was changed.
-  // It also safely checks if event.data is defined.
+  // This is the critical check. If event.data is undefined, it's a deletion, so we skip this block.
   if (collectionId === "openPositions" && event.data) {
     const dataBefore = event.data.before.data();
     const dataAfter = event.data.after.data();
@@ -180,7 +179,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
 
           // Update balance, delete position, and update history atomically
           transaction.update(userContextRef, {balance: newBalance});
-          transaction.delete(event.data.after.ref); // Safe to use here because we are in the 'if' block
+          transaction.delete(event.data.after.ref);
           if (!historySnapshot.empty) {
             const historyDocRef = historySnapshot.docs[0].ref;
             transaction.update(historyDocRef, {status: "closed", pnl: pnl});
@@ -188,17 +187,16 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
 
           logger.info(`Transaction successful for closing position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
         });
-        // The successful transaction will trigger this function again (due to delete/update),
-        // at which point the metrics will be recalculated below. We can exit here for this run.
+        // The successful transaction (deleting the position) will trigger this function again.
+        // On that second run, event.data will be undefined, this block will be skipped,
+        // and the metrics calculation below will run with the now-updated data.
         return;
       } catch (error) {
         logger.error(`Transaction failed for closing position ${positionId}:`, error);
         // Safely revert status to 'open' on failure to allow for retry.
-        // Check event.data again inside the catch block.
         if (event.data?.after.ref) {
             await event.data.after.ref.update({"details.status": "open"});
         }
-        // Exit to avoid inconsistent metric calculation on failure.
         return;
       }
     }
