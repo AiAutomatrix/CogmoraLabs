@@ -190,13 +190,19 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
 /**
  * Recalculates and updates aggregate account metrics.
- * This can be triggered by changes in positions, history, or balance.
+ * This can be triggered by changes in positions or history.
  */
-export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/{docId}/{subCollection}/{subDocId}", async (event) => {
-    const { userId } = event.params;
+export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{subCollection}/{subDocId}", async (event) => {
+    const { userId, subCollection } = event.params;
+    
+    // Only trigger for relevant subcollections
+    if (subCollection !== 'openPositions' && subCollection !== 'tradeHistory') {
+      return;
+    }
+
     const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
     
-    logger.info(`Metrics calculation triggered for user: ${userId}`);
+    logger.info(`Metrics calculation triggered for user: ${userId} by change in ${subCollection}`);
 
     try {
         const openPositionsSnapshot = await userContextRef.collection('openPositions').get();
