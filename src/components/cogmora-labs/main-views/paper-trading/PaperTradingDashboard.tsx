@@ -129,6 +129,13 @@ export default function PaperTradingDashboard({
     // For sizes less than 1, show more precision using toPrecision
     return size.toPrecision(3);
   };
+  
+  const formatTimestamp = (timestamp: any): string => {
+    if (!timestamp) return 'N/A';
+    // Firestore Timestamps have a toDate() method, while numeric timestamps do not.
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return format(date, "yyyy-MM-dd HH:mm");
+  };
 
   const PNLCell = ({ pnl }: { pnl: number | undefined }) => {
     if (pnl === undefined)
@@ -430,7 +437,7 @@ export default function PaperTradingDashboard({
                         return (
                             <TableRow key={trade.id}>
                             <TableCell className="px-2 py-2">
-                                {format(new Date(trade.timestamp), "yyyy-MM-dd HH:mm")}
+                                {formatTimestamp(trade.timestamp)}
                             </TableCell>
                             <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
                             <TableCell
