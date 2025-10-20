@@ -1,14 +1,16 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // WARNING: TEMPORARY DEBUGGING RULESET
-    // This allows open access to your entire database.
-    // This is ONLY to get the deployment to succeed.
-    // We must revert to the secure rules once the deployment issue is resolved.
-    match /{document=**} {
-      allow read, write: if true;
+    // Rule 1: Allow a user to create their own user profile document.
+    match /users/{userId} {
+      allow create: if request.auth.uid == userId;
+    }
+
+    // Rule 2: Allow a user to read and write to ANY document or subcollection
+    // within their own user profile directory.
+    match /users/{userId}/{path=**} {
+      allow read, write: if request.auth.uid == userId;
     }
   }
 }
