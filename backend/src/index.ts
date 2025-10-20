@@ -210,7 +210,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
         balance: 100000, equity: 100000, unrealizedPnl: 0, realizedPnl: 0,
         winRate: 0, wonTrades: 0, lostTrades: 0,
       };
-      await userContextRef.set(initialMetrics);
+      await userContextRef.set(initialMetrics, {merge: true});
       balance = initialMetrics.balance;
     } else {
       balance = userContextSnap.data()?.balance ?? 0;
@@ -246,7 +246,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
     // Update the main context document with all metrics
-    const metrics = { equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades };
+    const metrics = {equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades};
     await userContextRef.update(metrics);
     logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
   } catch (error) {
