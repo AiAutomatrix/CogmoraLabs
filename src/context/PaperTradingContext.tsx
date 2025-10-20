@@ -234,14 +234,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         (snapshot) => {
           const items = snapshot.docs.map(doc => {
             const docData = doc.data();
-             // For open positions, initialize currentPrice with entry price.
-             // This prevents showing stale data before the websocket connects.
+             // For open positions, initialize with stored data but set PNL to 0.
+             // The WebSocket snapshot will provide the live price almost instantly.
             if (collectionName === 'openPositions') {
               return { 
                 ...docData, 
                 id: doc.id,
-                currentPrice: docData.averageEntryPrice, // Start with entry price
-                unrealizedPnl: 0, // Start with 0 PNL
+                unrealizedPnl: 0,
               } as T;
             }
             return { ...docData, id: doc.id } as T
@@ -426,10 +425,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       
       const newBalance = balance - amountUSD;
       const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newEquity = newBalance + unrealizedPnl;
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + unrealizedPnl,
+        equity: newEquity,
         unrealizedPnl: unrealizedPnl,
       });
 
@@ -532,10 +532,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       const newBalance = balance - collateral;
       const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newEquity = newBalance + unrealizedPnl;
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + unrealizedPnl,
+        equity: newEquity,
         unrealizedPnl: unrealizedPnl,
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
@@ -597,10 +598,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
       const newBalance = balance - collateral;
       const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newEquity = newBalance + unrealizedPnl;
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + unrealizedPnl,
+        equity: newEquity,
         unrealizedPnl: unrealizedPnl,
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
@@ -1304,5 +1306,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     
