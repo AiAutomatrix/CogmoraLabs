@@ -2,7 +2,7 @@
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
-import * * as logger from "firebase-functions/logger";
+import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
