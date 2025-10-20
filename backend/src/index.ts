@@ -1,3 +1,4 @@
+
 "use server";
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
@@ -110,12 +111,11 @@ export const watchlistScraperScheduler = onSchedule({
 
 
 /**
- * Handles the transactional process of closing a single trade position.
- * Calculates P&L, updates balance, deletes the open position, and updates the trade history.
+ * Handles the transactional process of closing a single trade position and updating its history.
  */
-export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string, positionId: string}>) => {
+export const finalizeTradeHistory = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string, positionId: string}>) => {
   // We only care about updates where a position is marked for closing.
-  if (!event.data || !event.data.before || !event.data.after) {
+  if (!event.data?.before || !event.data.after) {
     return;
   }
   const dataBefore = event.data.before.data();
@@ -126,7 +126,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   }
 
   const {userId, positionId} = event.params;
-  logger.info(`Closing position ${positionId} for user ${userId}.`);
+  logger.info(`Finalizing history for position ${positionId} for user ${userId}.`);
 
   const positionRef = event.data.after.ref;
   const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
@@ -171,10 +171,10 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         transaction.update(historyDocRef, {status: "closed", pnl});
       }
 
-      logger.info(`Successfully closed position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
+      logger.info(`Successfully finalized trade history for position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
     });
   } catch (error) {
-    logger.error(`Transaction failed for closing position ${positionId}:`, error);
+    logger.error(`Transaction failed for finalizing history for position ${positionId}:`, error);
     // Revert status to 'open' on failure to allow for retry.
     await positionRef.update({"details.status": "open"});
   }
@@ -249,3 +249,5 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
+
+    
