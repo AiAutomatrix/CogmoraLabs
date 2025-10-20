@@ -338,101 +338,73 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
+    
+    const batch = db.batch();
+    let writes = 0;
 
-    // --- Block 1: Handle SL/TP on Open Positions and update P&L ---
     try {
+        // Check for open positions to hit SL/TP and update P&L
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
-        
-        if (!positionsSnapshot.empty) {
-            const updateBatch = db.batch();
-            let hasUpdates = false;
+        positionsSnapshot.forEach((doc) => {
+            const pos = doc.data() as OpenPosition;
+            if (pos.details?.status === 'closing') return;
 
-            positionsSnapshot.forEach((doc) => {
-                const pos = doc.data() as OpenPosition;
-                
-                // Only process open positions
-                if (pos.details?.status === 'closing') return;
+            const isLong = pos.side === 'long' || pos.side === 'buy';
+            const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+            const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+            
+            const unrealizedPnl = (price - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
 
-                const isLong = pos.side === 'long' || pos.side === 'buy';
-                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
-
-                if (slHit || tpHit) {
-                    console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
-                    updateBatch.update(doc.ref, { 'details.status': 'closing' });
-                    hasUpdates = true;
-                } else {
-                    // If not closing, update P&L and currentPrice
-                    const unrealizedPnl = (price - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
-                    updateBatch.update(doc.ref, { currentPrice: price, unrealizedPnl: unrealizedPnl });
-                    hasUpdates = true;
-                }
-            });
-
-            if (hasUpdates) {
-                await updateBatch.commit();
+            if (slHit || tpHit) {
+                console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
+                // IMPORTANT: Write the final price and PNL before marking for closure
+                batch.update(doc.ref, { 'details.status': 'closing', currentPrice: price, unrealizedPnl: unrealizedPnl });
+                writes++;
+            } else {
+                 // For all other open positions, just update their price and PNL
+                batch.update(doc.ref, { currentPrice: price, unrealizedPnl: unrealizedPnl });
+                writes++;
             }
-        }
-    } catch (e) {
-        console.error(`[WORKER_ERROR] Failed to process updates for symbol ${symbol}:`, e);
-    }
+        });
 
-    // --- Block 2: Handle Trade Trigger Executions ---
-    try {
-        const triggersQuery = db.collectionGroup('tradeTriggers')
-            .where('symbol', '==', symbol)
-            .where('details.status', '==', 'active');
+        // Check for active trade triggers
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
+        triggersSnapshot.forEach((doc) => {
+            const trigger = doc.data() as TradeTrigger;
+            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
-        if (!triggersSnapshot.empty) {
-            for (const doc of triggersSnapshot.docs) {
-                const trigger = doc.data() as TradeTrigger;
-                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-                if (conditionMet) {
-                    console.log(`[WORKER_ACTION] Firing trigger ${doc.id} for ${symbol}. Starting transaction...`);
-                    try {
-                        await db.runTransaction(async (transaction) => {
-                            const userContextRef = doc.ref.parent.parent!;
-                            if (!userContextRef) throw new Error("Could not determine user context from trigger ref.");
-                            
-                            const userContextSnap = await transaction.get(userContextRef);
-                            if (!userContextSnap.exists) throw new Error("User context not found during trigger execution.");
-                            
-                            if (trigger.type === 'spot') {
-                                await executeSpotBuy(transaction, trigger, price, userContextRef, userContextSnap.data()!);
-                            } else { // futures
-                                await executeFuturesTrade(transaction, trigger, price, userContextRef, userContextSnap.data()!);
-                            }
-                            
-                            transaction.delete(doc.ref); // Delete the trigger as part of the transaction
-                        });
-                        console.log(`[EXECUTION_SUCCESS] Transaction for trigger ${doc.id} completed.`);
-
-                        if (trigger.cancelOthers) {
-                            const cancellationBatch = db.batch();
-                            const otherTriggersQuery = doc.ref.parent.where('symbol', '==', trigger.symbol);
-                            const otherTriggersSnapshot = await otherTriggersQuery.get();
-                            otherTriggersSnapshot.forEach(otherDoc => {
-                                if(otherDoc.id !== doc.id) {
-                                    console.log(`[WORKER_ACTION] Cancelling other trigger ${otherDoc.id} for symbol ${trigger.symbol}`);
-                                    cancellationBatch.delete(otherDoc.ref);
-                                }
-                            });
-                            await cancellationBatch.commit();
-                        }
-
-                    } catch (error) {
-                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, error);
-                        // Optionally delete the failed trigger to prevent retries, or add error handling logic
-                        await doc.ref.delete();
+            if (conditionMet) {
+                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                // The actual execution is now handled in a transaction below
+                // We just mark for deletion here
+                batch.delete(doc.ref); 
+                writes++;
+                
+                // We need to run the execution logic in a transaction
+                // This is a simplified version, ideally this would be a separate, robust function call
+                db.runTransaction(async (transaction) => {
+                    const userContextRef = doc.ref.parent.parent!;
+                    const userContextSnap = await transaction.get(userContextRef);
+                    if (!userContextSnap.exists) throw new Error("User context not found during trigger execution.");
+                    
+                    if (trigger.type === 'spot') {
+                        await executeSpotBuy(transaction, trigger, price, userContextRef, userContextSnap.data()!);
+                    } else { // futures
+                        await executeFuturesTrade(transaction, trigger, price, userContextRef, userContextSnap.data()!);
                     }
-                }
+                }).catch(err => {
+                    console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, err);
+                });
             }
+        });
+
+        if (writes > 0) {
+            await batch.commit();
         }
-    } catch (e) {
-         console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
+    } catch (err) {
+        console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
     }
 }
 

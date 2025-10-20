@@ -637,17 +637,76 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
-  const closePosition = useCallback((positionId: string) => {
-    const pos = openPositions.find(p => p.id === positionId);
-    if (!pos) return;
-  
-    saveSubcollectionDoc('openPositions', positionId, { details: { ...pos.details, status: 'closing' } });
+  const closePosition = useCallback(async (positionId: string) => {
+    if (!firestore || !userContextDocRef) return;
     
-    toast({
-        title: "Position Closing",
-        description: `${pos.symbolName} position is being processed for closure.`
-    });
-  }, [openPositions, toast, saveSubcollectionDoc]);
+    const pos = openPositions.find(p => p.id === positionId);
+    if (!pos) {
+      toast({ title: "Error", description: "Position not found.", variant: "destructive" });
+      return;
+    }
+  
+    try {
+      let pnl = 0;
+      let collateralToReturn = 0;
+  
+      if (pos.positionType === 'spot') {
+        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        collateralToReturn = pos.size * pos.averageEntryPrice;
+      } else { // Futures
+        const contractValue = pos.size * pos.averageEntryPrice;
+        collateralToReturn = contractValue / (pos.leverage || 1);
+        if (pos.side === "long") {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        } else { // short
+          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+        }
+      }
+      
+      const newBalance = balance + collateralToReturn + pnl;
+  
+      const batch = writeBatch(firestore);
+  
+      // 1. Update main context balance
+      batch.update(userContextDocRef, { balance: newBalance });
+  
+      // 2. Create history record
+      const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
+      const historyRecord = {
+        positionId: pos.id,
+        positionType: pos.positionType,
+        symbol: pos.symbol,
+        symbolName: pos.symbolName,
+        size: pos.size,
+        price: pos.currentPrice, // Use final price
+        side: pos.side === 'buy' || pos.side === 'long' ? 'sell' : 'buy',
+        leverage: pos.leverage || null,
+        timestamp: Date.now(),
+        status: 'closed',
+        pnl: pnl,
+      };
+      batch.set(historyRef, historyRecord);
+  
+      // 3. Delete the open position
+      const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+      batch.delete(positionRef);
+  
+      await batch.commit();
+  
+      toast({
+        title: "Position Closed",
+        description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
+      });
+  
+    } catch (error) {
+      console.error("Failed to manually close position:", error);
+      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: doc(userContextDocRef, 'openPositions', positionId).path,
+        operation: 'write',
+      }));
+    }
+  }, [firestore, userContextDocRef, openPositions, balance, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -670,14 +729,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setOpenPositions(prev =>
           prev.map(p => {
               if (p.symbol === symbol) {
-                  if (p.details?.status !== 'closing') {
-                      if (p.details?.stopLoss && ((p.side === 'long' || p.side === 'buy') ? newPrice! <= p.details.stopLoss : newPrice! >= p.details.stopLoss)) {
-                          positionsToCloseIds.current.add(p.id);
-                      } else if (p.details?.takeProfit && ((p.side === 'long' || p.side === 'buy') ? newPrice! >= p.details.takeProfit : newPrice! <= p.details.takeProfit)) {
-                          positionsToCloseIds.current.add(p.id);
-                      }
-                  }
-
+                  // The backend worker now handles SL/TP detection.
+                  // This client-side logic is now just for UI updates.
                   return { 
                       ...p, 
                       currentPrice: newPrice!,
@@ -728,15 +781,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       });
     }
 
-    if (positionsToCloseIds.current.size > 0) {
-      const positionsToActOn = Array.from(positionsToCloseIds.current);
-      positionsToCloseIds.current.clear();
-
-      positionsToActOn.forEach(positionId => {
-        closePosition(positionId);
-      });
-    }
-    
     if (triggeredAlerts.current.size > 0) {
         const alertsToFire = Array.from(triggeredAlerts.current);
         triggeredAlerts.current.clear();
@@ -1010,7 +1054,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       statusSetter: React.Dispatch<React.SetStateAction<string>>,
       pingRef: React.MutableRefObject<NodeJS.Timeout | null>,
       reconnectTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>,
-      reconnectAttemptsRef: React.MutableRefObject<number>,
+      reconnectAttemptsRef: React.MutableRefObject<number>>,
       tokenFetcher: () => Promise<any>,
       urlBuilder: (token: string, instance: any) => string,
       onMessageHandler: (event: MessageEvent) => void,
