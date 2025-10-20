@@ -201,6 +201,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         } else {
             const initialContext: FirestorePaperTradingContext = {
                 balance: INITIAL_BALANCE,
+                equity: INITIAL_BALANCE,
+                unrealizedPnl: 0,
+                realizedPnl: 0,
+                winRate: 0,
+                wonTrades: 0,
+                lostTrades: 0,
                 automationConfig: INITIAL_AUTOMATION_CONFIG,
                 aiSettings: INITIAL_AI_SETTINGS,
                 lastAiActionPlan: null,
@@ -227,65 +233,60 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     );
     unsubscribers.push(unsubContext);
 
-    // Generic function to create listeners for subcollections
-    const createSubcollectionListener = <T extends { id?: string }>(
-      collectionName: string,
-      setState: React.Dispatch<React.SetStateAction<T[]>>
-    ) => {
-      const collectionRef = collection(userContextDocRef, collectionName);
-      const unsub = onSnapshot(
-        collectionRef,
-        (snapshot) => {
-          const items = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            // Special handling for watchlist where id is the symbol
-            if (collectionName === 'watchlist') {
-                return { ...data, symbol: doc.id } as T;
-            }
-            return { ...data, id: doc.id } as T;
-          });
-          setState(items);
-        },
-        (error) => {
-          console.error(`Error listening to ${collectionName}:`, error);
-          errorEmitter.emit(
-            'permission-error',
-            new FirestorePermissionError({
-              path: collectionRef.path,
-              operation: 'list',
-            })
-          );
-        }
-      );
-      unsubscribers.push(unsub);
-    };
+    // Specific listeners for each subcollection
+    const unsubOpenPositions = onSnapshot(collection(userContextDocRef, 'openPositions'), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({
+            ...(doc.data() as OpenPosition),
+            id: doc.id,
+            currentPrice: doc.data().averageEntryPrice, // Initialize current price to entry price
+            unrealizedPnl: 0, // Initialize P&L to 0
+        }));
+        setOpenPositions(items);
+    }, (error) => {
+        console.error("Error listening to openPositions:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'openPositions').path, operation: 'list' }));
+    });
+    unsubscribers.push(unsubOpenPositions);
 
-    const createRecordListener = <T,>(collectionName: string, setState: React.Dispatch<React.SetStateAction<Record<string, T>>>) => {
-        const collectionRef = collection(userContextDocRef, collectionName);
-        const unsub = onSnapshot(collectionRef,
-          (snapshot) => {
-            const items: Record<string, T> = {};
-            snapshot.docs.forEach(doc => {
-              items[doc.id] = doc.data() as T;
-            });
-            setState(items);
-          },
-          (error) => {
-            console.error(`Error listening to ${collectionName}:`, error);
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: collectionRef.path,
-              operation: 'list',
-            }));
-          }
-        );
-        unsubscribers.push(unsub);
-    };
+    const unsubTradeHistory = onSnapshot(collection(userContextDocRef, 'tradeHistory'), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...(doc.data() as PaperTrade), id: doc.id }));
+        setTradeHistory(items);
+    }, (error) => {
+        console.error("Error listening to tradeHistory:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'tradeHistory').path, operation: 'list' }));
+    });
+    unsubscribers.push(unsubTradeHistory);
+    
+    const unsubWatchlist = onSnapshot(collection(userContextDocRef, 'watchlist'), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...(doc.data() as WatchlistItem), symbol: doc.id }));
+        setWatchlist(items);
+    }, (error) => {
+        console.error("Error listening to watchlist:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'watchlist').path, operation: 'list' }));
+    });
+    unsubscribers.push(unsubWatchlist);
+    
+    const unsubTradeTriggers = onSnapshot(collection(userContextDocRef, 'tradeTriggers'), (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ ...(doc.data() as TradeTrigger), id: doc.id }));
+        setTradeTriggers(items);
+    }, (error) => {
+        console.error("Error listening to tradeTriggers:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'tradeTriggers').path, operation: 'list' }));
+    });
+    unsubscribers.push(unsubTradeTriggers);
 
-    createSubcollectionListener<OpenPosition>('openPositions', setOpenPositions);
-    createSubcollectionListener<PaperTrade>('tradeHistory', setTradeHistory);
-    createSubcollectionListener<WatchlistItem>('watchlist', setWatchlist);
-    createSubcollectionListener<TradeTrigger>('tradeTriggers', setTradeTriggers);
-    createRecordListener<PriceAlert>('priceAlerts', setPriceAlerts);
+    const unsubPriceAlerts = onSnapshot(collection(userContextDocRef, 'priceAlerts'), (snapshot) => {
+        const items: Record<string, PriceAlert> = {};
+        snapshot.docs.forEach(doc => {
+            items[doc.id] = doc.data() as PriceAlert;
+        });
+        setPriceAlerts(items);
+    }, (error) => {
+        console.error("Error listening to priceAlerts:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'priceAlerts').path, operation: 'list' }));
+    });
+    unsubscribers.push(unsubPriceAlerts);
+
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
@@ -344,8 +345,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       .filter((t) => t.status === "closed")
       .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
 
-    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl !== null && t.pnl > 0).length;
-    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl !== null && t.pnl <= 0).length;
+    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
+    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
@@ -702,12 +703,23 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const remainingPositions = openPositions.filter(p => p.id !== positionId);
       const newUnrealizedPnl = remainingPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       const newEquity = newBalance + newUnrealizedPnl;
+      
+      const newRealizedPnl = accountMetrics.realizedPnl + pnl;
+      const newWonTrades = pnl > 0 ? accountMetrics.wonTrades + 1 : accountMetrics.wonTrades;
+      const newLostTrades = pnl <= 0 ? accountMetrics.lostTrades + 1 : accountMetrics.lostTrades;
+      const totalClosed = newWonTrades + newLostTrades;
+      const newWinRate = totalClosed > 0 ? (newWonTrades / totalClosed) * 100 : 0;
 
       const batch = writeBatch(firestore);
 
       batch.update(userContextDocRef, {
         balance: newBalance,
         equity: newEquity,
+        unrealizedPnl: newUnrealizedPnl,
+        realizedPnl: newRealizedPnl,
+        winRate: newWinRate,
+        wonTrades: newWonTrades,
+        lostTrades: newLostTrades,
       });
 
       const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
@@ -746,7 +758,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         })
       );
     }
-  }, [firestore, userContextDocRef, openPositions, balance, toast, accountMetrics]);
+  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -1004,27 +1016,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         let orderIndex = 0;
         config.rules.forEach(rule => {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
-            let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
-
+            
             if (rule.source === 'spot') {
                 sourceData = allSpotTickers;
-                sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+                const sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+                sourceData.sort((a, b) => parseFloat(b[sortKey as keyof typeof b] as string) - parseFloat(a[sortKey as keyof typeof a] as string));
             } else {
                 sourceData = futuresContracts;
-                sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+                const sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+                sourceData.sort((a,b) => (b[sortKey as keyof typeof b] as number) - (a[sortKey as keyof typeof a] as number));
             }
-
-            const sorted = [...sourceData].sort((a, b) => {
-                const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
-                const valB = parseFloat(b[sortKey as keyof b] as string) || 0;
-                return valB - valA;
-            });
 
             let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
             if (rule.criteria.startsWith('top')) {
-                selected = sorted.slice(0, rule.count);
+                selected = sourceData.slice(0, rule.count);
             } else { // bottom
-                selected = sorted.slice(-rule.count).reverse();
+                selected = sourceData.slice(-rule.count).reverse();
             }
 
             selected.forEach(item => {

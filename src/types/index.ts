@@ -16,6 +16,12 @@ export type UserProfile = z.infer<typeof UserProfileSchema>;
 
 export const FirestorePaperTradingContextSchema = z.object({
   balance: z.number().default(100000),
+  equity: z.number().optional(),
+  unrealizedPnl: z.number().optional(),
+  realizedPnl: z.number().optional(),
+  winRate: z.number().optional(),
+  wonTrades: z.number().optional(),
+  lostTrades: z.number().optional(),
   automationConfig: z.any(), // Keeping it simple for now
   aiSettings: z.any(),
   lastAiActionPlan: z.any().nullable(),
@@ -378,7 +384,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
+export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -634,5 +640,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
