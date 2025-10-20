@@ -22,15 +22,16 @@ const db = admin.firestore();
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string; positionId: string;}>) => {
   const {userId, positionId} = event.params;
   const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-  const change = event.data; // Store the change data safely.
+
+  // Store the change event safely.
+  const change = event.data;
 
   // --- Step 1: Handle Position Closing Logic ---
-  // This block only runs if a document was UPDATED (not created or deleted).
+  // This block only runs if a document was UPDATED to have the 'closing' status.
   if (change && change.before.exists && change.after.exists) {
     const dataBefore = change.before.data();
     const dataAfter = change.after.data();
 
-    // Condition: A position was just updated to have the 'closing' status.
     if (dataAfter?.details?.status === "closing" && dataBefore?.details?.status !== "closing") {
       logger.info(`Handling closing for position ${positionId} for user ${userId}.`);
       const position = dataAfter;
@@ -78,7 +79,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
           // Perform all writes atomically.
           transaction.update(userContextRef, {balance: newBalance});
           transaction.set(historyRef, closedTrade);
-          transaction.delete(change.after.ref); // This is now safe.
+          transaction.delete(change.after.ref);
         });
         logger.info(`Successfully closed position ${positionId}.`);
         // The transaction triggers this function again (due to delete), which will then run the metric calculation below.
@@ -86,18 +87,16 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
       } catch (error) {
         logger.error(`Transaction failed for closing position ${positionId}:`, error);
         // Revert status to 'open' on failure to allow for retry.
-        await change.after.ref.update({"details.status": "open"}); // This is also safe now.
+        await change.after.ref.update({"details.status": "open"});
         return;
       }
     }
   }
 
   // --- Step 2: Recalculate Aggregate Account Metrics ---
-  // This part runs after any create, update, or delete on openPositions,
-  // or if a tradeHistory document is written.
+  // This part runs after ANY create, update, or delete on openPositions.
   logger.info(`Recalculating aggregate metrics for user: ${userId}`);
   try {
-    // Fetch all necessary data concurrently.
     const [openPositionsSnapshot, tradeHistorySnapshot, userContextSnap] = await Promise.all([
       userContextRef.collection("openPositions").get(),
       userContextRef.collection("tradeHistory").get(),
@@ -145,6 +144,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
       wonTrades,
       lostTrades,
     };
+
     // Use set with merge to create if not exists, or update if it does.
     await userContextRef.set(metrics, {merge: true});
     logger.info(`Successfully updated account metrics for user ${userId}.`);
