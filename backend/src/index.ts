@@ -14,37 +14,29 @@ const db = admin.firestore();
 
 
 /**
- * Recalculates and updates aggregate account metrics whenever openPositions or tradeHistory change.
- * This function acts as the single source of truth for all summary-level account data.
+ * A single, unified function that handles all paper trading events.
+ * It is triggered by any write (create, update, delete) to an open position.
+ * It handles the logic for closing a position and then recalculates all
+ * aggregate account metrics.
  */
-export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{collectionId}/{docId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string, collectionId: string, docId: string}>) => {
-  const {userId, collectionId} = event.params;
+export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string; positionId: string;}>) => {
+  const {userId, positionId} = event.params;
+  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
 
-  // We only care about changes to these two collections for metrics calculation.
-  if (collectionId !== "openPositions" && collectionId !== "tradeHistory") {
-    return;
-  }
-
-  // --- POSITION CLOSING LOGIC ---
-  // This function now ALSO handles the transactional logic of closing a position.
-  // This is critical to ensure balance is updated correctly BEFORE metrics are recalculated.
-  if (collectionId === "openPositions" && event.data?.after.exists) {
+  // --- Step 1: Handle Position Closing Logic (if applicable) ---
+  // This block only runs if a document was updated (not created or deleted).
+  if (event.data && event.data.before.exists && event.data.after.exists) {
     const dataBefore = event.data.before.data();
     const dataAfter = event.data.after.data();
 
-    // Condition to run: a position was just updated to have the 'closing' status.
+    // Condition: A position was just updated to have the 'closing' status.
     if (dataAfter?.details?.status === "closing" && dataBefore?.details?.status !== "closing") {
-      const positionId = event.params.docId;
-      const positionRef = event.data.after.ref;
-      const position = dataAfter;
-
       logger.info(`Handling closing for position ${positionId} for user ${userId}.`);
+      const position = dataAfter;
 
       try {
         await db.runTransaction(async (transaction) => {
-          const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
           const userContextDoc = await transaction.get(userContextRef);
-
           if (!userContextDoc.exists) {
             throw new Error(`User context not found for user ${userId}`);
           }
@@ -77,31 +69,29 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
 
           // Perform all writes atomically.
           transaction.update(userContextRef, {balance: newBalance});
-          transaction.delete(positionRef);
+          transaction.delete(event.data!.after.ref); // It's safe to use '!' here because we are inside the transaction that checked for existence.
           if (!historySnapshot.empty) {
             const historyDocRef = historySnapshot.docs[0].ref;
             transaction.update(historyDocRef, {status: "closed", pnl});
           }
         });
         logger.info(`Successfully closed position ${positionId}.`);
-        // The transaction triggers this function again, which will then run the metric calculation below.
+        // The transaction triggers this function again (due to delete/update), which will then run the metric calculation below.
         // We can safely return here.
         return;
       } catch (error) {
         logger.error(`Transaction failed for closing position ${positionId}:`, error);
         // Revert status to 'open' on failure to allow for retry.
-        await positionRef.update({"details.status": "open"});
+        await event.data!.after.ref.update({"details.status": "open"});
         return; // Stop execution to prevent incorrect metric calculation.
       }
     }
   }
 
-  // --- AGGREGATE METRICS CALCULATION ---
-  // This part runs after a position is closed or any other relevant change.
+  // --- Step 2: Recalculate Aggregate Account Metrics ---
+  // This part runs after any create, update, or delete on openPositions.
   logger.info(`Recalculating aggregate metrics for user: ${userId}`);
   try {
-    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-
     // Fetch all necessary data concurrently.
     const [openPositionsSnapshot, tradeHistorySnapshot, userContextSnap] = await Promise.all([
       userContextRef.collection("openPositions").get(),
@@ -126,7 +116,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     // 2. Calculate Equity.
     const equity = balance + unrealizedPnl;
 
-    // 3. Calculate Realized P&L and Win Rate from all closed trades.
+    // 3. Calculate Realized P&L and Win Rate from all closed trades in history.
     let realizedPnl = 0;
     let wonTrades = 0;
     let lostTrades = 0;
@@ -150,7 +140,8 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
       wonTrades,
       lostTrades,
     };
-    await userContextRef.set(metrics, {merge: true}); // Use set with merge to create if not exists.
+    // Use set with merge to create if not exists, or update if it does.
+    await userContextRef.set(metrics, {merge: true});
     logger.info(`Successfully updated account metrics for user ${userId}.`);
   } catch (error) {
     logger.error(`Error calculating aggregate metrics for user ${userId}:`, error);
