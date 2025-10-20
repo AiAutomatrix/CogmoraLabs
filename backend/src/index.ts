@@ -1,13 +1,10 @@
 
 "use server";
 
-import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
+import type {FirestoreEvent, Change, DocumentSnapshot} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
-import {defineInt} from "firebase-functions/params";
-import type {Change, DocumentSnapshot} from "firebase-functions/v2/firestore";
-import type {FirestoreEvent} from "firebase-functions/v2/native";
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -15,185 +12,97 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
-// Define a runtime option for the scheduler functions
-const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 
 /**
- * Scheduled function that runs every minute to execute due AI agent tasks.
+ * Recalculates and updates aggregate account metrics whenever openPositions or tradeHistory change.
+ * This function acts as the single source of truth for all summary-level account data.
  */
-export const aiAgentScheduler = onSchedule({
-  schedule: "every 1 minutes",
-  maxInstances,
-}, async () => {
-  logger.info("AI Agent Scheduler waking up...");
-  const now = admin.firestore.Timestamp.now();
-  const currentTime = now.toMillis();
-
-  try {
-    const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-      .where("aiSettings.scheduleInterval", ">", 0)
-      .where("aiSettings.nextRun", "<=", currentTime)
-      .get();
-
-    if (aiUsersSnapshot.empty) {
-      logger.info("No due AI agent tasks found.");
-      return;
-    }
-
-    logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
-
-    for (const doc of aiUsersSnapshot.docs) {
-      const userId = doc.ref.parent.parent?.id;
-      const aiSettings = doc.data().aiSettings;
-
-      if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
-        continue;
-      }
-
-      logger.info(`Processing AI task for user: ${userId}`);
-      // In a real implementation, you would invoke the Genkit flow here.
-      // ...
-      const nextRun = currentTime + aiSettings.scheduleInterval;
-      await doc.ref.update({"aiSettings.nextRun": nextRun});
-      logger.info(`AI task for user ${userId} completed. Next run scheduled for ${new Date(nextRun).toISOString()}`);
-    }
-  } catch (error) {
-    logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
-    logger.error("This likely means you are missing a Firestore composite index.");
-  }
-});
-
-
-/**
- * Scheduled function that runs every minute to execute due watchlist scraper tasks.
- */
-export const watchlistScraperScheduler = onSchedule({
-  schedule: "every 1 minutes",
-  maxInstances,
-}, async () => {
-  logger.info("Watchlist Scraper Scheduler waking up...");
-  const now = admin.firestore.Timestamp.now();
-  const currentTime = now.toMillis();
-
-  try {
-    const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
-      .where("automationConfig.updateMode", "==", "auto-refresh")
-      .where("automationConfig.lastRun", "<=", currentTime - 60000) // 1-minute buffer
-      .get();
-
-    if (scraperUsersSnapshot.empty) {
-      logger.info("No due watchlist scraper tasks found.");
-      return;
-    }
-
-    logger.info(`Found ${scraperUsersSnapshot.docs.length} users with due auto-refreshing watchlists.`);
-
-    for (const doc of scraperUsersSnapshot.docs) {
-      const config = doc.data().automationConfig;
-      if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
-        continue;
-      }
-
-      const userId = doc.ref.parent.parent?.id;
-      if (!userId) continue;
-
-      logger.info(`Processing watchlist scraper task for user: ${userId}`);
-      // In a real implementation, you would invoke scraping logic here.
-      // ...
-      await doc.ref.update({"automationConfig.lastRun": currentTime});
-      logger.info(`Watchlist scraper task for user ${userId} completed.`);
-    }
-  } catch (error) {
-    logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
-    logger.error("This likely means you are missing a Firestore composite index.");
-  }
-});
-
-
-/**
- * Handles the transactional process of closing a single trade position and updating its history.
- */
-export const finalizeTradeHistory = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string, positionId: string}>) => {
-  // We only care about updates where a position is marked for closing.
-  if (!event.data?.before || !event.data.after) {
-    return;
-  }
-  const dataBefore = event.data.before.data();
-  const dataAfter = event.data.after.data();
-
-  if (dataAfter?.details?.status !== "closing" || dataBefore?.details?.status === "closing") {
-    return;
-  }
-
-  const {userId, positionId} = event.params;
-  logger.info(`Finalizing history for position ${positionId} for user ${userId}.`);
-
-  const positionRef = event.data.after.ref;
-  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-
-  try {
-    await db.runTransaction(async (transaction) => {
-      const userContextDoc = await transaction.get(userContextRef);
-      if (!userContextDoc.exists) throw new Error("User context not found.");
-
-      const position = dataAfter;
-      const currentBalance = userContextDoc.data()?.balance ?? 0;
-      let pnl = 0;
-      let collateralToReturn = 0;
-
-      if (position.positionType === "spot") {
-        pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
-        collateralToReturn = position.size * position.averageEntryPrice;
-      } else { // Futures
-        const contractValue = position.size * position.averageEntryPrice;
-        collateralToReturn = contractValue / position.leverage;
-        if (position.side === "long") {
-          pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
-        } else { // short
-          pnl = (position.averageEntryPrice - position.currentPrice) * position.size;
-        }
-      }
-      const newBalance = currentBalance + collateralToReturn + pnl;
-
-      // Find the corresponding open trade in history
-      const historyQuery = userContextRef.collection("tradeHistory")
-        .where("positionId", "==", positionId)
-        .where("status", "==", "open")
-        .orderBy("timestamp", "desc")
-        .limit(1);
-      const historySnapshot = await transaction.get(historyQuery);
-
-      // Perform all writes in the transaction
-      transaction.update(userContextRef, {balance: newBalance});
-      transaction.delete(positionRef);
-      if (!historySnapshot.empty) {
-        const historyDocRef = historySnapshot.docs[0].ref;
-        transaction.update(historyDocRef, {status: "closed", pnl});
-      }
-
-      logger.info(`Successfully finalized trade history for position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
-    });
-  } catch (error) {
-    logger.error(`Transaction failed for finalizing history for position ${positionId}:`, error);
-    // Revert status to 'open' on failure to allow for retry.
-    await positionRef.update({"details.status": "open"});
-  }
-});
-
-
-/**
- * Recalculates and updates aggregate account metrics based on all open positions and trade history.
- */
-export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{collectionId}/{docId}", async (event) => {
+export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{collectionId}/{docId}", async (event: FirestoreEvent<Change<DocumentSnapshot> | undefined, {userId: string, collectionId: string, docId: string}>) => {
   const {userId, collectionId} = event.params;
+
+  // We only care about changes to these two collections for metrics calculation.
   if (collectionId !== "openPositions" && collectionId !== "tradeHistory") {
     return;
   }
 
-  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-  logger.info(`Recalculating account metrics for user: ${userId}`);
+  // --- POSITION CLOSING LOGIC ---
+  // This function now ALSO handles the transactional logic of closing a position.
+  // This is critical to ensure balance is updated correctly BEFORE metrics are recalculated.
+  if (collectionId === "openPositions" && event.data?.after.exists) {
+    const dataBefore = event.data.before.data();
+    const dataAfter = event.data.after.data();
 
+    // Condition to run: a position was just updated to have the 'closing' status.
+    if (dataAfter?.details?.status === "closing" && dataBefore?.details?.status !== "closing") {
+      const positionId = event.params.docId;
+      const positionRef = event.data.after.ref;
+      const position = dataAfter;
+
+      logger.info(`Handling closing for position ${positionId} for user ${userId}.`);
+
+      try {
+        await db.runTransaction(async (transaction) => {
+          const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+          const userContextDoc = await transaction.get(userContextRef);
+
+          if (!userContextDoc.exists) {
+            throw new Error(`User context not found for user ${userId}`);
+          }
+
+          const currentBalance = userContextDoc.data()?.balance ?? 0;
+          let pnl = 0;
+          let collateralToReturn = 0;
+
+          if (position.positionType === "spot") {
+            pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
+            collateralToReturn = position.size * position.averageEntryPrice;
+          } else { // Futures
+            const contractValue = position.size * position.averageEntryPrice;
+            collateralToReturn = contractValue / position.leverage;
+            pnl = position.side === "long" ?
+              (position.currentPrice - position.averageEntryPrice) * position.size :
+              (position.averageEntryPrice - position.currentPrice) * position.size;
+          }
+
+          const newBalance = currentBalance + collateralToReturn + pnl;
+
+          // Find the related 'open' trade history record to update it.
+          const historyQuery = userContextRef.collection("tradeHistory")
+            .where("positionId", "==", positionId)
+            .where("status", "==", "open")
+            .orderBy("timestamp", "desc")
+            .limit(1);
+
+          const historySnapshot = await transaction.get(historyQuery);
+
+          // Perform all writes atomically.
+          transaction.update(userContextRef, {balance: newBalance});
+          transaction.delete(positionRef);
+          if (!historySnapshot.empty) {
+            const historyDocRef = historySnapshot.docs[0].ref;
+            transaction.update(historyDocRef, {status: "closed", pnl});
+          }
+        });
+        logger.info(`Successfully closed position ${positionId}.`);
+        // The transaction triggers this function again, which will then run the metric calculation below.
+        // We can safely return here.
+        return;
+      } catch (error) {
+        logger.error(`Transaction failed for closing position ${positionId}:`, error);
+        // Revert status to 'open' on failure to allow for retry.
+        await positionRef.update({"details.status": "open"});
+        return; // Stop execution to prevent incorrect metric calculation.
+      }
+    }
+  }
+
+  // --- AGGREGATE METRICS CALCULATION ---
+  // This part runs after a position is closed or any other relevant change.
+  logger.info(`Recalculating aggregate metrics for user: ${userId}`);
   try {
+    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+
+    // Fetch all necessary data concurrently.
     const [openPositionsSnapshot, tradeHistorySnapshot, userContextSnap] = await Promise.all([
       userContextRef.collection("openPositions").get(),
       userContextRef.collection("tradeHistory").get(),
@@ -202,27 +111,22 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
 
     let balance = 0;
     if (!userContextSnap.exists) {
-      logger.warn(`User context for ${userId} not found. Creating with default metrics.`);
-      const initialMetrics = {
-        balance: 100000, equity: 100000, unrealizedPnl: 0, realizedPnl: 0,
-        winRate: 0, wonTrades: 0, lostTrades: 0,
-      };
-      await userContextRef.set(initialMetrics, {merge: true});
-      balance = initialMetrics.balance;
+      logger.warn(`User context for ${userId} not found. Creating with default balance.`);
+      balance = 100000;
     } else {
       balance = userContextSnap.data()?.balance ?? 0;
     }
 
-    // Calculate Unrealized P&L from open positions
+    // 1. Calculate Unrealized P&L from all open positions.
     let unrealizedPnl = 0;
     openPositionsSnapshot.forEach((doc) => {
       unrealizedPnl += doc.data().unrealizedPnl || 0;
     });
 
-    // Calculate Equity
+    // 2. Calculate Equity.
     const equity = balance + unrealizedPnl;
 
-    // Calculate Realized P&L and Win Rate from trade history
+    // 3. Calculate Realized P&L and Win Rate from all closed trades.
     let realizedPnl = 0;
     let wonTrades = 0;
     let lostTrades = 0;
@@ -230,24 +134,25 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
       const trade = doc.data();
       if (trade.status === "closed" && typeof trade.pnl === "number") {
         realizedPnl += trade.pnl;
-        if (trade.pnl > 0) {
-          wonTrades++;
-        } else {
-          lostTrades++;
-        }
+        if (trade.pnl > 0) wonTrades++;
+        else lostTrades++;
       }
     });
-
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
-    // Update the main context document with all aggregate metrics
-    const metrics = {equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades};
-    await userContextRef.update(metrics);
+    // 4. Atomically update the main user document with all calculated metrics.
+    const metrics = {
+      equity,
+      unrealizedPnl,
+      realizedPnl,
+      winRate,
+      wonTrades,
+      lostTrades,
+    };
+    await userContextRef.set(metrics, {merge: true}); // Use set with merge to create if not exists.
     logger.info(`Successfully updated account metrics for user ${userId}.`);
   } catch (error) {
-    logger.error(`Error calculating metrics for user ${userId}:`, error);
+    logger.error(`Error calculating aggregate metrics for user ${userId}:`, error);
   }
 });
-
-    
