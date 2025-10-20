@@ -188,7 +188,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
       } catch (error) {
         logger.error(`Transaction failed for closing position ${positionId}:`, error);
         // Revert status to 'open' on failure to allow for retry
-        if (event.data.after.ref) {
+        if (event.data?.after.ref) {
             await event.data.after.ref.update({"details.status": "open"});
         }
       }
