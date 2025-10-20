@@ -1,4 +1,3 @@
-
 "use client";
 import React, {
   createContext,
@@ -233,66 +232,68 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     );
     unsubscribers.push(unsubContext);
 
-    // Specific listener for openPositions
-    const unsubOpenPositions = onSnapshot(collection(userContextDocRef, 'openPositions'), (snapshot) => {
-        const items = snapshot.docs.map(doc => {
-            const data = doc.data() as Omit<OpenPosition, 'id'>;
-            return {
-                ...data,
-                id: doc.id,
-                currentPrice: data.averageEntryPrice, // Initialize to entry price
-                unrealizedPnl: 0, // PNL is 0 at entry
-            } as OpenPosition;
-        });
-        setOpenPositions(items);
-    }, (error) => {
-        console.error("Error listening to openPositions:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'openPositions').path, operation: 'list' }));
-    });
-    unsubscribers.push(unsubOpenPositions);
+    const createCollectionListener = <T>(
+      collectionName: string,
+      setState: React.Dispatch<React.SetStateAction<any[]>>
+    ) => {
+        const collectionRef = collection(userContextDocRef, collectionName);
+        const unsub = onSnapshot(collectionRef,
+            (snapshot) => {
+                const items = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    const idKey = collectionName === 'watchlist' ? 'symbol' : 'id';
+                    return {
+                        ...data,
+                        [idKey]: doc.id,
+                        // Correctly initialize open positions for seamless loading
+                        ...(collectionName === 'openPositions' && {
+                            currentPrice: data.averageEntryPrice,
+                            unrealizedPnl: 0,
+                        }),
+                    };
+                });
+                setState(items as T[]);
+            },
+            (error) => {
+                console.error(`Error listening to ${collectionName}:`, error);
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                    path: collectionRef.path,
+                    operation: 'list',
+                }));
+            }
+        );
+        unsubscribers.push(unsub);
+    };
 
-    // Specific listener for tradeHistory
-    const unsubTradeHistory = onSnapshot(collection(userContextDocRef, 'tradeHistory'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...(doc.data() as PaperTrade), id: doc.id }));
-        setTradeHistory(items);
-    }, (error) => {
-        console.error("Error listening to tradeHistory:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'tradeHistory').path, operation: 'list' }));
-    });
-    unsubscribers.push(unsubTradeHistory);
+    const createRecordListener = <T,>(
+        collectionName: string,
+        setState: React.Dispatch<React.SetStateAction<Record<string, T>>>
+    ) => {
+        const collectionRef = collection(userContextDocRef, collectionName);
+        const unsub = onSnapshot(collectionRef,
+            (snapshot) => {
+                const items: Record<string, T> = {};
+                snapshot.docs.forEach(doc => {
+                    items[doc.id] = doc.data() as T;
+                });
+                setState(items);
+            },
+            (error) => {
+                console.error(`Error listening to ${collectionName}:`, error);
+                errorEmitter.emit('permission-error', new FirestorePermissionError({
+                    path: collectionRef.path,
+                    operation: 'list',
+                }));
+            }
+        );
+        unsubscribers.push(unsub);
+    };
     
-    // Specific listener for watchlist
-    const unsubWatchlist = onSnapshot(collection(userContextDocRef, 'watchlist'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...(doc.data() as Omit<WatchlistItem, 'symbol'>), symbol: doc.id }));
-        setWatchlist(items);
-    }, (error) => {
-        console.error("Error listening to watchlist:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'watchlist').path, operation: 'list' }));
-    });
-    unsubscribers.push(unsubWatchlist);
-    
-    // Specific listener for tradeTriggers
-    const unsubTradeTriggers = onSnapshot(collection(userContextDocRef, 'tradeTriggers'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...(doc.data() as TradeTrigger), id: doc.id }));
-        setTradeTriggers(items);
-    }, (error) => {
-        console.error("Error listening to tradeTriggers:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'tradeTriggers').path, operation: 'list' }));
-    });
-    unsubscribers.push(unsubTradeTriggers);
-
-    // Specific listener for priceAlerts
-    const unsubPriceAlerts = onSnapshot(collection(userContextDocRef, 'priceAlerts'), (snapshot) => {
-        const items: Record<string, PriceAlert> = {};
-        snapshot.docs.forEach(doc => {
-            items[doc.id] = doc.data() as PriceAlert;
-        });
-        setPriceAlerts(items);
-    }, (error) => {
-        console.error("Error listening to priceAlerts:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: collection(userContextDocRef, 'priceAlerts').path, operation: 'list' }));
-    });
-    unsubscribers.push(unsubPriceAlerts);
+    createCollectionListener<OpenPosition>('openPositions', setOpenPositions);
+    createCollectionListener<PaperTrade>('tradeHistory', setTradeHistory);
+    createCollectionListener<WatchlistItem>('watchlist', setWatchlist);
+    createCollectionListener<TradeTrigger>('tradeTriggers', setTradeTriggers);
+    createRecordListener<PriceAlert>('priceAlerts', setPriceAlerts);
 
 
     return () => {
@@ -348,12 +349,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
     const equityValue = balance + totalUnrealizedPNL;
-    const totalRealizedPNL = tradeHistory
-      .filter((t) => t.status === "closed")
-      .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
+    const closedTrades = tradeHistory.filter((t) => t.status === "closed");
+    const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
 
-    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
-    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== null && t.pnl !== undefined && t.pnl <= 0).length;
+    const wonTrades = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
+    const lostTrades = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl <= 0).length;
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
@@ -690,6 +690,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
+      // --- Start Calculations ---
       let pnl = 0;
       let collateralToReturn = 0;
 
@@ -707,28 +708,33 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       const newBalance = balance + collateralToReturn + pnl;
-      const remainingPositions = openPositions.filter(p => p.id !== positionId);
-      const newUnrealizedPnl = remainingPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
-      const newEquity = newBalance + newUnrealizedPnl;
-      
+
+      // Recalculate aggregate metrics based on the change
       const newRealizedPnl = accountMetrics.realizedPnl + pnl;
       const newWonTrades = pnl > 0 ? accountMetrics.wonTrades + 1 : accountMetrics.wonTrades;
       const newLostTrades = pnl <= 0 ? accountMetrics.lostTrades + 1 : accountMetrics.lostTrades;
-      const totalClosed = newWonTrades + newLostTrades;
-      const newWinRate = totalClosed > 0 ? (newWonTrades / totalClosed) * 100 : 0;
+      const newTotalClosed = newWonTrades + newLostTrades;
+      const newWinRate = newTotalClosed > 0 ? (newWonTrades / newTotalClosed) * 100 : 0;
+
+      // Recalculate unrealized P&L and equity from the *remaining* positions
+      const remainingPositions = openPositions.filter(p => p.id !== positionId);
+      const newUnrealizedPnl = remainingPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newEquity = newBalance + newUnrealizedPnl;
 
       const batch = writeBatch(firestore);
 
+      // 1. Update the main context document with all new metrics
       batch.update(userContextDocRef, {
         balance: newBalance,
         equity: newEquity,
-        unrealizedPnl: newUnrealizedPnl,
         realizedPnl: newRealizedPnl,
+        unrealizedPnl: newUnrealizedPnl,
         winRate: newWinRate,
         wonTrades: newWonTrades,
         lostTrades: newLostTrades,
       });
 
+      // 2. Create the new trade history record
       const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
       const historyRecord: Omit<PaperTrade, 'id'> = {
         positionId: pos.id,
@@ -745,6 +751,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
       batch.set(historyRef, historyRecord);
 
+      // 3. Delete the open position document
       const positionRef = doc(userContextDocRef, 'openPositions', positionId);
       batch.delete(positionRef);
 
@@ -1023,7 +1030,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         let orderIndex = 0;
         config.rules.forEach(rule => {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
-            let sortKey: keyof KucoinTicker | keyof KucoinFuturesContract;
+            let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct' = 'volValue';
 
             if (rule.source === 'spot') {
                 sourceData = allSpotTickers;
@@ -1307,5 +1314,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
