@@ -177,14 +177,14 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         symbolName: position.symbolName,
         size: position.size,
         price: position.currentPrice, // Use currentPrice as the closing price
-        side: position.side === 'buy' || position.side === 'long' ? 'sell' : 'buy', // Record the closing action
+        side: position.side === "buy" || position.side === "long" ? "sell" : "buy", // Record the closing action
         leverage: position.leverage || null,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: "closed",
         pnl: pnl,
       };
       transaction.set(tradeHistoryRef, historyRecord);
-      
+
       // 3. Delete the open position
       transaction.delete(change.after.ref);
 
@@ -196,5 +196,3 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await change.after.ref.update({"details.status": "open"});
   }
 });
-
-    
