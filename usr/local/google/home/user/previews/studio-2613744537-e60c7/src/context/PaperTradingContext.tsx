@@ -232,7 +232,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const collectionRef = collection(userContextDocRef, collectionName);
       const unsub = onSnapshot(collectionRef, 
         (snapshot) => {
-          const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
+          const items = snapshot.docs.map(doc => {
+            const docData = doc.data();
+             // Reset current price and PNL on initial load for open positions
+            if (collectionName === 'openPositions') {
+              return { 
+                ...docData, 
+                id: doc.id,
+                currentPrice: docData.averageEntryPrice, // Start with entry price
+                unrealizedPnl: 0, // Start with 0 PNL
+              } as T;
+            }
+            return { ...docData, id: doc.id } as T
+          });
           setState(items);
         }, 
         (error) => {
@@ -412,7 +424,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
       
       const newBalance = balance - amountUSD;
-      saveDataToFirestore({ balance: newBalance });
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      
+      saveDataToFirestore({ 
+        balance: newBalance,
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
+      });
 
       let positionId = existingPosition?.id;
       if (existingPosition) {
@@ -512,7 +530,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      saveDataToFirestore({ balance: newBalance });
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      
+      saveDataToFirestore({ 
+        balance: newBalance,
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
+      });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
       const newTrade: Omit<PaperTrade, 'id'> = {
@@ -530,7 +554,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
+  }, [balance, openPositions, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
 
   const futuresSell = useCallback((
     symbol: string,
@@ -571,7 +595,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      saveDataToFirestore({ balance: newBalance });
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      
+      saveDataToFirestore({ 
+        balance: newBalance,
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
+      });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
       const newTrade: Omit<PaperTrade, 'id'> = {
@@ -589,7 +619,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
+  }, [balance, openPositions, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
   
   const formatPrice = (price?: number) => {
     if (price === undefined || isNaN(price)) return "N/A";
@@ -639,14 +669,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const closePosition = useCallback(async (positionId: string) => {
     if (!firestore || !userContextDocRef) return;
-  
-    const pos = openPositions.find((p) => p.id === positionId);
+    
+    const pos = openPositions.find(p => p.id === positionId);
     if (!pos) {
-      toast({
-        title: 'Error',
-        description: 'Position not found.',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Position not found.", variant: "destructive" });
       return;
     }
   
@@ -658,18 +684,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (pos.positionType === 'spot') {
         pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
         collateralToReturn = pos.size * pos.averageEntryPrice;
-      } else {
-        // Futures
+      } else { // Futures
         const contractValue = pos.size * pos.averageEntryPrice;
         collateralToReturn = contractValue / (pos.leverage || 1);
-        if (pos.side === 'long') {
+        if (pos.side === "long") {
           pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-        } else {
-          // short
+        } else { // short
           pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
         }
       }
-  
+      
       const newBalance = balance + collateralToReturn + pnl;
   
       // Recalculate aggregate metrics based on the change
@@ -726,11 +750,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       });
     } catch (error) {
       console.error('Failed to manually close position:', error);
-      toast({
-        title: 'Error Closing Position',
-        description: 'Could not update Firestore.',
-        variant: 'destructive',
-      });
+      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
       errorEmitter.emit(
         'permission-error',
         new FirestorePermissionError({
@@ -762,6 +782,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setOpenPositions(prev =>
           prev.map(p => {
               if (p.symbol === symbol) {
+                  // The backend worker now handles SL/TP detection.
+                  // This client-side logic is now just for UI updates.
                   return { 
                       ...p, 
                       currentPrice: newPrice!,
@@ -1085,7 +1107,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       statusSetter: React.Dispatch<React.SetStateAction<string>>,
       pingRef: React.MutableRefObject<NodeJS.Timeout | null>,
       reconnectTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>,
-      reconnectAttemptsRef: React.MutableRefObject<number>,
+      reconnectAttemptsRef: React.MutableRefObject<number>>,
       tokenFetcher: () => Promise<any>,
       urlBuilder: (token: string, instance: any) => string,
       onMessageHandler: (event: MessageEvent) => void,
@@ -1281,3 +1303,6 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
+    
