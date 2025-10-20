@@ -233,14 +233,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     );
     unsubscribers.push(unsubContext);
 
-    // Specific listeners for each subcollection
+    // Specific listener for openPositions
     const unsubOpenPositions = onSnapshot(collection(userContextDocRef, 'openPositions'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({
-            ...(doc.data() as OpenPosition),
-            id: doc.id,
-            currentPrice: doc.data().averageEntryPrice, // Initialize current price to entry price
-            unrealizedPnl: 0, // Initialize P&L to 0
-        }));
+        const items = snapshot.docs.map(doc => {
+            const data = doc.data() as Omit<OpenPosition, 'id'>;
+            return {
+                ...data,
+                id: doc.id,
+                currentPrice: data.averageEntryPrice, // Initialize to entry price
+                unrealizedPnl: 0, // PNL is 0 at entry
+            } as OpenPosition;
+        });
         setOpenPositions(items);
     }, (error) => {
         console.error("Error listening to openPositions:", error);
@@ -248,6 +251,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
     unsubscribers.push(unsubOpenPositions);
 
+    // Specific listener for tradeHistory
     const unsubTradeHistory = onSnapshot(collection(userContextDocRef, 'tradeHistory'), (snapshot) => {
         const items = snapshot.docs.map(doc => ({ ...(doc.data() as PaperTrade), id: doc.id }));
         setTradeHistory(items);
@@ -257,8 +261,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
     unsubscribers.push(unsubTradeHistory);
     
+    // Specific listener for watchlist
     const unsubWatchlist = onSnapshot(collection(userContextDocRef, 'watchlist'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...(doc.data() as WatchlistItem), symbol: doc.id }));
+        const items = snapshot.docs.map(doc => ({ ...(doc.data() as Omit<WatchlistItem, 'symbol'>), symbol: doc.id }));
         setWatchlist(items);
     }, (error) => {
         console.error("Error listening to watchlist:", error);
@@ -266,6 +271,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
     unsubscribers.push(unsubWatchlist);
     
+    // Specific listener for tradeTriggers
     const unsubTradeTriggers = onSnapshot(collection(userContextDocRef, 'tradeTriggers'), (snapshot) => {
         const items = snapshot.docs.map(doc => ({ ...(doc.data() as TradeTrigger), id: doc.id }));
         setTradeTriggers(items);
@@ -275,6 +281,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
     unsubscribers.push(unsubTradeTriggers);
 
+    // Specific listener for priceAlerts
     const unsubPriceAlerts = onSnapshot(collection(userContextDocRef, 'priceAlerts'), (snapshot) => {
         const items: Record<string, PriceAlert> = {};
         snapshot.docs.forEach(doc => {
@@ -345,8 +352,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       .filter((t) => t.status === "closed")
       .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
 
-    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
-    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
+    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
+    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== null && t.pnl !== undefined && t.pnl <= 0).length;
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
@@ -1016,22 +1023,27 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         let orderIndex = 0;
         config.rules.forEach(rule => {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[] = [];
-            
+            let sortKey: keyof KucoinTicker | keyof KucoinFuturesContract;
+
             if (rule.source === 'spot') {
                 sourceData = allSpotTickers;
-                const sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
-                sourceData.sort((a, b) => parseFloat(b[sortKey as keyof typeof b] as string) - parseFloat(a[sortKey as keyof typeof a] as string));
+                sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
             } else {
                 sourceData = futuresContracts;
-                const sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
-                sourceData.sort((a,b) => (b[sortKey as keyof typeof b] as number) - (a[sortKey as keyof typeof a] as number));
+                sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
             }
+
+            const sorted = [...sourceData].sort((a, b) => {
+                const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
+                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+                return valB - valA;
+            });
 
             let selected: (KucoinTicker | KucoinFuturesContract)[] = [];
             if (rule.criteria.startsWith('top')) {
-                selected = sourceData.slice(0, rule.count);
+                selected = sorted.slice(0, rule.count);
             } else { // bottom
-                selected = sourceData.slice(-rule.count).reverse();
+                selected = sorted.slice(-rule.count).reverse();
             }
 
             selected.forEach(item => {
@@ -1295,3 +1307,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
