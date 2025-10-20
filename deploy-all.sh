@@ -11,7 +11,7 @@ echo "🔹 Deploying Cloud Functions and Firestore Rules..."
 firebase deploy --only functions,firestore --project=studio-2613744537-e60c7
 
 # --- 2. Deploy Real-time Worker to Cloud Run ---
-# This reuses the existing deploy.sh logic for the worker.
+# This executes the dedicated script for deploying the worker.
 echo "🔹 Deploying real-time worker to Cloud Run..."
 ./deploy.sh
 

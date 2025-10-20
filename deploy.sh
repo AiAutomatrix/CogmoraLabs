@@ -1,18 +1,28 @@
 #!/bin/bash
-# This script deploys all backend services for the Cogmora Labs application.
-# It stops on any error to prevent partial deployments.
+# This script deploys the real-time worker service to Cloud Run.
+# It stops on any error.
 set -e
 
-echo "🚀 Starting full backend deployment..."
+# Variables
+PROJECT_ID="studio-2613744537-e60c7"
+REGION="us-central1"
+SERVICE_NAME="realtime-worker"
+IMAGE="us-central1-docker.pkg.dev/$PROJECT_ID/docker-repo/$SERVICE_NAME:latest"
+SOURCE_DIR="realtime-worker"
 
-# --- 1. Deploy Cloud Functions & Firestore Rules ---
-# This command deploys both functions and firestore rules defined in firebase.json
-echo "🔹 Deploying Cloud Functions and Firestore Rules..."
-firebase deploy --only functions,firestore --project=studio-2613744537-e60c7
+echo "🔨 Building Docker image for the real-time worker..."
+# Submit the build job to Cloud Build, pointing to the worker's source directory
+gcloud builds submit $SOURCE_DIR --tag $IMAGE --project=$PROJECT_ID
 
-# --- 2. Deploy Real-time Worker to Cloud Run ---
-# This reuses the existing deploy.sh logic for the worker.
-echo "🔹 Deploying real-time worker to Cloud Run..."
-./deploy.sh
+echo "🚀 Deploying worker to Cloud Run..."
+# Deploy the newly built image to the Cloud Run service
+gcloud run deploy $SERVICE_NAME \
+  --image $IMAGE \
+  --platform managed \
+  --region $REGION \
+  --allow-unauthenticated \
+  --port 8080 \
+  --min-instances=1 \
+  --project=$PROJECT_ID
 
-echo "✅ Full backend deployment completed successfully!"
+echo "✅ Real-time worker deployment complete!"
