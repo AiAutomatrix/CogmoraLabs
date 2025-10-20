@@ -187,7 +187,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   }
 });
 
-
 /**
  * Recalculates and updates aggregate account metrics whenever positions or history change.
  */
@@ -207,26 +206,26 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     const openPositionsSnapshot = await userContextRef.collection("openPositions").get();
     const tradeHistorySnapshot = await userContextRef.collection("tradeHistory").get();
     const userContextSnap = await userContextRef.get();
-    
+
     let balance = 0;
-    
+
     // **FIX:** If the main document doesn't exist, create it with a default balance.
     // This prevents a race condition on the very first trade.
     if (!userContextSnap.exists) {
-        logger.warn(`User context for ${userId} not found. Creating it with default metrics.`);
-        const initialMetrics = {
-            balance: 100000,
-            equity: 100000,
-            unrealizedPnl: 0,
-            realizedPnl: 0,
-            winRate: 0,
-            wonTrades: 0,
-            lostTrades: 0,
-        };
-        await userContextRef.set(initialMetrics);
-        balance = initialMetrics.balance;
+      logger.warn(`User context for ${userId} not found. Creating it with default metrics.`);
+      const initialMetrics = {
+        balance: 100000,
+        equity: 100000,
+        unrealizedPnl: 0,
+        realizedPnl: 0,
+        winRate: 0,
+        wonTrades: 0,
+        lostTrades: 0,
+      };
+      await userContextRef.set(initialMetrics);
+      balance = initialMetrics.balance;
     } else {
-        balance = userContextSnap.data()?.balance ?? 0;
+      balance = userContextSnap.data()?.balance ?? 0;
     }
 
 
@@ -234,8 +233,8 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     let unrealizedPnl = 0;
     openPositionsSnapshot.forEach((doc) => {
       const pos = doc.data();
-      const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === "short" ? -1 : 1);
-      unrealizedPnl += pnl;
+      // **FIX:** Use the unrealizedPnl value already calculated and stored on the position document.
+      unrealizedPnl += pos.unrealizedPnl || 0;
     });
 
     // Calculate Equity
