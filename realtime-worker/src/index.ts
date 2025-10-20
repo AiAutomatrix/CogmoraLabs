@@ -71,13 +71,8 @@ class WebSocketManager {
             let price: number | undefined;
 
             if (this.name === 'SPOT') {
-                if (message.topic === '/market/ticker:all') {
-                    symbol = priceData.symbol; // For /market/ticker:all
-                    price = parseFloat(priceData.price);
-                } else { // For /market/snapshot:{symbol}
-                    symbol = message.topic.replace('/market/snapshot:', '');
-                    price = parseFloat(priceData?.data?.lastTradedPrice);
-                }
+                symbol = message.topic.replace('/market/snapshot:', '');
+                price = parseFloat(priceData?.data?.lastTradedPrice);
             } else { // FUTURES
                 symbol = message.topic.replace('/contractMarket/tickerV2:', '');
                 price = priceData.markPrice;
@@ -213,7 +208,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     try {
         // Check for open positions to hit SL/TP
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data();
@@ -230,7 +225,7 @@ async function processPriceUpdate(symbol: string, price: number) {
         });
 
         // Check for active trade triggers
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
             const trigger = doc.data();
