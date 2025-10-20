@@ -8,10 +8,9 @@ import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
-if (admin.apps.length === 0) {
+if (!admin.apps.length) {
   admin.initializeApp();
 }
-
 const db = admin.firestore();
 
 // Define a runtime option for the scheduler functions
@@ -20,139 +19,110 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 /**
  * Scheduled function that runs every minute to execute due AI agent tasks.
  */
-export const aiAgentScheduler = onSchedule(
-    {
-      schedule: "every 1 minutes",
-      maxInstances,
-    },
-    async () => {
-      logger.info("AI Agent Scheduler waking up...");
-      const now = admin.firestore.Timestamp.now();
-      const currentTime = now.toMillis();
+export const aiAgentScheduler = onSchedule({
+  schedule: "every 1 minutes",
+  maxInstances,
+}, async () => {
+  logger.info("AI Agent Scheduler waking up...");
+  const now = admin.firestore.Timestamp.now();
+  const currentTime = now.toMillis();
 
-      try {
-        const aiUsersSnapshot = await db
-            .collectionGroup("paperTradingContext")
-            .where("aiSettings.scheduleInterval", ">", 0)
-            .where("aiSettings.nextRun", "<=", currentTime)
-            .get();
+  try {
+    const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
+      .where("aiSettings.scheduleInterval", ">", 0)
+      .where("aiSettings.nextRun", "<=", currentTime)
+      .get();
 
-        if (aiUsersSnapshot.empty) {
-          logger.info("No due AI agent tasks found.");
-          return;
-        }
-
-        logger.info(
-            `Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`
-        );
-
-        for (const doc of aiUsersSnapshot.docs) {
-          const userId = doc.ref.parent.parent?.id;
-          const aiSettings = doc.data()?.aiSettings;
-
-          if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
-            continue;
-          }
-
-          logger.info(`Processing AI task for user: ${userId}`);
-
-          // In a real implementation, you would invoke the Genkit flow here.
-          // ...
-
-          const nextRun = currentTime + aiSettings.scheduleInterval;
-          await doc.ref.update({"aiSettings.nextRun": nextRun});
-
-          logger.info(
-              `AI task for user ${userId} completed. Next run scheduled for ${new Date(
-                  nextRun
-              ).toISOString()}`
-          );
-        }
-      } catch (error) {
-        logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
-        logger.error(
-            "This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.nextRun, ASCENDING), (aiSettings.scheduleInterval, ASCENDING)]"
-        );
-      }
+    if (aiUsersSnapshot.empty) {
+      logger.info("No due AI agent tasks found.");
+      return;
     }
-);
+
+    logger.info(`Found ${aiUsersSnapshot.docs.length} potential users with due AI tasks.`);
+
+    for (const doc of aiUsersSnapshot.docs) {
+      const userId = doc.ref.parent.parent?.id;
+      const aiSettings = doc.data().aiSettings;
+
+      if (!userId || !aiSettings || !aiSettings.scheduleInterval) {
+        continue;
+      }
+
+      logger.info(`Processing AI task for user: ${userId}`);
+
+      // In a real implementation, you would invoke the Genkit flow here.
+      // ...
+
+      const nextRun = currentTime + aiSettings.scheduleInterval;
+      await doc.ref.update({"aiSettings.nextRun": nextRun});
+
+      logger.info(`AI task for user ${userId} completed. Next run scheduled for ${new Date(nextRun).toISOString()}`);
+    }
+  } catch (error) {
+    logger.error("--- ERROR IN AI AGENT SCHEDULER ---", error);
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.nextRun, ASCENDING), (aiSettings.scheduleInterval, ASCENDING)]");
+  }
+});
+
 
 /**
  * Scheduled function that runs every minute to execute due watchlist scraper tasks.
  */
-export const watchlistScraperScheduler = onSchedule(
-    {
-      schedule: "every 1 minutes",
-      maxInstances,
-    },
-    async () => {
-      logger.info("Watchlist Scraper Scheduler waking up...");
-      const now = admin.firestore.Timestamp.now();
-      const currentTime = now.toMillis();
+export const watchlistScraperScheduler = onSchedule({
+  schedule: "every 1 minutes",
+  maxInstances,
+}, async () => {
+  logger.info("Watchlist Scraper Scheduler waking up...");
+  const now = admin.firestore.Timestamp.now();
+  const currentTime = now.toMillis();
 
-      try {
-        const scraperUsersSnapshot = await db
-            .collectionGroup("paperTradingContext")
-            .where("automationConfig.updateMode", "==", "auto-refresh")
-            .where("automationConfig.lastRun", "<=", currentTime - 60000)
-            .get();
+  try {
+    const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
+      .where("automationConfig.updateMode", "==", "auto-refresh")
+      .where("automationConfig.lastRun", "<=", currentTime - 60000) // 1-minute buffer
+      .get();
 
-        if (scraperUsersSnapshot.empty) {
-          logger.info("No due watchlist scraper tasks found.");
-          return;
-        }
-
-        logger.info(
-            `Found ${scraperUsersSnapshot.docs.length} users with due auto-refreshing watchlists.`
-        );
-
-        for (const doc of scraperUsersSnapshot.docs) {
-          const config = doc.data()?.automationConfig;
-
-          if (
-            !config ||
-          typeof config.lastRun !== "number" ||
-          typeof config.refreshInterval !== "number" ||
-          config.lastRun + config.refreshInterval > currentTime
-          ) {
-            continue;
-          }
-
-          const userId = doc.ref.parent.parent?.id;
-          if (!userId) {
-            continue;
-          }
-
-          logger.info(`Processing watchlist scraper task for user: ${userId}`);
-
-          // In a real implementation, you would invoke scraping logic here.
-          // ...
-
-          await doc.ref.update({"automationConfig.lastRun": currentTime});
-
-          logger.info(`Watchlist scraper task for user ${userId} completed.`);
-        }
-      } catch (error) {
-        logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
-        logger.error(
-            "This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(automationConfig.updateMode, ASCENDING), (automationConfig.lastRun, ASCENDING)]"
-        );
-      }
+    if (scraperUsersSnapshot.empty) {
+      logger.info("No due watchlist scraper tasks found.");
+      return;
     }
-);
+
+    logger.info(`Found ${scraperUsersSnapshot.docs.length} users with due auto-refreshing watchlists.`);
+
+    for (const doc of scraperUsersSnapshot.docs) {
+      const config = doc.data().automationConfig;
+      if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
+        continue;
+      }
+
+      const userId = doc.ref.parent.parent?.id;
+      if (!userId) continue;
+
+      logger.info(`Processing watchlist scraper task for user: ${userId}`);
+
+      // In a real implementation, you would invoke scraping logic here.
+      // ...
+
+      await doc.ref.update({"automationConfig.lastRun": currentTime});
+      logger.info(`Watchlist scraper task for user ${userId} completed.`);
+    }
+  } catch (error) {
+    logger.error("--- ERROR IN WATCHLIST SCRAPER SCHEDULER ---", error);
+    logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(automationConfig.updateMode, ASCENDING), (automationConfig.lastRun, ASCENDING)]");
+  }
+});
 
 /**
  * Firestore trigger to handle the closing of a paper trading position.
  * This function calculates P&L, updates the user's balance, and cleans up records.
  */
 export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event) => {
-  // Exit if there's no data change (e.g. initial write of the function)
   if (!event.data) {
     return;
   }
 
-  const dataBefore = event.data.before.data();
   const dataAfter = event.data.after.data();
+  const dataBefore = event.data.before.data();
 
   // Condition to run: an update where status becomes 'closing'
   if (dataAfter?.details?.status !== "closing" || dataBefore?.details?.status === "closing") {
@@ -192,11 +162,11 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       }
       const newBalance = currentBalance + collateralToReturn + pnl;
 
-      const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
-          .where("positionId", "==", positionId)
-          .where("status", "==", "open")
-          .orderBy("timestamp", "desc")
-          .limit(1);
+      const historyQuery = userContextRef.collection("tradeHistory")
+        .where("positionId", "==", positionId)
+        .where("status", "==", "open")
+        .orderBy("timestamp", "desc")
+        .limit(1);
 
       const historySnapshot = await transaction.get(historyQuery);
 
@@ -204,14 +174,13 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       transaction.delete(positionRef);
       if (!historySnapshot.empty) {
         const historyDocRef = historySnapshot.docs[0].ref;
-        transaction.update(historyDocRef, {status: "closed", pnl: pnl});
+        transaction.update(historyDocRef, {status: "closed", pnl});
       }
 
       logger.info(`Transaction successful for closing position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
-    // Safely revert status to 'open' on failure to allow for retry.
     await positionRef.update({"details.status": "open"});
   }
 });
@@ -223,7 +192,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{collectionId}/{docId}", async (event) => {
   const {userId, collectionId} = event.params;
 
-  // Only trigger for relevant collections to avoid unnecessary runs
   if (collectionId !== "openPositions" && collectionId !== "tradeHistory") {
     return;
   }
@@ -242,8 +210,13 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     if (!userContextSnap.exists) {
       logger.warn(`User context for ${userId} not found during metrics calculation. Creating it.`);
       const initialMetrics = {
-        balance: 100000, equity: 100000, unrealizedPnl: 0, realizedPnl: 0,
-        winRate: 0, wonTrades: 0, lostTrades: 0,
+        balance: 100000,
+        equity: 100000,
+        unrealizedPnl: 0,
+        realizedPnl: 0,
+        winRate: 0,
+        wonTrades: 0,
+        lostTrades: 0,
       };
       await userContextRef.set(initialMetrics, {merge: true});
       balance = initialMetrics.balance;
@@ -258,6 +231,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     });
 
     const equity = balance + unrealizedPnl;
+
     let realizedPnl = 0;
     let wonTrades = 0;
     let lostTrades = 0;
@@ -272,7 +246,6 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
         }
       }
     });
-
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
