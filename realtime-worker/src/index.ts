@@ -339,23 +339,20 @@ async function executeFuturesTrade(transaction: admin.firestore.Transaction, tri
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
 
-    // --- Block 1: Handle SL/TP on Open Positions ---
+    // --- Block 1: Handle SL/TP on Open Positions and update P&L ---
     try {
-        console.log(`[WORKER_INFO] Querying open positions for symbol: ${symbol}`);
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         
         if (!positionsSnapshot.empty) {
-            const sltpBatch = db.batch();
-            let hasSltpUpdates = false;
+            const updateBatch = db.batch();
+            let hasUpdates = false;
 
             positionsSnapshot.forEach((doc) => {
                 const pos = doc.data() as OpenPosition;
                 
-                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
-                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
-                    return; // This is correct, acts as 'continue' in forEach
-                }
+                // Only process open positions
+                if (pos.details?.status === 'closing') return;
 
                 const isLong = pos.side === 'long' || pos.side === 'buy';
                 const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
@@ -363,23 +360,26 @@ async function processPriceUpdate(symbol: string, price: number) {
 
                 if (slHit || tpHit) {
                     console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
-                    sltpBatch.update(doc.ref, { 'details.status': 'closing' });
-                    hasSltpUpdates = true;
+                    updateBatch.update(doc.ref, { 'details.status': 'closing' });
+                    hasUpdates = true;
+                } else {
+                    // If not closing, update P&L and currentPrice
+                    const unrealizedPnl = (price - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
+                    updateBatch.update(doc.ref, { currentPrice: price, unrealizedPnl: unrealizedPnl });
+                    hasUpdates = true;
                 }
             });
 
-            if (hasSltpUpdates) {
-                await sltpBatch.commit();
-                console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
+            if (hasUpdates) {
+                await updateBatch.commit();
             }
         }
     } catch (e) {
-        console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
+        console.error(`[WORKER_ERROR] Failed to process updates for symbol ${symbol}:`, e);
     }
 
     // --- Block 2: Handle Trade Trigger Executions ---
     try {
-        console.log(`[WORKER_INFO] Querying trade triggers for symbol: ${symbol}`);
         const triggersQuery = db.collectionGroup('tradeTriggers')
             .where('symbol', '==', symbol)
             .where('details.status', '==', 'active');
@@ -434,8 +434,6 @@ async function processPriceUpdate(symbol: string, price: number) {
     } catch (e) {
          console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
     }
-    
-    console.log(`[WORKER_INFO] Finished processing price update for ${symbol}.`);
 }
 
 
@@ -449,5 +447,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER] Server listening on port ${PORT}`);
 });
-
-    
