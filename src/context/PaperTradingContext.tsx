@@ -228,21 +228,33 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     unsubscribers.push(unsubContext);
 
     // Generic function to create listeners for subcollections
-    const createSubcollectionListener = <T extends {id?: string}>(collectionName: string, setState: React.Dispatch<React.SetStateAction<T[]>>) => {
+    const createSubcollectionListener = <T extends { id?: string }>(
+      collectionName: string,
+      setState: React.Dispatch<React.SetStateAction<T[]>>
+    ) => {
       const collectionRef = collection(userContextDocRef, collectionName);
-      const unsub = onSnapshot(collectionRef,
+      const unsub = onSnapshot(
+        collectionRef,
         (snapshot) => {
-          const items = snapshot.docs.map(doc => {
-            return { ...doc.data(), id: doc.id } as T;
+          const items = snapshot.docs.map((doc) => {
+            const data = doc.data();
+            // Special handling for watchlist where id is the symbol
+            if (collectionName === 'watchlist') {
+                return { ...data, symbol: doc.id } as T;
+            }
+            return { ...data, id: doc.id } as T;
           });
           setState(items);
         },
         (error) => {
           console.error(`Error listening to ${collectionName}:`, error);
-          errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: collectionRef.path,
-            operation: 'list',
-          }));
+          errorEmitter.emit(
+            'permission-error',
+            new FirestorePermissionError({
+              path: collectionRef.path,
+              operation: 'list',
+            })
+          );
         }
       );
       unsubscribers.push(unsub);
@@ -269,11 +281,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         unsubscribers.push(unsub);
     };
 
-    createSubcollectionListener('openPositions', setOpenPositions);
-    createSubcollectionListener('tradeHistory', setTradeHistory);
-    createSubcollectionListener('watchlist', setWatchlist);
-    createSubcollectionListener('tradeTriggers', setTradeTriggers);
-    createRecordListener('priceAlerts', setPriceAlerts);
+    createSubcollectionListener<OpenPosition>('openPositions', setOpenPositions);
+    createSubcollectionListener<PaperTrade>('tradeHistory', setTradeHistory);
+    createSubcollectionListener<WatchlistItem>('watchlist', setWatchlist);
+    createSubcollectionListener<TradeTrigger>('tradeTriggers', setTradeTriggers);
+    createRecordListener<PriceAlert>('priceAlerts', setPriceAlerts);
 
     return () => {
       unsubscribers.forEach(unsub => unsub());
@@ -332,8 +344,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       .filter((t) => t.status === "closed")
       .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
 
-    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl > 0).length;
-    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl <= 0).length;
+    const wonTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl !== null && t.pnl > 0).length;
+    const lostTrades = tradeHistory.filter(t => t.status === 'closed' && t.pnl !== undefined && t.pnl !== null && t.pnl <= 0).length;
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
@@ -696,7 +708,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       batch.update(userContextDocRef, {
         balance: newBalance,
         equity: newEquity,
-        unrealizedPnl: newUnrealizedPnl,
       });
 
       const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
@@ -735,7 +746,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         })
       );
     }
-  }, [firestore, userContextDocRef, openPositions, balance, toast]);
+  }, [firestore, userContextDocRef, openPositions, balance, toast, accountMetrics]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -1277,5 +1288,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
