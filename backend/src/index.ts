@@ -207,7 +207,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
         const tradeHistorySnapshot = await userContextRef.collection('tradeHistory').get();
         const userContextSnap = await userContextRef.get();
 
-        if (!userContextSnap.exists()) {
+        if (!userContextSnap.exists) {
             logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
             return;
         }
