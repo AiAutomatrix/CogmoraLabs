@@ -1,8 +1,8 @@
 
-'use server';
+"use server";
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
-import {onDocumentWritten, onDocumentDeleted} from "firebase-functions/v2/firestore";
+import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
@@ -122,23 +122,28 @@ export const watchlistScraperScheduler = onSchedule({
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{collectionId}/{docId}", async (event) => {
   const {userId, collectionId} = event.params;
 
+  // Only trigger for relevant collections to avoid unnecessary runs
+  if (collectionId !== "openPositions" && collectionId !== "tradeHistory") {
+    return;
+  }
+
+  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+
   // --- Handle Position Closing Logic ---
   // This block only runs if a document in 'openPositions' was changed.
   if (collectionId === "openPositions" && event.data) {
     const dataBefore = event.data.before.data();
     const dataAfter = event.data.after.data();
+    const positionDocRef = event.data.after.ref;
 
     // Check if a position was just marked for closing.
     if (dataAfter?.details?.status === "closing" && dataBefore?.details?.status !== "closing") {
       const positionId = event.params.docId;
       logger.info(`Detected position closing event for user ${userId}, position ${positionId}.`);
-      
-      const positionDocRef = event.data.after.ref;
       const position = dataAfter;
 
       try {
         await db.runTransaction(async (transaction) => {
-          const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
           const userContextDoc = await transaction.get(userContextRef);
           if (!userContextDoc.exists) {
             throw new Error(`User context document does not exist for user ${userId}!`);
@@ -187,63 +192,58 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     }
   }
 
-
   // --- Recalculate Aggregate Metrics ---
-  // This logic runs for any change in openPositions or tradeHistory, including deletions.
-  if (collectionId === "openPositions" || collectionId === "tradeHistory") {
-      const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-      logger.info(`Metrics calculation triggered for user: ${userId} by change in ${collectionId}`);
-      try {
-        const [openPositionsSnapshot, tradeHistorySnapshot, userContextSnap] = await Promise.all([
-          userContextRef.collection("openPositions").get(),
-          userContextRef.collection("tradeHistory").get(),
-          userContextRef.get(),
-        ]);
+  logger.info(`Metrics calculation triggered for user: ${userId} by change in ${collectionId}`);
+  try {
+    const [openPositionsSnapshot, tradeHistorySnapshot, userContextSnap] = await Promise.all([
+      userContextRef.collection("openPositions").get(),
+      userContextRef.collection("tradeHistory").get(),
+      userContextRef.get(),
+    ]);
 
-        let balance = 0;
-        if (!userContextSnap.exists) {
-          logger.warn(`User context for ${userId} not found during metrics calculation. Creating it.`);
-          const initialMetrics = {
-            balance: 100000, equity: 100000, unrealizedPnl: 0, realizedPnl: 0,
-            winRate: 0, wonTrades: 0, lostTrades: 0,
-          };
-          await userContextRef.set(initialMetrics, {merge: true});
-          balance = initialMetrics.balance;
+    let balance = 0;
+    if (!userContextSnap.exists) {
+      logger.warn(`User context for ${userId} not found during metrics calculation. Creating it.`);
+      const initialMetrics = {
+        balance: 100000, equity: 100000, unrealizedPnl: 0, realizedPnl: 0,
+        winRate: 0, wonTrades: 0, lostTrades: 0,
+      };
+      await userContextRef.set(initialMetrics, {merge: true});
+      balance = initialMetrics.balance;
+    } else {
+      balance = userContextSnap.data()?.balance ?? 0;
+    }
+
+    let unrealizedPnl = 0;
+    openPositionsSnapshot.forEach((doc) => {
+      const pos = doc.data();
+      unrealizedPnl += pos.unrealizedPnl || 0;
+    });
+
+    const equity = balance + unrealizedPnl;
+
+    let realizedPnl = 0;
+    let wonTrades = 0;
+    let lostTrades = 0;
+    tradeHistorySnapshot.forEach((doc) => {
+      const trade = doc.data();
+      if (trade.status === "closed" && trade.pnl !== undefined && trade.pnl !== null) {
+        realizedPnl += trade.pnl;
+        if (trade.pnl > 0) {
+          wonTrades++;
         } else {
-          balance = userContextSnap.data()?.balance ?? 0;
+          lostTrades++;
         }
-
-        let unrealizedPnl = 0;
-        openPositionsSnapshot.forEach((doc) => {
-          const pos = doc.data();
-          unrealizedPnl += pos.unrealizedPnl || 0;
-        });
-
-        const equity = balance + unrealizedPnl;
-
-        let realizedPnl = 0;
-        let wonTrades = 0;
-        let lostTrades = 0;
-        tradeHistorySnapshot.forEach((doc) => {
-          const trade = doc.data();
-          if (trade.status === "closed" && trade.pnl !== undefined && trade.pnl !== null) {
-            realizedPnl += trade.pnl;
-            if (trade.pnl > 0) {
-              wonTrades++;
-            } else {
-              lostTrades++;
-            }
-          }
-        });
-
-        const totalClosedTrades = wonTrades + lostTrades;
-        const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
-
-        const metrics = {equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades};
-        await userContextRef.update(metrics);
-        logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
-      } catch (error) {
-        logger.error(`Error calculating metrics for user ${userId}:`, error);
       }
+    });
+
+    const totalClosedTrades = wonTrades + lostTrades;
+    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
+
+    const metrics = {equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades};
+    await userContextRef.update(metrics);
+    logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
+  } catch (error) {
+    logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
