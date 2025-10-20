@@ -191,74 +191,74 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
  * Recalculates and updates aggregate account metrics whenever positions or history change.
  */
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{subCollection}/{subDocId}", async (event) => {
-    const { userId, subCollection } = event.params;
+  const {userId, subCollection} = event.params;
 
-    // Only trigger for relevant subcollections to avoid unnecessary runs
-    if (subCollection !== 'openPositions' && subCollection !== 'tradeHistory') {
+  // Only trigger for relevant subcollections to avoid unnecessary runs
+  if (subCollection !== "openPositions" && subCollection !== "tradeHistory") {
+    return;
+  }
+
+  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+
+  logger.info(`Metrics calculation triggered for user: ${userId} by change in ${subCollection}`);
+
+  try {
+    const openPositionsSnapshot = await userContextRef.collection("openPositions").get();
+    const tradeHistorySnapshot = await userContextRef.collection("tradeHistory").get();
+    const userContextSnap = await userContextRef.get();
+
+    if (!userContextSnap.exists) {
+      logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
       return;
     }
 
-    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-    
-    logger.info(`Metrics calculation triggered for user: ${userId} by change in ${subCollection}`);
+    const balance = userContextSnap.data()?.balance ?? 0;
 
-    try {
-        const openPositionsSnapshot = await userContextRef.collection('openPositions').get();
-        const tradeHistorySnapshot = await userContextRef.collection('tradeHistory').get();
-        const userContextSnap = await userContextRef.get();
+    // Calculate Unrealized P&L from all open positions
+    let unrealizedPnl = 0;
+    openPositionsSnapshot.forEach((doc) => {
+      const pos = doc.data();
+      const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === "short" ? -1 : 1);
+      unrealizedPnl += pnl;
+    });
 
-        if (!userContextSnap.exists) {
-            logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
-            return;
+    // Calculate Equity
+    const equity = balance + unrealizedPnl;
+
+    // Calculate Realized P&L and Win Rate from all closed trades
+    let realizedPnl = 0;
+    let wonTrades = 0;
+    let lostTrades = 0;
+
+    tradeHistorySnapshot.forEach((doc) => {
+      const trade = doc.data();
+      if (trade.status === "closed" && trade.pnl !== undefined && trade.pnl !== null) {
+        realizedPnl += trade.pnl;
+        if (trade.pnl > 0) {
+          wonTrades++;
+        } else {
+          lostTrades++;
         }
+      }
+    });
 
-        const balance = userContextSnap.data()?.balance ?? 0;
+    const totalClosedTrades = wonTrades + lostTrades;
+    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
-        // Calculate Unrealized P&L from all open positions
-        let unrealizedPnl = 0;
-        openPositionsSnapshot.forEach(doc => {
-            const pos = doc.data();
-            const pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
-            unrealizedPnl += pnl;
-        });
+    // Prepare the final metrics object to update Firestore
+    const metrics = {
+      equity,
+      unrealizedPnl,
+      realizedPnl,
+      winRate,
+      wonTrades,
+      lostTrades,
+    };
 
-        // Calculate Equity
-        const equity = balance + unrealizedPnl;
-
-        // Calculate Realized P&L and Win Rate from all closed trades
-        let realizedPnl = 0;
-        let wonTrades = 0;
-        let lostTrades = 0;
-        
-        tradeHistorySnapshot.forEach(doc => {
-            const trade = doc.data();
-            if (trade.status === 'closed' && trade.pnl !== undefined && trade.pnl !== null) {
-                realizedPnl += trade.pnl;
-                if (trade.pnl > 0) {
-                    wonTrades++;
-                } else {
-                    lostTrades++;
-                }
-            }
-        });
-
-        const totalClosedTrades = wonTrades + lostTrades;
-        const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
-
-        // Prepare the final metrics object to update Firestore
-        const metrics = {
-            equity,
-            unrealizedPnl,
-            realizedPnl,
-            winRate,
-            wonTrades,
-            lostTrades,
-        };
-
-        // Update the main context document with the newly calculated metrics
-        await userContextRef.update(metrics);
-        logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
-    } catch (error) {
-        logger.error(`Error calculating metrics for user ${userId}:`, error);
-    }
+    // Update the main context document with the newly calculated metrics
+    await userContextRef.update(metrics);
+    logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
+  } catch (error) {
+    logger.error(`Error calculating metrics for user ${userId}:`, error);
+  }
 });
