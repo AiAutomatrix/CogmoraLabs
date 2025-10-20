@@ -232,19 +232,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const collectionRef = collection(userContextDocRef, collectionName);
       const unsub = onSnapshot(collectionRef, 
         (snapshot) => {
-          const items = snapshot.docs.map(doc => {
-            const docData = doc.data();
-             // For open positions, initialize with stored data but set PNL to 0.
-             // The WebSocket snapshot will provide the live price almost instantly.
-            if (collectionName === 'openPositions') {
-              return { 
-                ...docData, 
-                id: doc.id,
-                unrealizedPnl: 0,
-              } as T;
-            }
-            return { ...docData, id: doc.id } as T
-          });
+          const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
           setState(items);
         }, 
         (error) => {
@@ -424,13 +412,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
       
       const newBalance = balance - amountUSD;
-      const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
-      const newEquity = newBalance + unrealizedPnl;
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newEquity,
-        unrealizedPnl: unrealizedPnl,
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
       });
 
       let positionId = existingPosition?.id;
@@ -531,13 +518,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
-      const newEquity = newBalance + unrealizedPnl;
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newEquity,
-        unrealizedPnl: unrealizedPnl,
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -597,13 +583,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
-      const newEquity = newBalance + unrealizedPnl;
+      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newEquity,
-        unrealizedPnl: unrealizedPnl,
+        equity: newBalance + existingUnrealizedPnl,
+        unrealizedPnl: existingUnrealizedPnl
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -1306,7 +1291,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
-
-    
