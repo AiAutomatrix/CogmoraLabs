@@ -234,7 +234,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         (snapshot) => {
           const items = snapshot.docs.map(doc => {
             const docData = doc.data();
-             // For open positions, initialize currentPrice with entry price and PNL at 0.
+             // For open positions, initialize currentPrice with entry price.
              // This prevents showing stale data before the websocket connects.
             if (collectionName === 'openPositions') {
               return { 
@@ -425,12 +425,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
       
       const newBalance = balance - amountUSD;
-      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + existingUnrealizedPnl,
-        unrealizedPnl: existingUnrealizedPnl
+        equity: newBalance + unrealizedPnl,
+        unrealizedPnl: unrealizedPnl,
       });
 
       let positionId = existingPosition?.id;
@@ -531,12 +531,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + existingUnrealizedPnl,
-        unrealizedPnl: existingUnrealizedPnl
+        equity: newBalance + unrealizedPnl,
+        unrealizedPnl: unrealizedPnl,
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -596,12 +596,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const unrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + existingUnrealizedPnl,
-        unrealizedPnl: existingUnrealizedPnl
+        equity: newBalance + unrealizedPnl,
+        unrealizedPnl: unrealizedPnl,
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
