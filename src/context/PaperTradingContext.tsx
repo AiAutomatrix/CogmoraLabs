@@ -232,7 +232,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const collectionRef = collection(userContextDocRef, collectionName);
       const unsub = onSnapshot(collectionRef, 
         (snapshot) => {
-          const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
+          const items = snapshot.docs.map(doc => {
+            const docData = doc.data();
+            // This is the key fix. Initialize UI state correctly.
+            if (collectionName === 'openPositions') {
+              return { 
+                ...docData, 
+                id: doc.id,
+                currentPrice: docData.averageEntryPrice, // Start with entry price
+                unrealizedPnl: 0, // Start with 0 PNL
+              } as T;
+            }
+            return { ...docData, id: doc.id } as T
+          });
           setState(items);
         }, 
         (error) => {
@@ -246,7 +258,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       unsubscribers.push(unsub);
     };
 
-    const createRecordListener = <T>(collectionName: string, setState: React.Dispatch<React.SetStateAction<Record<string, T>>>) => {
+    const createRecordListener = <T,>(collectionName: string, setState: React.Dispatch<React.SetStateAction<Record<string, T>>>) => {
         const collectionRef = collection(userContextDocRef, collectionName);
         const unsub = onSnapshot(collectionRef, 
           (snapshot) => {
@@ -412,12 +424,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
       
       const newBalance = balance - amountUSD;
-      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + existingUnrealizedPnl,
-        unrealizedPnl: existingUnrealizedPnl
+        unrealizedPnl: newUnrealizedPnl,
+        equity: newBalance + newUnrealizedPnl,
       });
 
       let positionId = existingPosition?.id;
@@ -518,12 +530,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + existingUnrealizedPnl,
-        unrealizedPnl: existingUnrealizedPnl
+        unrealizedPnl: newUnrealizedPnl,
+        equity: newBalance + newUnrealizedPnl,
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -583,12 +595,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
 
       const newBalance = balance - collateral;
-      const existingUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newUnrealizedPnl = openPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
       
       saveDataToFirestore({ 
         balance: newBalance,
-        equity: newBalance + existingUnrealizedPnl,
-        unrealizedPnl: existingUnrealizedPnl
+        unrealizedPnl: newUnrealizedPnl,
+        equity: newBalance + newUnrealizedPnl,
       });
       saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
 
@@ -1252,7 +1264,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         aiActionLogs,
         lastAiActionPlan,
         isLoaded,
-        equity: equity,
+        equity,
         buy,
         futuresBuy,
         futuresSell,
@@ -1291,3 +1303,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
