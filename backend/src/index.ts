@@ -138,12 +138,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await db.runTransaction(async (transaction) => {
       // --- READS FIRST ---
       const userContextDoc = await transaction.get(userContextRef);
-      const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
-        .where("positionId", "==", positionId)
-        .where("status", "==", "open")
-        .orderBy("timestamp", "desc")
-        .limit(1);
-      const historySnapshot = await transaction.get(historyQuery);
 
       // --- VALIDATION ---
       if (!userContextDoc.exists) {
@@ -170,19 +164,35 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const newBalance = currentBalance + collateralToReturn + pnl;
 
       // --- WRITES LAST ---
-      transaction.update(userContextRef, {balance: newBalance});
-      transaction.delete(change.after.ref);
 
-      if (!historySnapshot.empty) {
-        const historyDocRef = historySnapshot.docs[0].ref;
-        transaction.update(historyDocRef, {status: "closed", pnl});
-      }
+      // 1. Update the main balance
+      transaction.update(userContextRef, {balance: newBalance});
+
+      // 2. Create the trade history record
+      const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
+      const historyRecord = {
+        positionId: positionId,
+        positionType: position.positionType,
+        symbol: position.symbol,
+        symbolName: position.symbolName,
+        size: position.size,
+        price: position.currentPrice, // Closing price
+        side: position.side === 'buy' || position.side === 'long' ? 'sell' : 'buy', // Opposite action to close
+        leverage: position.leverage || null,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        status: "closed",
+        pnl: pnl,
+      };
+      transaction.set(tradeHistoryRef, historyRecord);
+      
+      // 3. Delete the open position
+      transaction.delete(change.after.ref);
 
       logger.info(`Transaction successful for position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
-    // Revert status to 'open' on failure
+    // Revert status to 'open' on failure to allow for retry
     await change.after.ref.update({"details.status": "open"});
   }
 });
