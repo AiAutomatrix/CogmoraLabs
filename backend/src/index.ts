@@ -175,7 +175,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
 
           // Update balance, delete position, and update history atomically
           transaction.update(userContextRef, {balance: newBalance});
-          transaction.delete(event.data.after.ref);
+          transaction.delete(event.data!.after.ref);
           if (!historySnapshot.empty) {
             const historyDocRef = historySnapshot.docs[0].ref;
             transaction.update(historyDocRef, {status: "closed", pnl: pnl});
