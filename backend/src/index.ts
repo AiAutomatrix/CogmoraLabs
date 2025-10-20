@@ -168,7 +168,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       // 1. Update the main balance
       transaction.update(userContextRef, {balance: newBalance});
 
-      // 2. Create the trade history record
+      // 2. Create the trade history record for the closed position
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
       const historyRecord = {
         positionId: positionId,
@@ -176,8 +176,8 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         symbol: position.symbol,
         symbolName: position.symbolName,
         size: position.size,
-        price: position.currentPrice, // Closing price
-        side: position.side === 'buy' || position.side === 'long' ? 'sell' : 'buy', // Opposite action to close
+        price: position.currentPrice, // Use currentPrice as the closing price
+        side: position.side === 'buy' || position.side === 'long' ? 'sell' : 'buy', // Record the closing action
         leverage: position.leverage || null,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: "closed",
@@ -196,3 +196,5 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await change.after.ref.update({"details.status": "open"});
   }
 });
+
+    
