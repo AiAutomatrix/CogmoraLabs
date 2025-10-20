@@ -192,14 +192,6 @@ async function collectAllSymbols() {
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
-
-        // Collect from watchlist
-        const watchlistSnapshot = await db.collectionGroup('watchlist').get();
-        watchlistSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            const item = doc.data();
-            if (item.type === 'spot') spotSymbols.add(item.symbol);
-            if (item.type === 'futures') futuresSymbols.add(item.symbol);
-        });
         
         console.log(`Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
         spotManager.updateSubscriptions(spotSymbols);
@@ -249,14 +241,6 @@ async function processPriceUpdate(symbol: string, price: number) {
                 batch.delete(doc.ref); 
                 writes++;
             }
-        });
-
-        // Update watchlist items with the new price
-        const watchlistQuery = db.collectionGroup('watchlist').where('symbol', '==', symbol);
-        const watchlistSnapshot = await watchlistQuery.get();
-        watchlistSnapshot.forEach((doc) => {
-            batch.update(doc.ref, { currentPrice: price });
-            writes++;
         });
 
         if (writes > 0) {
