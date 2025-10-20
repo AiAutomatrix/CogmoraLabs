@@ -13,7 +13,6 @@ import React, {
 import {
   doc,
   setDoc,
-  getDoc,
   collection,
   writeBatch,
   deleteDoc,
@@ -640,38 +639,65 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
   const closePosition = useCallback(async (positionId: string) => {
     if (!firestore || !userContextDocRef) return;
-    
-    const pos = openPositions.find(p => p.id === positionId);
+  
+    const pos = openPositions.find((p) => p.id === positionId);
     if (!pos) {
-      toast({ title: "Error", description: "Position not found.", variant: "destructive" });
+      toast({
+        title: 'Error',
+        description: 'Position not found.',
+        variant: 'destructive',
+      });
       return;
     }
   
     try {
+      // --- Start Calculations ---
       let pnl = 0;
       let collateralToReturn = 0;
   
       if (pos.positionType === 'spot') {
         pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
         collateralToReturn = pos.size * pos.averageEntryPrice;
-      } else { // Futures
+      } else {
+        // Futures
         const contractValue = pos.size * pos.averageEntryPrice;
         collateralToReturn = contractValue / (pos.leverage || 1);
-        if (pos.side === "long") {
+        if (pos.side === 'long') {
           pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-        } else { // short
+        } else {
+          // short
           pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
         }
       }
-      
+  
       const newBalance = balance + collateralToReturn + pnl;
+  
+      // Recalculate aggregate metrics based on the change
+      const newRealizedPnl = accountMetrics.realizedPnl + pnl;
+      const newWonTrades = pnl > 0 ? accountMetrics.wonTrades + 1 : accountMetrics.wonTrades;
+      const newLostTrades = pnl <= 0 ? accountMetrics.lostTrades + 1 : accountMetrics.lostTrades;
+      const newTotalClosed = newWonTrades + newLostTrades;
+      const newWinRate = newTotalClosed > 0 ? (newWonTrades / newTotalClosed) * 100 : 0;
+  
+      // Recalculate unrealized P&L and equity from the *remaining* positions
+      const remainingPositions = openPositions.filter(p => p.id !== positionId);
+      const newUnrealizedPnl = remainingPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
+      const newEquity = newBalance + newUnrealizedPnl;
   
       const batch = writeBatch(firestore);
   
-      // 1. Update main context balance
-      batch.update(userContextDocRef, { balance: newBalance });
+      // 1. Update the main context document with all new metrics
+      batch.update(userContextDocRef, {
+        balance: newBalance,
+        equity: newEquity,
+        realizedPnl: newRealizedPnl,
+        unrealizedPnl: newUnrealizedPnl,
+        winRate: newWinRate,
+        wonTrades: newWonTrades,
+        lostTrades: newLostTrades,
+      });
   
-      // 2. Create history record
+      // 2. Create the new trade history record
       const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
       const historyRecord: Omit<PaperTrade, 'id'> = {
         positionId: pos.id,
@@ -679,7 +705,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         symbol: pos.symbol,
         symbolName: pos.symbolName,
         size: pos.size,
-        price: pos.currentPrice, // Use final price
+        price: pos.currentPrice,
         side: pos.side === 'buy' || pos.side === 'long' ? 'sell' : 'buy',
         leverage: pos.leverage || null,
         timestamp: Date.now(),
@@ -688,26 +714,32 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       };
       batch.set(historyRef, historyRecord);
   
-      // 3. Delete the open position
+      // 3. Delete the open position document
       const positionRef = doc(userContextDocRef, 'openPositions', positionId);
       batch.delete(positionRef);
   
       await batch.commit();
   
       toast({
-        title: "Position Closed",
+        title: 'Position Closed',
         description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
       });
-  
     } catch (error) {
-      console.error("Failed to manually close position:", error);
-      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: doc(userContextDocRef, 'openPositions', positionId).path,
-        operation: 'write',
-      }));
+      console.error('Failed to manually close position:', error);
+      toast({
+        title: 'Error Closing Position',
+        description: 'Could not update Firestore.',
+        variant: 'destructive',
+      });
+      errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: doc(userContextDocRef, 'openPositions', positionId).path,
+          operation: 'write',
+        })
+      );
     }
-  }, [firestore, userContextDocRef, openPositions, balance, toast]);
+  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -1249,5 +1281,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
