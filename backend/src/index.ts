@@ -1,4 +1,6 @@
 
+'use server';
+
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -175,7 +177,7 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
 
           // Update balance, delete position, and update history atomically
           transaction.update(userContextRef, {balance: newBalance});
-          transaction.delete(event.data!.after.ref);
+          transaction.delete(event.data.after.ref);
           if (!historySnapshot.empty) {
             const historyDocRef = historySnapshot.docs[0].ref;
             transaction.update(historyDocRef, {status: "closed", pnl: pnl});
@@ -186,7 +188,9 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
       } catch (error) {
         logger.error(`Transaction failed for closing position ${positionId}:`, error);
         // Revert status to 'open' on failure to allow for retry
-        await event.data.after.ref.update({"details.status": "open"});
+        if (event.data.after.ref) {
+            await event.data.after.ref.update({"details.status": "open"});
+        }
       }
       // After handling the closing, the rest of the function will run and recalculate aggregates.
     }
