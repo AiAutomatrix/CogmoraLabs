@@ -12,11 +12,8 @@ import React, {
 } from "react";
 import {
   doc,
-  updateDoc,
   collection,
   writeBatch,
-  deleteDoc,
-  getDocs,
   onSnapshot,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
@@ -33,7 +30,6 @@ import type {
   KucoinFuturesContract,
   AutomationConfig,
   AiTriggerSettings,
-  KucoinTicker,
   FuturesSnapshotData,
   AgentActionPlan,
   AgentAction,
@@ -686,14 +682,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     const positionRef = doc(userContextDocRef, 'openPositions', positionId);
-    await updateDoc(positionRef, { 'details.status': 'closing' }).catch(error => {
-        console.error('Failed to mark position for closing:', error);
-        toast({ title: "Error", description: "Could not initiate position closure.", variant: "destructive" });
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: positionRef.path,
-            operation: 'update',
-        }));
-    });
+    setDocumentNonBlocking(positionRef, { 'details.status': 'closing' }, { merge: true });
 
     toast({
         title: 'Closing Position...',
@@ -943,7 +932,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-        const allSpotTickers: KucoinTicker[] = initialSpotTickers.filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        const allSpotTickers = initialSpotTickers.filter((t: any) => t.symbol.endsWith('-USDT'));
 
         if (!allSpotTickers.length && !futuresContracts.length) {
             throw new Error('Could not fetch any screener data.');
@@ -954,7 +943,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         let orderIndex = 0;
         config.rules.forEach(rule => {
-            let sourceData: (KucoinTicker | KucoinFuturesContract)[];
+            let sourceData: (any)[];
             let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct';
 
             if (rule.source === 'spot') {
@@ -966,12 +955,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
 
             const sorted = [...sourceData].sort((a, b) => {
-                const valA = parseFloat((a as any)[sortKey] as string) || 0;
-                const valB = parseFloat((b as any)[sortKey] as string) || 0;
+                const valA = parseFloat(a[sortKey] as string) || 0;
+                const valB = parseFloat(b[sortKey] as string) || 0;
                 return valB - valA;
             });
 
-            let selected: (KucoinTicker | KucoinFuturesContract)[];
+            let selected: (any)[];
             if (rule.criteria.startsWith('top')) {
                 selected = sorted.slice(0, rule.count);
             } else { // bottom
@@ -984,12 +973,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                     const isSpot = rule.source === 'spot';
                     finalItems.push({
                         symbol: item.symbol,
-                        symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
+                        symbolName: isSpot ? item.symbolName : item.symbol.replace(/M$/, ''),
                         type: rule.source,
-                        currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
-                        priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
-                        high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
-                        low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
+                        currentPrice: isSpot ? parseFloat(item.last) : item.markPrice,
+                        priceChgPct: isSpot ? parseFloat(item.changeRate) : item.priceChgPct,
+                        high: isSpot ? parseFloat(item.high) : item.highPrice,
+                        low: isSpot ? parseFloat(item.low) : item.lowPrice,
                         order: orderIndex++,
                     });
                 }
@@ -1146,6 +1135,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(async () => {
     if (!firestore || !userContextDocRef || openPositions.length === 0) {
+      toast({
+        title: "No Positions to Close",
+        description: "There are no open positions in your account.",
+        variant: "default"
+      });
       return;
     }
     
@@ -1273,3 +1267,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
