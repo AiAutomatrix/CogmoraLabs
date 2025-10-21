@@ -2,9 +2,70 @@
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
-import fetch from 'node-fetch'; // Use node-fetch
+import fetch from 'node-fetch'; // Use node-fetch for CommonJS compatibility
+
+// Type definitions moved here to make the worker self-contained.
+interface OpenPositionDetails {
+  stopLoss?: number;
+  takeProfit?: number;
+  triggeredBy?: string;
+  status?: 'open' | 'closing';
+}
+
+interface OpenPosition {
+  id: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  side: 'buy' | 'long' | 'short';
+  leverage?: number | null;
+  unrealizedPnl?: number;
+  priceChgPct?: number;
+  liquidationPrice?: number;
+  details?: OpenPositionDetails;
+}
+
+interface PaperTrade {
+  id?: string;
+  positionId: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  price: number;
+  side: 'buy' | 'sell' | 'long' | 'short';
+  leverage: number | null;
+  timestamp: number;
+  status: 'open' | 'closed';
+  pnl?: number | null;
+}
+
+interface TradeTriggerDetails {
+    status: 'active' | 'executed' | 'canceled';
+}
+
+interface TradeTrigger {
+  id: string;
+  symbol: string;
+  symbolName: string;
+  type: 'spot' | 'futures';
+  condition: 'above' | 'below';
+  targetPrice: number;
+  action: 'buy' | 'long' | 'short';
+  amount: number;
+  leverage: number;
+  cancelOthers?: boolean;
+  stopLoss?: number;
+  takeProfit?: number;
+  details: TradeTriggerDetails;
+}
+
 
 // Initialize Firebase Admin SDK for Cloud Run environment
+// This uses the service account associated with the Cloud Run instance
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
@@ -73,13 +134,14 @@ class WebSocketManager {
             if (this.name === 'SPOT') {
                 symbol = message.topic.replace('/market/snapshot:', '');
                 price = parseFloat(priceData?.data?.lastTradedPrice);
+
             } else { // FUTURES
-                symbol = message.topic.replace('/contractMarket/tickerV2:', '');
-                price = priceData.markPrice;
+                symbol = message.topic.replace('/contractMarket/snapshot:', '');
+                price = message.data.markPrice;
             }
 
             if (price && symbol) {
-                processPriceUpdate(symbol, price).catch(e => console.error(`Error in processPriceUpdate for ${symbol}:`, e));
+                processPriceUpdate(symbol, price).catch(e => console.error(`[WORKER] Error in processPriceUpdate for ${symbol}:`, e));
             }
         }
     }
@@ -117,6 +179,7 @@ class WebSocketManager {
     
     private resubscribe = () => {
         if (this.ws?.readyState === WebSocket.OPEN) {
+            console.log(`[${this.name}] Resubscribing to ${this.currentSubscriptions.size} symbols.`);
             this.currentSubscriptions.forEach(symbol => {
                 this.ws?.send(JSON.stringify({
                     id: Date.now(),
@@ -125,7 +188,6 @@ class WebSocketManager {
                     response: true
                 }));
             });
-             console.log(`[${this.name}] Resubscribed to ${this.currentSubscriptions.size} symbols.`);
         }
     }
 
@@ -139,17 +201,19 @@ class WebSocketManager {
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
         toAdd.forEach(symbol => {
+            console.log(`[${this.name}] Subscribing to ${symbol}`);
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.add(symbol);
         });
 
         toRemove.forEach(symbol => {
+            console.log(`[${this.name}] Unsubscribing from ${symbol}`);
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
             this.currentSubscriptions.delete(symbol);
         });
 
         if(toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
+            console.log(`[${this.name}] Subscription change complete: +${toAdd.size} / -${toRemove.size}`);
         }
     }
 }
@@ -157,17 +221,14 @@ class WebSocketManager {
 // --- Main Application Logic ---
 
 const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (symbol) => `/market/snapshot:${symbol}`);
-const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/tickerV2:${symbol}`);
+const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
 
 
 spotManager.connect();
 futuresManager.connect();
 
 async function collectAllSymbols() {
-    // Add a 5-second delay to give Firestore indexes time to warm up on container start
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    console.log("Collecting symbols to monitor...");
+    console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
@@ -188,62 +249,193 @@ async function collectAllSymbols() {
             if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
         
-        console.log(`Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
+        console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
         spotManager.updateSubscriptions(spotSymbols);
         futuresManager.updateSubscriptions(futuresSymbols);
     } catch (e) {
-        console.error("CRITICAL: Failed to collect symbols due to Firestore query error.", e);
+        console.error("[WORKER] CRITICAL: Failed to collect symbols due to Firestore query error.", e);
     }
 }
 
 // Check for symbols to monitor every 30 seconds
 setInterval(collectAllSymbols, 30000);
-collectAllSymbols(); // Initial run
+// Initial run after a short delay
+setTimeout(collectAllSymbols, 5000);
+
+
+async function executeSpotBuy(transaction: admin.firestore.Transaction, trigger: TradeTrigger, currentPrice: number, userContextRef: admin.firestore.DocumentReference, userContextData: admin.firestore.DocumentData) {
+    const { symbol, symbolName, amount } = trigger;
+    const balance = userContextData.balance || 0;
+
+    if (balance < amount) {
+        console.log(`[EXECUTION_SKIP] User ${userContextRef.parent.parent?.id} has insufficient balance for spot buy.`);
+        return;
+    }
+
+    const size = amount / currentPrice;
+    const newBalance = balance - amount;
+
+    // Check for existing position to average into
+    const openPositionsRef = userContextRef.collection('openPositions');
+    const existingPositionQuery = openPositionsRef.where('symbol', '==', symbol).where('positionType', '==', 'spot').limit(1);
+    const existingPositionSnapshot = await transaction.get(existingPositionQuery);
+    
+    let positionId: string;
+
+    if (!existingPositionSnapshot.empty) {
+        const existingPositionDoc = existingPositionSnapshot.docs[0];
+        const existingPosition = existingPositionDoc.data() as OpenPosition;
+        positionId = existingPosition.id;
+        const totalSize = existingPosition.size + size;
+        const totalValue = (existingPosition.size * existingPosition.averageEntryPrice) + (size * currentPrice);
+        const newAverageEntry = totalValue / totalSize;
+
+        transaction.update(existingPositionDoc.ref, { size: totalSize, averageEntryPrice: newAverageEntry });
+    } else {
+        positionId = crypto.randomUUID();
+        const details: OpenPositionDetails = { triggeredBy: `trigger:${trigger.id.slice(0,8)}`, stopLoss: trigger.stopLoss, takeProfit: trigger.takeProfit, status: 'open' };
+        const newPosition: OpenPosition = { id: positionId, positionType: 'spot', symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side: 'buy', details };
+        transaction.set(openPositionsRef.doc(positionId), newPosition);
+    }
+    
+    const tradeHistoryRef = userContextRef.collection('tradeHistory');
+    const newTrade: Omit<PaperTrade, 'id'> = { positionId, positionType: 'spot', symbol, symbolName, size, price: currentPrice, side: 'buy', leverage: null, timestamp: Date.now(), status: 'open' };
+    transaction.set(tradeHistoryRef.doc(), newTrade);
+
+    transaction.update(userContextRef, { balance: newBalance });
+    console.log(`[EXECUTION_SUCCESS] Spot buy for ${symbol} for user ${userContextRef.parent.parent?.id}`);
+}
+
+async function executeFuturesTrade(transaction: admin.firestore.Transaction, trigger: TradeTrigger, currentPrice: number, userContextRef: admin.firestore.DocumentReference, userContextData: admin.firestore.DocumentData) {
+    const { symbol, symbolName, amount: collateral, leverage, action, id, stopLoss, takeProfit } = trigger;
+    const balance = userContextData.balance || 0;
+
+    if (balance < collateral) {
+        console.log(`[EXECUTION_SKIP] User ${userContextRef.parent.parent?.id} has insufficient balance for futures trade.`);
+        return;
+    }
+    
+    const positionValue = collateral * leverage;
+    const size = positionValue / currentPrice;
+    const newBalance = balance - collateral;
+
+    const side = action as 'long' | 'short';
+    const liquidationPrice = side === 'long' ? currentPrice * (1 - (1/leverage)) : currentPrice * (1 + (1/leverage));
+
+    const positionId = crypto.randomUUID();
+    const details: OpenPositionDetails = { triggeredBy: `trigger:${id.slice(0,8)}`, stopLoss, takeProfit, status: 'open' };
+    const newPosition: OpenPosition = { id: positionId, positionType: 'futures', symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details };
+    
+    transaction.set(userContextRef.collection('openPositions').doc(positionId), newPosition);
+
+    const newTrade: Omit<PaperTrade, 'id'> = { positionId, positionType: 'futures', symbol, symbolName, size, price: currentPrice, side, leverage, timestamp: Date.now(), status: 'open' };
+    transaction.set(userContextRef.collection('tradeHistory').doc(), newTrade);
+
+    transaction.update(userContextRef, { balance: newBalance });
+    console.log(`[EXECUTION_SUCCESS] Futures ${side} for ${symbol} for user ${userContextRef.parent.parent?.id}`);
+}
+
 
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
-    
-    const batch = db.batch();
-    let writes = 0;
 
+    // --- Block 1: Handle SL/TP on Open Positions ---
     try {
-        // Check for open positions to hit SL/TP
+        console.log(`[WORKER_INFO] Querying open positions for symbol: ${symbol}`);
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
-        positionsSnapshot.forEach((doc) => {
-            const pos = doc.data();
-            if (pos.details?.status === 'closing') return;
+        
+        if (!positionsSnapshot.empty) {
+            const sltpBatch = db.batch();
+            let hasSltpUpdates = false;
 
-            const slHit = pos.details?.stopLoss && ((pos.side === 'long' || pos.side === 'buy') ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && ((pos.side === 'long' || pos.side === 'buy') ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+            positionsSnapshot.forEach((doc) => {
+                const pos = doc.data() as OpenPosition;
+                
+                if (!pos.details?.stopLoss && !pos.details?.takeProfit) {
+                    console.log(`[WORKER_INFO] Watching position ${doc.id} for symbol ${symbol}. No SL/TP set.`);
+                    return; // This is correct, acts as 'continue' in forEach
+                }
 
-            if (slHit || tpHit) {
-                console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                batch.update(doc.ref, { 'details.status': 'closing' });
-                writes++;
+                const isLong = pos.side === 'long' || pos.side === 'buy';
+                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+
+                if (slHit || tpHit) {
+                    console.log(`[WORKER_ACTION] Position ${doc.id} hit ${slHit ? 'Stop Loss' : 'Take Profit'}. Marking for closure.`);
+                    sltpBatch.update(doc.ref, { 'details.status': 'closing' });
+                    hasSltpUpdates = true;
+                }
+            });
+
+            if (hasSltpUpdates) {
+                await sltpBatch.commit();
+                console.log(`[WORKER_INFO] Committed SL/TP updates for symbol ${symbol}.`);
             }
-        });
-
-        // Check for active trade triggers
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
-        const triggersSnapshot = await triggersQuery.get();
-        triggersSnapshot.forEach((doc) => {
-            const trigger = doc.data();
-            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-            if (conditionMet) {
-                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-                batch.delete(doc.ref); 
-                writes++;
-            }
-        });
-
-        if (writes > 0) {
-            await batch.commit();
         }
-    } catch (err) {
-        console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
+    } catch (e) {
+        console.error(`[WORKER_ERROR] Failed to process SL/TP for symbol ${symbol}:`, e);
     }
+
+    // --- Block 2: Handle Trade Trigger Executions ---
+    try {
+        console.log(`[WORKER_INFO] Querying trade triggers for symbol: ${symbol}`);
+        const triggersQuery = db.collectionGroup('tradeTriggers')
+            .where('symbol', '==', symbol)
+            .where('details.status', '==', 'active');
+        const triggersSnapshot = await triggersQuery.get();
+
+        if (!triggersSnapshot.empty) {
+            for (const doc of triggersSnapshot.docs) {
+                const trigger = doc.data() as TradeTrigger;
+                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+
+                if (conditionMet) {
+                    console.log(`[WORKER_ACTION] Firing trigger ${doc.id} for ${symbol}. Starting transaction...`);
+                    try {
+                        await db.runTransaction(async (transaction) => {
+                            const userContextRef = doc.ref.parent.parent!;
+                            if (!userContextRef) throw new Error("Could not determine user context from trigger ref.");
+                            
+                            const userContextSnap = await transaction.get(userContextRef);
+                            if (!userContextSnap.exists) throw new Error("User context not found during trigger execution.");
+                            
+                            if (trigger.type === 'spot') {
+                                await executeSpotBuy(transaction, trigger, price, userContextRef, userContextSnap.data()!);
+                            } else { // futures
+                                await executeFuturesTrade(transaction, trigger, price, userContextRef, userContextSnap.data()!);
+                            }
+                            
+                            transaction.delete(doc.ref); // Delete the trigger as part of the transaction
+                        });
+                        console.log(`[EXECUTION_SUCCESS] Transaction for trigger ${doc.id} completed.`);
+
+                        if (trigger.cancelOthers) {
+                            const cancellationBatch = db.batch();
+                            const otherTriggersQuery = doc.ref.parent.where('symbol', '==', trigger.symbol);
+                            const otherTriggersSnapshot = await otherTriggersQuery.get();
+                            otherTriggersSnapshot.forEach(otherDoc => {
+                                if(otherDoc.id !== doc.id) {
+                                    console.log(`[WORKER_ACTION] Cancelling other trigger ${otherDoc.id} for symbol ${trigger.symbol}`);
+                                    cancellationBatch.delete(otherDoc.ref);
+                                }
+                            });
+                            await cancellationBatch.commit();
+                        }
+
+                    } catch (error) {
+                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, error);
+                        // Optionally delete the failed trigger to prevent retries, or add error handling logic
+                        await doc.ref.delete();
+                    }
+                }
+            }
+        }
+    } catch (e) {
+         console.error(`[WORKER_ERROR] Failed to query or process triggers for symbol ${symbol}:`, e);
+    }
+    
+    console.log(`[WORKER_INFO] Finished processing price update for ${symbol}.`);
 }
 
 
@@ -255,5 +447,7 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`[WORKER] Server listening on port ${PORT}`);
 });
+
+    

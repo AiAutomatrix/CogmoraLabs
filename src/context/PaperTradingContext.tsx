@@ -12,7 +12,7 @@ import React, {
 } from "react";
 import {
   doc,
-  setDoc,
+  updateDoc,
   collection,
   writeBatch,
   deleteDoc,
@@ -238,8 +238,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const unsubOpenPositions = onSnapshot(collection(userContextDocRef, 'openPositions'), (snapshot) => {
       const items = snapshot.docs.map(doc => {
           const data = doc.data() as Omit<OpenPosition, 'id'>;
-          const initialTicker = initialSpotTickersMap.get(data.symbol);
-          const initialPrice = initialTicker ? parseFloat(initialTicker.last) : data.averageEntryPrice;
+          const ticker = initialSpotTickersMap.get(data.symbol);
+          const initialPrice = ticker ? parseFloat(ticker.last) : data.averageEntryPrice;
           
           return {
               ...data,
@@ -678,97 +678,29 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closePosition = useCallback(async (positionId: string) => {
     if (!firestore || !userContextDocRef) return;
-
+    
     const pos = openPositions.find(p => p.id === positionId);
     if (!pos) {
       toast({ title: "Error", description: "Position not found.", variant: "destructive" });
       return;
     }
 
-    try {
-      // --- Start Calculations ---
-      let pnl = 0;
-      let collateralToReturn = 0;
+    // This marks the position for closing, and the backend Cloud Function `closePositionHandler` takes over.
+    const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+    await updateDoc(positionRef, { 'details.status': 'closing' }).catch(error => {
+        console.error('Failed to mark position for closing:', error);
+        toast({ title: "Error", description: "Could not initiate position closure.", variant: "destructive" });
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: positionRef.path,
+            operation: 'update',
+        }));
+    });
 
-      if (pos.positionType === 'spot') {
-        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-        collateralToReturn = pos.size * pos.averageEntryPrice;
-      } else { // Futures
-        const contractValue = pos.size * pos.averageEntryPrice;
-        collateralToReturn = contractValue / (pos.leverage || 1);
-        if (pos.side === "long") {
-          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-        } else { // short
-          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
-        }
-      }
-
-      const newBalance = balance + collateralToReturn + pnl;
-
-      // Recalculate aggregate metrics based on the change
-      const newRealizedPnl = accountMetrics.realizedPnl + pnl;
-      const newWonTrades = pnl > 0 ? accountMetrics.wonTrades + 1 : accountMetrics.wonTrades;
-      const newLostTrades = pnl <= 0 ? accountMetrics.lostTrades + 1 : accountMetrics.lostTrades;
-      const newTotalClosed = newWonTrades + newLostTrades;
-      const newWinRate = newTotalClosed > 0 ? (newWonTrades / newTotalClosed) * 100 : 0;
-
-      // Recalculate unrealized P&L and equity from the *remaining* positions
-      const remainingPositions = openPositions.filter(p => p.id !== positionId);
-      const newUnrealizedPnl = remainingPositions.reduce((acc, p) => acc + (p.unrealizedPnl || 0), 0);
-      const newEquity = newBalance + newUnrealizedPnl;
-
-      const batch = writeBatch(firestore);
-
-      // 1. Update the main context document with all new metrics
-      batch.update(userContextDocRef, {
-        balance: newBalance,
-        equity: newEquity,
-        realizedPnl: newRealizedPnl,
-        unrealizedPnl: newUnrealizedPnl,
-        winRate: newWinRate,
-        wonTrades: newWonTrades,
-        lostTrades: newLostTrades,
-      });
-
-      // 2. Create the new trade history record
-      const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
-      const historyRecord: Omit<PaperTrade, 'id'> = {
-        positionId: pos.id,
-        positionType: pos.positionType,
-        symbol: pos.symbol,
-        symbolName: pos.symbolName,
-        size: pos.size,
-        price: pos.currentPrice,
-        side: pos.side === 'buy' || pos.side === 'long' ? 'sell' : 'buy',
-        leverage: pos.leverage || null,
-        timestamp: Date.now(),
-        status: 'closed',
-        pnl: pnl,
-      };
-      batch.set(historyRef, historyRecord);
-
-      // 3. Delete the open position document
-      const positionRef = doc(userContextDocRef, 'openPositions', positionId);
-      batch.delete(positionRef);
-
-      await batch.commit();
-
-      toast({
-        title: 'Position Closed',
-        description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
-      });
-    } catch (error) {
-      console.error('Failed to manually close position:', error);
-      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
-      errorEmitter.emit(
-        'permission-error',
-        new FirestorePermissionError({
-          path: doc(userContextDocRef, 'openPositions', positionId).path,
-          operation: 'write',
-        })
-      );
-    }
-  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
+    toast({
+        title: 'Closing Position...',
+        description: `Closing order for ${pos.symbolName} has been sent.`,
+    });
+  }, [firestore, userContextDocRef, openPositions, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -1213,11 +1145,41 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [symbolsToWatch.futures, setupWebSocket, handleFuturesMessage]);
 
 
-  const closeAllPositions = useCallback(() => {
-    openPositions.forEach(p => {
-        closePosition(p.id);
+  const closeAllPositions = useCallback(async () => {
+    if (!firestore || !userContextDocRef || openPositions.length === 0) {
+      return;
+    }
+    
+    toast({
+      title: 'Closing All Positions...',
+      description: `Sending close orders for ${openPositions.length} positions.`,
     });
-  }, [openPositions, closePosition]);
+    
+    try {
+      const batch = writeBatch(firestore);
+      openPositions.forEach(pos => {
+        const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
+        batch.update(positionRef, { 'details.status': 'closing' });
+      });
+      await batch.commit();
+      
+      toast({
+        title: 'All Positions Marked for Closing',
+        description: 'The backend will now process each closure.',
+      });
+    } catch (error) {
+      console.error("Error marking all positions for closing:", error);
+      toast({
+        title: "Error",
+        description: "Could not initiate closing all positions.",
+        variant: "destructive"
+      });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: collection(userContextDocRef, 'openPositions').path,
+        operation: 'write',
+      }));
+    }
+  }, [firestore, userContextDocRef, openPositions, toast]);
 
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
