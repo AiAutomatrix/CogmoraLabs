@@ -685,7 +685,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
 
-    // This marks the position for closing, and the backend Cloud Function `closePositionHandler` takes over.
     const positionRef = doc(userContextDocRef, 'openPositions', positionId);
     await updateDoc(positionRef, { 'details.status': 'closing' }).catch(error => {
         console.error('Failed to mark position for closing:', error);
