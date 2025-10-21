@@ -1,5 +1,4 @@
 
-
 "use client";
 import React, { useMemo, useState } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";

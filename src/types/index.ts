@@ -1,5 +1,4 @@
 
-
 import { z } from 'zod';
 
 //==========================================================================
@@ -72,7 +71,6 @@ export const OpenPositionSchema = z.object({
   unrealizedPnl: z.number().optional(),
   priceChgPct: z.number().optional(),
   liquidationPrice: z.number().optional(),
-  openTimestamp: z.number(),
   details: OpenPositionDetailsSchema.optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
@@ -302,7 +300,7 @@ export const TradeSchema = z.object({
   id: z.string(),
   cryptocurrency: z.string().min(1, "Cryptocurrency symbol is required (e.g., BTCUSDT)"),
   entryPrice: z.coerce.number().positive("Entry price must be a positive number"),
-  targetPrice: z.coerce.number().positive("Target price must be a positive number"),
+  targetPrice: z.coerce.number().positive("Stop loss must be a positive number"),
   stopLoss: z.coerce.number().positive("Stop loss must be a positive number"),
   status: z.enum(['active', 'closed']).default('active'),
   createdAt: z.date().default(() => new Date()),
@@ -611,7 +609,5 @@ export type WebSocketStatus =
   | 'disconnected'
   | 'error';
 
-
-    
 
     

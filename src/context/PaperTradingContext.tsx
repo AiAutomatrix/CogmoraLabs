@@ -1,4 +1,3 @@
-
 "use client";
 import React, {
   createContext,
@@ -275,7 +274,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       dataLoadedRef.current = false;
     };
   }, [userContextDocRef, firestore]);
-  
+
   const symbolsToWatch = useMemo(() => {
     const spot = new Set<string>();
     const futures = new Set<string>();
@@ -285,7 +284,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return { spot: Array.from(spot), futures: Array.from(futures) };
   }, [openPositions, tradeTriggers, watchlist]);
 
-  useEffect(() => {
+   useEffect(() => {
     if (dataLoadedRef.current) {
         const needsSpot = symbolsToWatch.spot.length > 0;
         const needsFutures = symbolsToWatch.futures.length > 0;
@@ -297,7 +296,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             setIsLoaded(true);
         }
     }
-  }, [isWsConnected, symbolsToWatch]);
+  }, [isWsConnected, symbolsToWatch, dataLoadedRef]);
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -362,22 +361,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
     const pos = openPositions.find(p => p.id === positionId);
-    if (!pos) return;
+    if (!pos || !userContextDocRef) return;
 
-    const newDetails: OpenPositionDetails = { ...pos.details };
-    if (sl !== undefined) newDetails.stopLoss = sl;
-    if (tp !== undefined) newDetails.takeProfit = tp;
+    const detailsUpdate: Partial<OpenPositionDetails> = {};
+    if (sl !== undefined) detailsUpdate.stopLoss = sl;
+    if (tp !== undefined) detailsUpdate.takeProfit = tp;
     
-    // Use updateDocumentNonBlocking for partial updates
-    if (userContextDocRef) {
+    if (Object.keys(detailsUpdate).length > 0) {
         const positionRef = doc(userContextDocRef, 'openPositions', positionId);
-        updateDocumentNonBlocking(positionRef, { details: newDetails });
+        updateDocumentNonBlocking(positionRef, { details: { ...pos.details, ...detailsUpdate } });
+        toast({ title: "Position Updated", description: `SL/TP updated for ${pos.symbolName}.` });
     }
-    
-    toast({
-        title: "Position Updated",
-        description: `SL/TP updated for ${pos.symbolName}.`
-    });
   }, [openPositions, toast, userContextDocRef]);
 
   const removeTradeTrigger = useCallback((triggerId: string) => {
@@ -439,7 +433,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const totalValue = (existingPosition.size * existingPosition.averageEntryPrice) + (size * currentPrice);
           const newAverageEntry = totalValue / totalSize;
 
-          const details = { ...(existingPosition.details || {}), triggeredBy, status: 'open' as const };
+          const details: OpenPositionDetails = { ...(existingPosition.details || {}), triggeredBy, status: 'open' };
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
           
@@ -601,20 +595,80 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
   
   const closePosition = useCallback(async (positionId: string) => {
-    if (!userContextDocRef) return;
-    const positionToClose = openPositions.find(p => p.id === positionId);
-    if (!positionToClose) return;
-
-    // Use non-blocking update to trigger backend logic if it exists,
-    // or to simply mark for client-side processing.
-    const positionRef = doc(userContextDocRef, 'openPositions', positionId);
-    updateDocumentNonBlocking(positionRef, { 'details.status': 'closing' });
+    if (!firestore || !userContextDocRef) return;
     
-    toast({
-      title: 'Closing Position...',
-      description: `Close order for ${positionToClose.symbolName} has been submitted.`
-    });
-  }, [userContextDocRef, openPositions, toast]);
+    const pos = openPositions.find(p => p.id === positionId);
+    if (!pos) {
+      toast({ title: "Error", description: "Position not found.", variant: "destructive" });
+      return;
+    }
+  
+    try {
+      const batch = writeBatch(firestore);
+
+      // --- CALCULATIONS ---
+      let pnl = 0;
+      let collateralToReturn = 0;
+  
+      if (pos.positionType === 'spot') {
+        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        collateralToReturn = pos.size * pos.averageEntryPrice;
+      } else { // Futures
+        const contractValue = pos.size * pos.averageEntryPrice;
+        collateralToReturn = contractValue / (pos.leverage || 1);
+        if (pos.side === "long") {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        } else { // short
+          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+        }
+      }
+      
+      const newBalance = balance + collateralToReturn + pnl;
+
+      // 1. Update the main context document with the new balance.
+      // Other metrics like realizedPnl will be recalculated by the listener on tradeHistory.
+      batch.update(userContextDocRef, { balance: newBalance });
+  
+      // 2. Query for the open trade in history and update it
+      const historyQuery = query(
+        collection(userContextDocRef, 'tradeHistory'),
+        where("positionId", "==", positionId),
+        where("status", "==", "open"),
+        limit(1)
+      );
+      const historySnapshot = await getDocs(historyQuery);
+      if (!historySnapshot.empty) {
+        const historyDocRef = historySnapshot.docs[0].ref;
+        batch.update(historyDocRef, {
+            status: "closed",
+            pnl: pnl,
+            closePrice: pos.currentPrice,
+            closeTimestamp: Date.now(),
+        });
+      }
+  
+      // 3. Delete the open position document
+      const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+      batch.delete(positionRef);
+  
+      await batch.commit();
+  
+      toast({
+        title: 'Position Closed',
+        description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
+      });
+    } catch (error) {
+      console.error('Failed to manually close position:', error);
+      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
+      errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: doc(userContextDocRef, 'openPositions', positionId).path,
+          operation: 'write',
+        })
+      );
+    }
+  }, [firestore, userContextDocRef, openPositions, balance, toast]);
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
   useEffect(() => {
@@ -638,6 +692,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         setOpenPositions(prev =>
           prev.map(p => {
               if (p.symbol === symbol) {
+                  // This is now purely for UI updates.
                   return {
                       ...p,
                       currentPrice: newPrice!,
@@ -1046,16 +1101,59 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [symbolsToWatch.futures, setupWebSocket, handleFuturesMessage]);
 
-  const closeAllPositions = useCallback(() => {
-    if (!userContextDocRef) return;
-    openPositions.forEach(p => {
-        updateDocumentNonBlocking(doc(userContextDocRef, 'openPositions', p.id), { 'details.status': 'closing' });
-    });
-    toast({
-      title: 'Closing All Positions...',
-      description: `Submitted close orders for ${openPositions.length} positions.`,
-    });
-  }, [userContextDocRef, openPositions, toast]);
+  const closeAllPositions = useCallback(async () => {
+    if (!firestore || !userContextDocRef || openPositions.length === 0) return;
+  
+    try {
+        const batch = writeBatch(firestore);
+        let totalPnlFromBatch = 0;
+        let totalCollateralReturned = 0;
+
+        const historyQueryPromises = openPositions.map(pos => {
+            const q = query(
+                collection(userContextDocRef, 'tradeHistory'),
+                where("positionId", "==", pos.id),
+                where("status", "==", "open"),
+                limit(1)
+            );
+            return getDocs(q);
+        });
+        const historySnapshots = await Promise.all(historyQueryPromises);
+
+        openPositions.forEach((pos, index) => {
+            let pnl = 0;
+            let collateralToReturn = 0;
+            if (pos.positionType === 'spot') {
+                pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+                collateralToReturn = pos.size * pos.averageEntryPrice;
+            } else { // Futures
+                const contractValue = pos.size * pos.averageEntryPrice;
+                collateralToReturn = contractValue / (pos.leverage || 1);
+                pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
+            }
+            totalPnlFromBatch += pnl;
+            totalCollateralReturned += collateralToReturn;
+
+            const historySnapshot = historySnapshots[index];
+            if (!historySnapshot.empty) {
+                const historyDocRef = historySnapshot.docs[0].ref;
+                batch.update(historyDocRef, { status: "closed", pnl, closePrice: pos.currentPrice, closeTimestamp: Date.now() });
+            }
+
+            const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
+            batch.delete(positionRef);
+        });
+
+        const newBalance = balance + totalCollateralReturned + totalPnlFromBatch;
+        batch.update(userContextDocRef, { balance: newBalance });
+
+        await batch.commit();
+        toast({ title: 'All Positions Closed', description: `Closed ${openPositions.length} positions.` });
+    } catch (error) {
+        console.error('Failed to close all positions:', error);
+        toast({ title: "Error Closing All Positions", description: "Could not update Firestore.", variant: "destructive" });
+    }
+}, [firestore, userContextDocRef, openPositions, balance, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
