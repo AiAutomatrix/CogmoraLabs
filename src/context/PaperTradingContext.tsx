@@ -12,12 +12,12 @@ import React, {
 } from "react";
 import {
   doc,
-  setDoc,
-  collection,
   writeBatch,
   deleteDoc,
   getDocs,
   onSnapshot,
+  collection,
+  setDoc,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import type {
@@ -43,7 +43,7 @@ import type {
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
 import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
-import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
+import { KucoinTicker, useKucoinTickers } from "@/hooks/useKucoinAllTickersSocket";
 
 
 const INITIAL_BALANCE = 100000;
@@ -152,7 +152,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isWsConnected, setIsWsConnected] = useState(isWsConnected);
+  const [isWsConnected, setIsWsConnected] = useState(false);
   const dataLoadedRef = useRef(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
 
@@ -302,10 +302,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, tradeTriggers, watchlist]);
   
   useEffect(() => {
-    if (dataLoadedRef.current) {
+    if (dataLoadedRef.current && (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0 || isWsConnected)) {
       setIsLoaded(true);
     }
-  }, [dataLoadedRef.current]);
+  }, [isWsConnected, dataLoadedRef, symbolsToWatch]);
 
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
@@ -973,7 +973,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
             const sorted = [...sourceData].sort((a, b) => {
                 const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
-                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
+                const valB = parseFloat(b[sortKey as keyof b] as string) || 0;
                 return valB - valA;
             });
 
@@ -1153,8 +1153,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     try {
         const batch = writeBatch(firestore);
         
-        let totalPnlFromBatch = 0;
-        let totalCollateralToReturn = 0;
+        let batchPnl = 0;
+        let batchCollateralToReturn = 0;
 
         for (const pos of openPositions) {
             let pnl = 0;
@@ -1169,8 +1169,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
             }
             
-            totalPnlFromBatch += pnl;
-            totalCollateralToReturn += collateralToReturn;
+            batchPnl += pnl;
+            batchCollateralToReturn += collateralToReturn;
 
             const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
             const historyRecord: Omit<PaperTrade, 'id'> = {
@@ -1192,8 +1192,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             batch.delete(positionRef);
         }
 
-        const finalBalance = balance + totalCollateralToReturn + totalPnlFromBatch;
-        const finalRealizedPnl = accountMetrics.realizedPnl + totalPnlFromBatch;
+        const finalBalance = balance + batchCollateralToReturn + batchPnl;
+        const finalRealizedPnl = accountMetrics.realizedPnl + batchPnl;
         
         const closedCount = openPositions.length;
         const newWonTrades = accountMetrics.wonTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) > 0).length;
@@ -1230,7 +1230,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             operation: 'write',
         }));
     }
-}, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
+  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
@@ -1324,6 +1324,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
 
     
