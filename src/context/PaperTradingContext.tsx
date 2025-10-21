@@ -14,6 +14,7 @@ import {
   doc,
   collection,
   writeBatch,
+  getDocs,
   onSnapshot,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
@@ -149,6 +150,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isWsConnected, setIsWsConnected] = useState(false);
   const dataLoadedRef = useRef(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
 
@@ -212,7 +214,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             setDocumentNonBlocking(userContextDocRef, initialContext, { merge: false });
         }
         if (!dataLoadedRef.current) {
-            setIsLoaded(true);
             dataLoadedRef.current = true;
         }
       },
@@ -223,7 +224,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             operation: 'get',
         }));
         if (!dataLoadedRef.current) {
-          setIsLoaded(true); // Still mark as loaded to unblock UI
           dataLoadedRef.current = true;
         }
       }
@@ -300,6 +300,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       dataLoadedRef.current = false;
     };
   }, [userContextDocRef, firestore, initialSpotTickersMap]);
+  
+  useEffect(() => {
+    if (dataLoadedRef.current && isWsConnected) {
+      setIsLoaded(true);
+    }
+  }, [isWsConnected])
+
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -707,6 +714,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
 
         if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+        
+        setIsWsConnected(true);
 
         setOpenPositions(prev =>
           prev.map(p => {
@@ -724,7 +733,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setWatchlist(prev => prev.map(item =>
           item.symbol === symbol
-            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct }
+            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct, snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData }
             : item
         ));
 
@@ -955,8 +964,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
 
             const sorted = [...sourceData].sort((a, b) => {
-                const valA = parseFloat(a[sortKey] as string) || 0;
-                const valB = parseFloat(b[sortKey] as string) || 0;
+                const valA = parseFloat(a[sortKey]) || 0;
+                const valB = parseFloat(b[sortKey]) || 0;
                 return valB - valA;
             });
 
@@ -1132,22 +1141,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [symbolsToWatch.futures, setupWebSocket, handleFuturesMessage]);
 
-
   const closeAllPositions = useCallback(async () => {
     if (!firestore || !userContextDocRef || openPositions.length === 0) {
-      toast({
-        title: "No Positions to Close",
-        description: "There are no open positions in your account.",
-        variant: "default"
-      });
+      toast({ title: "No Positions to Close" });
       return;
     }
-    
+
     toast({
       title: 'Closing All Positions...',
       description: `Sending close orders for ${openPositions.length} positions.`,
     });
-    
+
     try {
       const batch = writeBatch(firestore);
       openPositions.forEach(pos => {
@@ -1155,15 +1159,60 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         batch.update(positionRef, { 'details.status': 'closing' });
       });
       await batch.commit();
+
+      // After triggering the backend, immediately calculate the final client-side metrics and save them.
+      let finalBalance = balance;
+      let finalRealizedPnl = accountMetrics.realizedPnl;
+      let finalWonTrades = accountMetrics.wonTrades;
+      let finalLostTrades = accountMetrics.lostTrades;
+
+      openPositions.forEach(pos => {
+        let pnl = 0;
+        let collateralToReturn = 0;
+        if (pos.positionType === 'spot') {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+          collateralToReturn = pos.size * pos.averageEntryPrice;
+        } else {
+          const contractValue = pos.size * pos.averageEntryPrice;
+          collateralToReturn = contractValue / (pos.leverage || 1);
+          if (pos.side === 'long') {
+            pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+          } else {
+            pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+          }
+        }
+        finalBalance += collateralToReturn + pnl;
+        finalRealizedPnl += pnl;
+        if (pnl > 0) {
+          finalWonTrades++;
+        } else {
+          finalLostTrades++;
+        }
+      });
       
+      const totalClosed = finalWonTrades + finalLostTrades;
+      const finalWinRate = totalClosed > 0 ? (finalWonTrades / totalClosed) * 100 : 0;
+      
+      // Update the main context document with the final calculated metrics
+      await setDocumentNonBlocking(userContextDocRef, {
+        balance: finalBalance,
+        equity: finalBalance, // Equity equals balance when no positions are open
+        unrealizedPnl: 0,
+        realizedPnl: finalRealizedPnl,
+        winRate: finalWinRate,
+        wonTrades: finalWonTrades,
+        lostTrades: finalLostTrades,
+      }, { merge: true });
+
       toast({
         title: 'All Positions Marked for Closing',
-        description: 'The backend will now process each closure.',
+        description: 'The backend is processing closures. Metrics updated.',
       });
+
     } catch (error) {
-      console.error("Error marking all positions for closing:", error);
+      console.error("Error in closeAllPositions:", error);
       toast({
-        title: "Error",
+        title: "Error Closing Positions",
         description: "Could not initiate closing all positions.",
         variant: "destructive"
       });
@@ -1172,8 +1221,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         operation: 'write',
       }));
     }
-  }, [firestore, userContextDocRef, openPositions, toast]);
-
+  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
