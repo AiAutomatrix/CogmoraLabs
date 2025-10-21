@@ -43,7 +43,7 @@ import type {
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
 import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
-import { KucoinTicker, useKucoinTickers } from "@/hooks/useKucoinAllTickersSocket";
+import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
 
 
 const INITIAL_BALANCE = 100000;
@@ -292,6 +292,20 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
   }, [userContextDocRef, firestore, initialSpotTickersMap]);
 
+  useEffect(() => {
+    if (dataLoadedRef.current) {
+        const needsSpot = symbolsToWatch.spot.length > 0;
+        const needsFutures = symbolsToWatch.futures.length > 0;
+
+        const spotReady = !needsSpot || isWsConnected;
+        const futuresReady = !needsFutures || isWsConnected;
+
+        if (spotReady && futuresReady) {
+            setIsLoaded(true);
+        }
+    }
+  }, [isWsConnected, dataLoadedRef.current, watchlist, openPositions, tradeTriggers]);
+
   const symbolsToWatch = useMemo(() => {
     const spot = new Set<string>();
     const futures = new Set<string>();
@@ -300,13 +314,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
     return { spot: Array.from(spot), futures: Array.from(futures) };
   }, [openPositions, tradeTriggers, watchlist]);
-  
-  useEffect(() => {
-    if (dataLoadedRef.current && (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0 || isWsConnected)) {
-      setIsLoaded(true);
-    }
-  }, [isWsConnected, symbolsToWatch]);
-
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -349,7 +356,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
     const equityValue = balance + totalUnrealizedPNL;
-    const closedTrades = tradeHistory.filter((t) => t.pnl !== undefined);
+    const closedTrades = tradeHistory.filter((t) => t.status === "closed");
     const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
 
     const wonTrades = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
@@ -418,7 +425,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [toast, saveDataToFirestore]);
 
   const buy = useCallback(
-    (
+    async (
       symbol: string,
       symbolName: string,
       amountUSD: number,
@@ -427,18 +434,22 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       takeProfit?: number,
       triggeredBy = 'manual'
     ) => {
-      if (!userContextDocRef) return;
+      if (!userContextDocRef || !firestore) return;
       if (balance < amountUSD) {
         toast({ title: "Error", description: "Insufficient balance.", variant: "destructive" });
         return;
       }
       const size = amountUSD / currentPrice;
       const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
+      const batch = writeBatch(firestore);
 
       const newBalance = balance - amountUSD;
-      saveDataToFirestore({ balance: newBalance });
+      
+      batch.update(userContextDocRef, { balance: newBalance });
 
+      let positionId = existingPosition?.id;
       if (existingPosition) {
+          positionId = existingPosition.id;
           const totalSize = existingPosition.size + size;
           const totalValue = (existingPosition.size * existingPosition.averageEntryPrice) + (size * currentPrice);
           const newAverageEntry = totalValue / totalSize;
@@ -447,42 +458,36 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
-          const updatedPosition: Partial<OpenPosition> = {
-            averageEntryPrice: newAverageEntry,
-            size: totalSize,
-            details,
-          };
-          saveSubcollectionDoc('openPositions', existingPosition.id, updatedPosition);
+          const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+          batch.update(positionRef, { size: totalSize, averageEntryPrice: newAverageEntry, details });
       } else {
-          const positionId = crypto.randomUUID();
-
-          const details: OpenPositionDetails = { triggeredBy, status: 'open' };
-          if (stopLoss !== undefined) details.stopLoss = stopLoss;
-          if (takeProfit !== undefined) details.takeProfit = takeProfit;
-
+          positionId = crypto.randomUUID();
+          const details: OpenPositionDetails = { triggeredBy, status: 'open', stopLoss, takeProfit };
           const newPosition: OpenPosition = {
-              id: positionId,
-              positionType: 'spot',
-              symbol,
-              symbolName,
-              size,
-              averageEntryPrice: currentPrice,
-              currentPrice,
-              side: 'buy',
-              unrealizedPnl: 0,
-              priceChgPct: 0,
-              openTimestamp: Date.now(),
-              details,
+              id: positionId, positionType: 'spot', symbol, symbolName, size,
+              averageEntryPrice: currentPrice, currentPrice, side: 'buy', openTimestamp: Date.now(), details,
           };
-          saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
+          const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+          batch.set(positionRef, newPosition);
       }
+      
+      const newTrade: Omit<PaperTrade, 'id'> = {
+        positionId: positionId!,
+        positionType: 'spot', symbol, symbolName, size,
+        entryPrice: currentPrice, side: 'buy', leverage: null,
+        openTimestamp: Date.now(),
+        status: 'open',
+      };
+      const tradeRef = doc(collection(userContextDocRef, 'tradeHistory'));
+      batch.set(tradeRef, newTrade);
 
+      await batch.commit();
       toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
     },
-    [balance, openPositions, toast, saveSubcollectionDoc, saveDataToFirestore, userContextDocRef]
+    [balance, openPositions, toast, firestore, userContextDocRef]
   );
 
-  const futuresBuy = useCallback((
+  const futuresBuy = useCallback(async (
     symbol: string,
     collateral: number,
     entryPrice: number,
@@ -491,7 +496,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     takeProfit?: number,
     triggeredBy = 'manual'
   ) => {
-      if (!userContextDocRef) return;
+      if (!userContextDocRef || !firestore) return;
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -499,36 +504,33 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
-
-      const details: OpenPositionDetails = { triggeredBy, status: 'open' };
-      if (stopLoss !== undefined) details.stopLoss = stopLoss;
-      if (takeProfit !== undefined) details.takeProfit = takeProfit;
+      const details: OpenPositionDetails = { triggeredBy, status: 'open', stopLoss, takeProfit };
 
       const newPosition: OpenPosition = {
-          id: crypto.randomUUID(),
-          positionType: "futures",
-          symbol,
-          symbolName: symbol.replace(/M$/, ""),
-          size,
-          averageEntryPrice: entryPrice,
-          currentPrice: entryPrice,
-          side: "long",
-          leverage,
-          liquidationPrice,
-          unrealizedPnl: 0,
-          priceChgPct: 0,
-          openTimestamp: Date.now(),
-          details,
+          id: crypto.randomUUID(), positionType: "futures", symbol, symbolName: symbol.replace(/M$/, ""),
+          size, averageEntryPrice: entryPrice, currentPrice: entryPrice, side: "long",
+          leverage, liquidationPrice, openTimestamp: Date.now(), details,
       };
 
       const newBalance = balance - collateral;
-      saveDataToFirestore({ balance: newBalance });
-      saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
+      const batch = writeBatch(firestore);
 
+      batch.update(userContextDocRef, { balance: newBalance });
+      const positionRef = doc(userContextDocRef, 'openPositions', newPosition.id);
+      batch.set(positionRef, newPosition);
+
+      const newTrade: Omit<PaperTrade, 'id'> = {
+          positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
+          size, entryPrice, side: "long", leverage, openTimestamp: Date.now(), status: "open",
+      };
+      const tradeRef = doc(collection(userContextDocRef, 'tradeHistory'));
+      batch.set(tradeRef, newTrade);
+
+      await batch.commit();
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
+  }, [balance, toast, firestore, userContextDocRef]);
 
-  const futuresSell = useCallback((
+  const futuresSell = useCallback(async (
     symbol: string,
     collateral: number,
     entryPrice: number,
@@ -537,7 +539,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     takeProfit?: number,
     triggeredBy = 'manual'
   ) => {
-      if (!userContextDocRef) return;
+      if (!userContextDocRef || !firestore) return;
       if (balance < collateral) {
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
@@ -545,34 +547,31 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
-
-      const details: OpenPositionDetails = { triggeredBy, status: 'open' };
-      if (stopLoss !== undefined) details.stopLoss = stopLoss;
-      if (takeProfit !== undefined) details.takeProfit = takeProfit;
+      const details: OpenPositionDetails = { triggeredBy, status: 'open', stopLoss, takeProfit };
 
       const newPosition: OpenPosition = {
-          id: crypto.randomUUID(),
-          positionType: "futures",
-          symbol,
-          symbolName: symbol.replace(/M$/, ""),
-          size,
-          averageEntryPrice: entryPrice,
-          currentPrice: entryPrice,
-          side: "short",
-          leverage,
-          liquidationPrice,
-          unrealizedPnl: 0,
-          priceChgPct: 0,
-          openTimestamp: Date.now(),
-          details,
+          id: crypto.randomUUID(), positionType: "futures", symbol, symbolName: symbol.replace(/M$/, ""),
+          size, averageEntryPrice: entryPrice, currentPrice: entryPrice, side: "short",
+          leverage, liquidationPrice, openTimestamp: Date.now(), details,
       };
 
       const newBalance = balance - collateral;
-      saveDataToFirestore({ balance: newBalance });
-      saveSubcollectionDoc('openPositions', newPosition.id, newPosition);
+      const batch = writeBatch(firestore);
+
+      batch.update(userContextDocRef, { balance: newBalance });
+      const positionRef = doc(userContextDocRef, 'openPositions', newPosition.id);
+      batch.set(positionRef, newPosition);
+
+      const newTrade: Omit<PaperTrade, 'id'> = {
+          positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
+          size, entryPrice, side: "short", leverage, openTimestamp: Date.now(), status: "open",
+      };
+      const tradeRef = doc(collection(userContextDocRef, 'tradeHistory'));
+      batch.set(tradeRef, newTrade);
       
+      await batch.commit();
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, toast, saveDataToFirestore, saveSubcollectionDoc, userContextDocRef]);
+  }, [balance, toast, firestore, userContextDocRef]);
   
   const formatPrice = (price?: number) => {
     if (price === undefined || isNaN(price)) return "N/A";
@@ -628,13 +627,68 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "Error", description: "Position not found.", variant: "destructive" });
       return;
     }
+    
+    const tradeHistoryRef = collection(userContextDocRef, 'tradeHistory');
+    const q = (await getDocs(tradeHistoryRef)).docs.find(doc => doc.data().positionId === positionId && doc.data().status === 'open');
 
-    saveSubcollectionDoc('openPositions', positionId, { ...pos, details: { ...pos.details, status: 'closing' } });
-    toast({
-        title: 'Closing Position...',
-        description: `Submitting close order for ${pos.symbolName}.`,
-    });
-  }, [firestore, userContextDocRef, openPositions, toast, saveSubcollectionDoc]);
+    if (!q) {
+      toast({ title: "Error", description: "Open trade history record not found.", variant: "destructive" });
+      return;
+    }
+    const tradeDocRef = q.ref;
+
+    try {
+      let pnl = 0;
+      let collateralToReturn = 0;
+  
+      if (pos.positionType === 'spot') {
+        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        collateralToReturn = pos.size * pos.averageEntryPrice;
+      } else { // Futures
+        const contractValue = pos.size * pos.averageEntryPrice;
+        collateralToReturn = contractValue / (pos.leverage || 1);
+        if (pos.side === "long") {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        } else { // short
+          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+        }
+      }
+      
+      const newBalance = balance + collateralToReturn + pnl;
+  
+      const batch = writeBatch(firestore);
+  
+      batch.update(userContextDocRef, { balance: newBalance });
+      
+      const updatedTrade = {
+        status: 'closed',
+        pnl: pnl,
+        closePrice: pos.currentPrice,
+        closeTimestamp: Date.now()
+      };
+      batch.update(tradeDocRef, updatedTrade);
+  
+      const positionRef = doc(userContextDocRef, 'openPositions', positionId);
+      batch.delete(positionRef);
+  
+      await batch.commit();
+  
+      toast({
+        title: 'Position Closed',
+        description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
+      });
+    } catch (error) {
+      console.error('Failed to close position:', error);
+      toast({ title: "Error Closing Position", description: "Could not update Firestore.", variant: "destructive" });
+      errorEmitter.emit(
+        'permission-error',
+        new FirestorePermissionError({
+          path: doc(userContextDocRef, 'openPositions', positionId).path,
+          operation: 'write',
+        })
+      );
+    }
+  }, [firestore, userContextDocRef, openPositions, balance, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -1083,25 +1137,76 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "No Positions to Close" });
       return;
     }
-  
+    
     toast({
       title: 'Closing All Positions...',
       description: `Submitting close orders for ${openPositions.length} positions.`,
     });
-  
+
+    const batch = writeBatch(firestore);
+    let finalBalance = balance;
+    let totalPnlFromBatch = 0;
+
+    for (const pos of openPositions) {
+      let pnl = 0;
+      let collateralToReturn = 0;
+
+      if (pos.positionType === 'spot') {
+        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        collateralToReturn = pos.size * pos.averageEntryPrice;
+      } else { // Futures
+        const contractValue = pos.size * pos.averageEntryPrice;
+        collateralToReturn = contractValue / (pos.leverage || 1);
+        if (pos.side === "long") {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        } else { // short
+          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+        }
+      }
+
+      finalBalance += collateralToReturn + pnl;
+      totalPnlFromBatch += pnl;
+
+      // Update the trade history record for this position
+      const historyQuery = (await getDocs(collection(userContextDocRef, 'tradeHistory'))).docs.find(doc => doc.data().positionId === pos.id && doc.data().status === 'open');
+      if (historyQuery) {
+        const tradeDocRef = historyQuery.ref;
+        batch.update(tradeDocRef, {
+            status: 'closed',
+            pnl: pnl,
+            closePrice: pos.currentPrice,
+            closeTimestamp: Date.now(),
+        });
+      }
+
+      // Delete the open position
+      const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
+      batch.delete(positionRef);
+    }
+    
+    // Now, calculate the final aggregate metrics
+    const finalRealizedPnl = accountMetrics.realizedPnl + totalPnlFromBatch;
+    const finalWonTrades = accountMetrics.wonTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) * p.size > 0).length;
+    const finalLostTrades = accountMetrics.lostTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) * p.size <= 0).length;
+    const finalTotalClosed = finalWonTrades + finalLostTrades;
+    const finalWinRate = finalTotalClosed > 0 ? (finalWonTrades / finalTotalClosed) * 100 : 0;
+    
+    // Update the main context doc with final values
+    batch.update(userContextDocRef, {
+        balance: finalBalance,
+        equity: finalBalance, // Since all positions are closed, equity equals balance
+        unrealizedPnl: 0,
+        realizedPnl: finalRealizedPnl,
+        winRate: finalWinRate,
+        wonTrades: finalWonTrades,
+        lostTrades: finalLostTrades,
+    });
+
     try {
-      const batch = writeBatch(firestore);
-      
-      openPositions.forEach(pos => {
-        const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
-        batch.update(positionRef, { 'details.status': 'closing' });
-      });
-  
       await batch.commit();
-  
       toast({
-        title: 'All Positions Marked for Closing',
-        description: `Your account will be updated shortly as each trade is processed.`,
+        title: 'All Positions Closed',
+        description: `Account has been updated.`,
       });
     } catch (error) {
       console.error("Error in closeAllPositions:", error);
@@ -1115,7 +1220,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         operation: 'write',
       }));
     }
-  }, [firestore, userContextDocRef, openPositions, toast]);
+  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
@@ -1209,5 +1314,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     

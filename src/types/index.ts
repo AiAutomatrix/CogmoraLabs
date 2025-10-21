@@ -37,14 +37,15 @@ export const PaperTradeSchema = z.object({
   positionType: z.enum(['spot', 'futures']),
   symbol: z.string(),
   symbolName: z.string(),
-  side: z.enum(['buy', 'long', 'short']), // The side of the opening trade
+  side: z.enum(['buy', 'long', 'short', 'sell']),
   size: z.number(),
   entryPrice: z.number(),
-  closePrice: z.number(),
+  closePrice: z.number().optional().nullable(),
   leverage: z.number().nullable(),
   openTimestamp: z.number(),
-  closeTimestamp: z.number(),
-  pnl: z.number(),
+  closeTimestamp: z.number().optional().nullable(),
+  pnl: z.number().optional().nullable(),
+  status: z.enum(['open', 'closed']),
 });
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 
@@ -500,14 +501,6 @@ export const KucoinFuturesContractSchema = z.object({
     highPrice: z.number(),
     priceChgPct: z.number(),
     priceChg: z.number(),
-    k: z.number(),
-    m: z.number(),
-    f: z.number(),
-    mmrLimit: z.number(),
-    mmrLevConstant: z.number(),
-    supportCross: z.boolean(),
-    buyLimit: z.number(),
-    sellLimit: z.number(),
 });
 export type KucoinFuturesContract = z.infer<typeof KucoinFuturesContractSchema>;
 
@@ -555,31 +548,6 @@ export type KucoinErrorMessage = {
   data: string; 
 };
 
-// This interface is a bit of a union of the snapshot and ticker data
-export interface KucoinTicker {
-  symbol: string;
-  symbolName: string;
-  buy: string;
-  sell: string;
-  bestBidSize: string;
-  bestAskSize: string;
-  changeRate: string;
-  changePrice: string;
-  high: string;
-  low: string;
-  vol: string;
-  volValue: string;
-  last: string;
-  averagePrice?: string;
-  takerFeeRate: string;
-  makerFeeRate: string;
-  takerCoefficient?: string;
-  makerCoefficient?: string;
-  price?: string; // Add price to match ticker data structure
-  lastTradedPrice?: string;
-  datetime?: number;
-}
-
 export const KucoinSnapshotDataWrapperSchema = z.object({
     data: SpotSnapshotDataSchema,
     sequence: z.string(),
@@ -620,8 +588,7 @@ export type FuturesSnapshotData = {
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot.24h' | 'snapshot'; // Added 'snapshot'
-    id: string;
+    subject: 'snapshot';
     data: FuturesSnapshotData;
 };
 
@@ -644,5 +611,7 @@ export type WebSocketStatus =
   | 'disconnected'
   | 'error';
 
+
+    
 
     

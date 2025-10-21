@@ -37,7 +37,7 @@ import {
 import Watchlist from "./Watchlist";
 import TradeTriggersDashboard from "./TradeTriggersDashboard";
 import { PositionDetailsPopup } from "./PositionDetailsPopup";
-import type { OpenPosition } from "@/types";
+import type { OpenPosition, PaperTrade } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
 
 interface PaperTradingDashboardProps {
@@ -76,22 +76,15 @@ export default function PaperTradingDashboard({
     [openPositions]
   );
 
-  const totalRealizedPNL = useMemo(
-    () =>
-      tradeHistory
-        .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0),
-    [tradeHistory]
-  );
-
-  const winTrades = tradeHistory.filter(
-    (t) => t.pnl !== undefined && t.pnl > 0
-  ).length;
-  const losingTrades = tradeHistory.filter(
-    (t) => t.pnl !== undefined && t.pnl <= 0
-  ).length;
-  const totalClosedTrades = winTrades + losingTrades;
-  const winRate =
-    totalClosedTrades > 0 ? (winTrades / totalClosedTrades) * 100 : 0;
+  const { realizedPnl, winRate, wonTrades, lostTrades } = useMemo(() => {
+    const closedTrades = tradeHistory.filter((t) => t.status === "closed");
+    const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
+    const won = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
+    const lost = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl <= 0).length;
+    const totalClosed = won + lost;
+    const rate = totalClosed > 0 ? (won / totalClosed) * 100 : 0;
+    return { realizedPnl: totalRealizedPNL, winRate: rate, wonTrades: won, lostTrades: lost };
+  }, [tradeHistory]);
     
   const handleOpenDetails = (position: OpenPosition) => {
     setSelectedPosition(position);
@@ -109,8 +102,8 @@ export default function PaperTradingDashboard({
       currency: "USD",
     }).format(value);
 
-  const formatPrice = (price: number) => {
-    if (!price || isNaN(price)) return "$0.00";
+  const formatPrice = (price: number | undefined) => {
+    if (price === undefined || isNaN(price)) return "$0.00";
     const options: Intl.NumberFormatOptions = {
       style: "currency",
       currency: "USD",
@@ -130,10 +123,9 @@ export default function PaperTradingDashboard({
     return size.toPrecision(3);
   };
   
-  const formatTimestamp = (timestamp: any): string => {
+  const formatTimestamp = (timestamp?: number): string => {
     if (!timestamp) return 'N/A';
-    // Firestore Timestamps have a toDate() method, while numeric timestamps do not.
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     return format(date, "yyyy-MM-dd HH:mm");
   };
 
@@ -152,7 +144,7 @@ export default function PaperTradingDashboard({
   };
 
   const sortedTradeHistory = useMemo(() => {
-    return [...tradeHistory].sort((a, b) => b.closeTimestamp - a.closeTimestamp);
+    return [...tradeHistory].sort((a, b) => (b.closeTimestamp ?? b.openTimestamp) - (a.closeTimestamp ?? a.openTimestamp));
   }, [tradeHistory]);
 
   return (
@@ -190,10 +182,10 @@ export default function PaperTradingDashboard({
             <p className="text-sm text-muted-foreground">Realized P&L</p>
             <p
               className={`text-lg md:text-xl font-bold ${
-                totalRealizedPNL >= 0 ? "text-green-500" : "text-red-500"
+                realizedPnl >= 0 ? "text-green-500" : "text-red-500"
               }`}
             >
-              {formatCurrency(totalRealizedPNL)}
+              {formatCurrency(realizedPnl)}
             </p>
           </div>
           <div className="p-4 bg-muted rounded-lg">
@@ -205,7 +197,7 @@ export default function PaperTradingDashboard({
           <div className="p-4 bg-muted rounded-lg">
             <p className="text-sm text-muted-foreground">Won / Lost</p>
             <p className="text-lg md:text-xl font-bold">
-              <span className="text-green-500">{winTrades}</span> / <span className="text-red-500">{losingTrades}</span>
+              <span className="text-green-500">{wonTrades}</span> / <span className="text-red-500">{lostTrades}</span>
             </p>
           </div>
         </CardContent>
@@ -380,7 +372,7 @@ export default function PaperTradingDashboard({
                 <div>
                     <CardTitle>Trade History</CardTitle>
                     <CardDescription>
-                    A log of all your completed paper trades.
+                    A log of all your paper trades.
                     </CardDescription>
                 </div>
                 <AlertDialog>
@@ -435,7 +427,7 @@ export default function PaperTradingDashboard({
                     <TableBody>
                         {sortedTradeHistory.length > 0 ? (
                         sortedTradeHistory.slice(0, rowsToShow).map((trade) => (
-                            <TableRow key={trade.id}>
+                            <TableRow key={trade.id} className={trade.status === 'open' ? 'opacity-60' : ''}>
                             <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
                             <TableCell
                                 className={`capitalize px-2 py-2 ${
@@ -462,10 +454,10 @@ export default function PaperTradingDashboard({
                                 {formatPrice(trade.entryPrice)}
                             </TableCell>
                             <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatPrice(trade.closePrice)}
+                                {trade.closePrice ? formatPrice(trade.closePrice) : '-'}
                             </TableCell>
                             <TableCell className="hidden md:table-cell px-2 py-2">
-                                {formatTimestamp(trade.closeTimestamp)}
+                                {formatTimestamp(trade.closeTimestamp ?? trade.openTimestamp)}
                             </TableCell>
                             <PNLCell pnl={trade.pnl} />
                             </TableRow>
@@ -514,5 +506,7 @@ export default function PaperTradingDashboard({
     </>
   );
 }
+
+    
 
     
