@@ -2,9 +2,35 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { KucoinTicker, KucoinTokenResponse, IncomingKucoinWebSocketMessage } from "@/types";
+import type { KucoinTokenResponse, IncomingKucoinWebSocketMessage } from "@/types";
 
 const KUCOIN_TICKERS_PROXY_URL = "/api/kucoin-tickers";
+
+// This interface is a bit of a union of the snapshot and ticker data
+export interface KucoinTicker {
+  symbol: string;
+  symbolName: string;
+  buy: string;
+  sell: string;
+  bestBidSize: string;
+  bestAskSize: string;
+  changeRate: string;
+  changePrice: string;
+  high: string;
+  low: string;
+  vol: string;
+  volValue: string;
+  last: string;
+  averagePrice?: string;
+  takerFeeRate: string;
+  makerFeeRate: string;
+  takerCoefficient?: string;
+  makerCoefficient?: string;
+  price?: string; // Add price to match ticker data structure
+  lastTradedPrice?: string;
+  datetime?: number;
+}
+
 
 export function useKucoinTickers() {
   const [tickers, setTickers] = useState<KucoinTicker[]>([]);
