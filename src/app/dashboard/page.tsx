@@ -4,13 +4,12 @@
 import MainViews from '@/components/cogmora-labs/main-views/MainViews';
 import MiniWidgets from '@/components/cogmora-labs/mini-widgets/MiniWidgets';
 import { PaperTradingProvider, usePaperTrading } from '@/context/PaperTradingContext';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
-import type { AgentActionPlan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -35,14 +34,7 @@ const PageContent: React.FC = () => {
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   
-  const { handleAiTriggerAnalysis, nextAiScrapeTime, aiSettings, setAiSettings, isLoaded } = usePaperTrading();
-
-  // AI Agent state is now local to the page for UI purposes
-  const [aiAgentState, setAiAgentState] = useState<AgentActionPlan & { isLoading: boolean }>({
-    analysis: '',
-    plan: [],
-    isLoading: false,
-  });
+  const { handleAiTriggerAnalysis, isLoaded } = usePaperTrading();
 
   const { toast } = useToast();
 
@@ -78,14 +70,11 @@ const PageContent: React.FC = () => {
     'BINANCE:SOLUSDT'
   ]);
   
-  const runAiAnalysis = useCallback(async (isScheduled = false) => {
+  const runAiAnalysis = useCallback(async () => {
     setActiveMiniView('ai_paper_trading');
-    setAiAgentState(prev => ({ ...prev, isLoading: true, plan: [], analysis: '' }));
-    const response = await handleAiTriggerAnalysis(isScheduled);
-    if (response) {
-      setAiAgentState(response);
-    }
+    await handleAiTriggerAnalysis();
   }, [handleAiTriggerAnalysis, setActiveMiniView]);
+
 
   useEffect(() => {
     if (activeView === 'chart') {
@@ -354,8 +343,6 @@ const PageContent: React.FC = () => {
             onSymbolChange={handleSymbolChange}
             activeMiniView={activeMiniView}
             setActiveMiniView={setActiveMiniView}
-            aiAgentState={aiAgentState}
-            setAiAgentState={setAiAgentState}
           />
         </aside>
       </main>

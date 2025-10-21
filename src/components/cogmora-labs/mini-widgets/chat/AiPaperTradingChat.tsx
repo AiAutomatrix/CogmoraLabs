@@ -10,15 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThumbsUp, ThumbsDown, ArrowUp, ArrowDown, Edit, FilePlus, Trash2, ShieldCheck, History, ListTodo } from 'lucide-react';
-import type { AgentAction, AgentActionPlan } from '@/types';
+import type { AgentAction } from '@/types';
 import { format } from 'date-fns';
 
-interface AiPaperTradingChatProps {
-    agentState: AgentActionPlan & { isLoading: boolean };
-    setAgentState: React.Dispatch<React.SetStateAction<AgentActionPlan & { isLoading: boolean }>>;
-}
-
-const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, setAgentState }) => {
+const AiPaperTradingChat: React.FC = () => {
     const { 
         addTradeTrigger, 
         removeTradeTrigger, 
@@ -26,12 +21,13 @@ const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, set
         updatePositionSlTp, 
         logAiAction, 
         lastAiActionPlan,
-        removeActionFromPlan, // New function from context
+        removeActionFromPlan,
         aiActionLogs,
         clearAiActionLogs,
+        isAiLoading,
     } = usePaperTrading();
-    const { isLoading } = agentState;
-    const activePlan = isLoading ? { analysis: '', plan: [] } : (agentState.plan.length > 0 ? agentState : lastAiActionPlan);
+
+    const activePlan = lastAiActionPlan;
 
     const handleApprove = (action: AgentAction) => {
         logAiAction(action);
@@ -44,11 +40,11 @@ const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, set
         } else if (action.type === 'UPDATE_OPEN_POSITION') {
             updatePositionSlTp(action.positionId, action.updates.stopLoss, action.updates.takeProfit);
         }
-        removeActionFromPlan(action); // Use context function to remove from plan
+        removeActionFromPlan(action);
     };
 
     const handleDecline = (action: AgentAction) => {
-        removeActionFromPlan(action); // Also use context function to remove
+        removeActionFromPlan(action);
     };
 
     const formatPrice = (price?: number) => {
@@ -171,7 +167,7 @@ const AiPaperTradingChat: React.FC<AiPaperTradingChatProps> = ({ agentState, set
     }
     
     const MainContent = () => {
-         if (isLoading) {
+         if (isAiLoading) {
             return (
                 <div className="space-y-4 p-4 h-full">
                     <Skeleton className="h-20 w-full" />

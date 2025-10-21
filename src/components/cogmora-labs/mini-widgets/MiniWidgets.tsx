@@ -7,15 +7,12 @@ import { TrendingUp, MessageCircle, Bot } from 'lucide-react';
 import TradingViewTechAnalysisWidget from './analysis/TradingViewTechAnalysisWidget';
 import AiWebchat from './chat/AiWebchat';
 import AiPaperTradingChat from './chat/AiPaperTradingChat';
-import type { AgentActionPlan } from '@/types';
 
 interface MiniWidgetsProps {
   currentSymbol: string;
   onSymbolChange: (symbol: string) => void;
   activeMiniView: string;
   setActiveMiniView: (view: string) => void;
-  aiAgentState: AgentActionPlan & { isLoading: boolean };
-  setAiAgentState: React.Dispatch<React.SetStateAction<AgentActionPlan & { isLoading: boolean }>>;
 }
 
 const MiniWidgets: FC<MiniWidgetsProps> = ({
@@ -23,8 +20,6 @@ const MiniWidgets: FC<MiniWidgetsProps> = ({
   onSymbolChange,
   activeMiniView,
   setActiveMiniView,
-  aiAgentState,
-  setAiAgentState,
 }) => {
   return (
     <Tabs
@@ -59,10 +54,7 @@ const MiniWidgets: FC<MiniWidgetsProps> = ({
       </TabsContent>
 
       <TabsContent value="ai_paper_trading" className="overflow-hidden flex-grow mt-0 p-2">
-        <AiPaperTradingChat 
-          agentState={aiAgentState}
-          setAgentState={setAiAgentState}
-        />
+        <AiPaperTradingChat />
       </TabsContent>
     </Tabs>
   );
