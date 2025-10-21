@@ -1,4 +1,5 @@
 
+
 "use client";
 import React, { useMemo, useState } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -78,16 +79,15 @@ export default function PaperTradingDashboard({
   const totalRealizedPNL = useMemo(
     () =>
       tradeHistory
-        .filter((t) => t.status === "closed")
         .reduce((acc, trade) => acc + (trade.pnl ?? 0), 0),
     [tradeHistory]
   );
 
   const winTrades = tradeHistory.filter(
-    (t) => t.status === "closed" && t.pnl !== undefined && t.pnl > 0
+    (t) => t.pnl !== undefined && t.pnl > 0
   ).length;
   const losingTrades = tradeHistory.filter(
-    (t) => t.status === "closed" && t.pnl !== undefined && t.pnl <= 0
+    (t) => t.pnl !== undefined && t.pnl <= 0
   ).length;
   const totalClosedTrades = winTrades + losingTrades;
   const winRate =
@@ -137,8 +137,8 @@ export default function PaperTradingDashboard({
     return format(date, "yyyy-MM-dd HH:mm");
   };
 
-  const PNLCell = ({ pnl }: { pnl: number | undefined }) => {
-    if (pnl === undefined)
+  const PNLCell = ({ pnl }: { pnl: number | undefined | null }) => {
+    if (pnl === undefined || pnl === null)
       return <TableCell className="text-right px-2 py-2">-</TableCell>;
     return (
       <TableCell
@@ -150,6 +150,10 @@ export default function PaperTradingDashboard({
       </TableCell>
     );
   };
+
+  const sortedTradeHistory = useMemo(() => {
+    return [...tradeHistory].sort((a, b) => b.closeTimestamp - a.closeTimestamp);
+  }, [tradeHistory]);
 
   return (
     <>
@@ -376,7 +380,7 @@ export default function PaperTradingDashboard({
                 <div>
                     <CardTitle>Trade History</CardTitle>
                     <CardDescription>
-                    A log of all your executed paper trades.
+                    A log of all your completed paper trades.
                     </CardDescription>
                 </div>
                 <AlertDialog>
@@ -412,33 +416,26 @@ export default function PaperTradingDashboard({
                     <Table>
                     <TableHeader>
                         <TableRow>
-                        <TableHead className="px-2 py-2">Timestamp</TableHead>
                         <TableHead className="px-2 py-2">Symbol</TableHead>
                         <TableHead className="px-2 py-2">Side</TableHead>
                         <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
                         <TableHead className="text-right px-2 py-2">Size</TableHead>
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Price
+                            Entry Price
                         </TableHead>
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Value (USD)
+                            Close Price
+                        </TableHead>
+                        <TableHead className="hidden md:table-cell px-2 py-2">
+                            Date
                         </TableHead>
                         <TableHead className="text-right px-2 py-2">P&L</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {tradeHistory.length > 0 ? (
-                        tradeHistory.slice(0, rowsToShow).map((trade) => {
-                        const tradePrice = trade.price;
-                        const tradeValue =
-                            trade.positionType === "futures"
-                            ? trade.size * tradePrice
-                            : trade.size * tradePrice;
-                        return (
+                        {sortedTradeHistory.length > 0 ? (
+                        sortedTradeHistory.slice(0, rowsToShow).map((trade) => (
                             <TableRow key={trade.id}>
-                            <TableCell className="px-2 py-2">
-                                {formatTimestamp(trade.timestamp)}
-                            </TableCell>
                             <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
                             <TableCell
                                 className={`capitalize px-2 py-2 ${
@@ -459,18 +456,20 @@ export default function PaperTradingDashboard({
                                 )}
                             </TableCell>
                             <TableCell className="text-right px-2 py-2">
-                                {trade.size.toFixed(6)}
+                                {formatSize(trade.size)}
                             </TableCell>
                             <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatPrice(tradePrice)}
+                                {formatPrice(trade.entryPrice)}
                             </TableCell>
                             <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatCurrency(tradeValue)}
+                                {formatPrice(trade.closePrice)}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell px-2 py-2">
+                                {formatTimestamp(trade.closeTimestamp)}
                             </TableCell>
                             <PNLCell pnl={trade.pnl} />
                             </TableRow>
-                        );
-                        })) : (
+                        ))) : (
                         <TableRow>
                             <TableCell
                             colSpan={8}
@@ -515,3 +514,5 @@ export default function PaperTradingDashboard({
     </>
   );
 }
+
+    

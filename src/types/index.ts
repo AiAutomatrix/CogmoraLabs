@@ -1,4 +1,5 @@
 
+
 import { z } from 'zod';
 
 //==========================================================================
@@ -31,18 +32,19 @@ export type FirestorePaperTradingContext = z.infer<typeof FirestorePaperTradingC
 
 
 export const PaperTradeSchema = z.object({
-  id: z.string().optional(), // Made optional as it's assigned by Firestore
+  id: z.string().optional(),
   positionId: z.string(),
   positionType: z.enum(['spot', 'futures']),
   symbol: z.string(),
   symbolName: z.string(),
+  side: z.enum(['buy', 'long', 'short']), // The side of the opening trade
   size: z.number(),
-  price: z.number(),
-  side: z.enum(['buy', 'sell', 'long', 'short']),
-  leverage: z.number().nullable(), // Allow null
-  timestamp: z.number(),
-  status: z.enum(['open', 'closed']),
-  pnl: z.number().optional().nullable(),
+  entryPrice: z.number(),
+  closePrice: z.number(),
+  leverage: z.number().nullable(),
+  openTimestamp: z.number(),
+  closeTimestamp: z.number(),
+  pnl: z.number(),
 });
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 
@@ -69,6 +71,7 @@ export const OpenPositionSchema = z.object({
   unrealizedPnl: z.number().optional(),
   priceChgPct: z.number().optional(),
   liquidationPrice: z.number().optional(),
+  openTimestamp: z.number(),
   details: OpenPositionDetailsSchema.optional(),
 });
 export type OpenPosition = z.infer<typeof OpenPositionSchema>;
@@ -640,3 +643,6 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+
+    
