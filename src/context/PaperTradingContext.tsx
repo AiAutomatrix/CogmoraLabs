@@ -132,7 +132,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const { toast } = useToast();
   const firestore = useFirestore();
   const { user } = useUser();
-  const { tickers: initialSpotTickers, tickersMap: initialSpotTickersMap } = useKucoinTickers();
+  const { tickersMap: initialSpotTickersMap } = useKucoinTickers();
 
 
   // State for core context data (not subcollections)
@@ -230,68 +230,57 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     );
     unsubscribers.push(unsubContext);
 
-    // Specific listener for openPositions
-    const unsubOpenPositions = onSnapshot(collection(userContextDocRef, 'openPositions'), (snapshot) => {
-      const items = snapshot.docs.map(doc => {
-          const data = doc.data() as Omit<OpenPosition, 'id'>;
-          const ticker = initialSpotTickersMap.get(data.symbol);
-          const initialPrice = ticker ? parseFloat(ticker.last) : data.averageEntryPrice;
-          
-          return {
-              ...data,
-              id: doc.id,
-              currentPrice: initialPrice,
-              unrealizedPnl: (initialPrice - data.averageEntryPrice) * data.size * (data.side === 'short' ? -1 : 1),
-          } as OpenPosition;
-      });
-      setOpenPositions(items);
-    }, (error) => {
-        console.error(`Error listening to openPositions:`, error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: collection(userContextDocRef, 'openPositions').path,
-            operation: 'list',
-        }));
-    });
-    unsubscribers.push(unsubOpenPositions);
-
-    // Specific listener for tradeHistory
-    const unsubTradeHistory = onSnapshot(collection(userContextDocRef, 'tradeHistory'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PaperTrade));
-        setTradeHistory(items);
-    }, (error) => {
-        console.error(`Error listening to tradeHistory:`, error);
-    });
-    unsubscribers.push(unsubTradeHistory);
-
-    // Specific listener for watchlist
-    const unsubWatchlist = onSnapshot(collection(userContextDocRef, 'watchlist'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...doc.data(), symbol: doc.id } as WatchlistItem));
-        setWatchlist(items);
-    }, (error) => {
-        console.error(`Error listening to watchlist:`, error);
-    });
-    unsubscribers.push(unsubWatchlist);
-    
-    // Specific listener for tradeTriggers
-    const unsubTradeTriggers = onSnapshot(collection(userContextDocRef, 'tradeTriggers'), (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TradeTrigger));
-        setTradeTriggers(items);
-    }, (error) => {
-        console.error(`Error listening to tradeTriggers:`, error);
-    });
-    unsubscribers.push(unsubTradeTriggers);
-
-    // Specific listener for priceAlerts
-    const unsubPriceAlerts = onSnapshot(collection(userContextDocRef, 'priceAlerts'), (snapshot) => {
-        const items: Record<string, PriceAlert> = {};
-        snapshot.docs.forEach(doc => {
-            items[doc.id] = doc.data() as PriceAlert;
+    const createSubcollectionListener = <T,>(collectionName: string, setState: React.Dispatch<React.SetStateAction<T[]>>, idKey: keyof T = 'id' as any) => {
+      const collectionRef = collection(userContextDocRef, collectionName);
+      const unsub = onSnapshot(collectionRef, (snapshot) => {
+        const items = snapshot.docs.map(doc => {
+            const data = doc.data();
+            if (collectionName === 'openPositions') {
+                const ticker = initialSpotTickersMap.get(data.symbol);
+                const currentPrice = ticker ? parseFloat(ticker.last) : data.averageEntryPrice;
+                return {
+                    ...data,
+                    [idKey]: doc.id,
+                    currentPrice: currentPrice,
+                    unrealizedPnl: (currentPrice - data.averageEntryPrice) * data.size * (data.side === 'short' ? -1 : 1),
+                } as T;
+            }
+            return { ...data, [idKey]: doc.id } as T;
         });
-        setPriceAlerts(items);
-    }, (error) => {
-        console.error(`Error listening to priceAlerts:`, error);
-    });
-    unsubscribers.push(unsubPriceAlerts);
+        setState(items);
+      }, (error) => {
+          console.error(`Error listening to ${collectionName}:`, error);
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: collectionRef.path,
+              operation: 'list',
+          }));
+      });
+      unsubscribers.push(unsub);
+    };
+
+    const createRecordListener = <T,>(collectionName: string, setState: React.Dispatch<React.SetStateAction<Record<string, T>>>) => {
+        const collectionRef = collection(userContextDocRef, collectionName);
+        const unsub = onSnapshot(collectionRef, (snapshot) => {
+            const items: Record<string, T> = {};
+            snapshot.docs.forEach(doc => {
+                items[doc.id] = doc.data() as T;
+            });
+            setState(items);
+        }, (error) => {
+            console.error(`Error listening to ${collectionName}:`, error);
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: collectionRef.path,
+                operation: 'list',
+            }));
+        });
+        unsubscribers.push(unsub);
+    };
+
+    createSubcollectionListener<OpenPosition>('openPositions', setOpenPositions, 'id');
+    createSubcollectionListener<PaperTrade>('tradeHistory', setTradeHistory, 'id');
+    createSubcollectionListener<WatchlistItem>('watchlist', setWatchlist, 'symbol');
+    createSubcollectionListener<TradeTrigger>('tradeTriggers', setTradeTriggers, 'id');
+    createRecordListener<PriceAlert>('priceAlerts', setPriceAlerts);
 
 
     return () => {
@@ -304,8 +293,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   useEffect(() => {
     if (dataLoadedRef.current && isWsConnected) {
       setIsLoaded(true);
+    } else if (dataLoadedRef.current && symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0) {
+      // If there's nothing to watch, we can consider it loaded.
+      setIsLoaded(true);
     }
-  }, [isWsConnected])
+  }, [isWsConnected, dataLoadedRef.current, symbolsToWatch]);
 
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
@@ -941,7 +933,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     try {
-        const allSpotTickers = initialSpotTickers.filter((t: any) => t.symbol.endsWith('-USDT'));
+        const spotResponse = await fetch('/api/kucoin-tickers');
+        const spotData = await spotResponse.json();
+        const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
 
         if (!allSpotTickers.length && !futuresContracts.length) {
             throw new Error('Could not fetch any screener data.');
@@ -1024,7 +1018,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
       }
     }
-  }, [toast, futuresContracts, userContextDocRef, firestore, watchlist, initialSpotTickers]);
+  }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
 
   const symbolsToWatch = useMemo(() => {
     if (!isLoaded) return { spot: [], futures: [] };
@@ -1143,83 +1137,83 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(async () => {
     if (!firestore || !userContextDocRef || openPositions.length === 0) {
-      toast({ title: "No Positions to Close" });
-      return;
+        toast({ title: "No Positions to Close" });
+        return;
     }
 
     toast({
-      title: 'Closing All Positions...',
-      description: `Sending close orders for ${openPositions.length} positions.`,
+        title: 'Closing All Positions...',
+        description: `Sending close orders for ${openPositions.length} positions.`,
     });
 
     try {
-      const batch = writeBatch(firestore);
-      openPositions.forEach(pos => {
-        const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
-        batch.update(positionRef, { 'details.status': 'closing' });
-      });
-      await batch.commit();
+        const batch = writeBatch(firestore);
+        openPositions.forEach(pos => {
+            const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
+            batch.update(positionRef, { 'details.status': 'closing' });
+        });
+        await batch.commit();
 
-      // After triggering the backend, immediately calculate the final client-side metrics and save them.
-      let finalBalance = balance;
-      let finalRealizedPnl = accountMetrics.realizedPnl;
-      let finalWonTrades = accountMetrics.wonTrades;
-      let finalLostTrades = accountMetrics.lostTrades;
+        // Immediately calculate final client-side metrics and save them.
+        let finalBalance = balance;
+        let finalRealizedPnl = accountMetrics.realizedPnl;
+        let finalWonTrades = accountMetrics.wonTrades;
+        let finalLostTrades = accountMetrics.lostTrades;
 
-      openPositions.forEach(pos => {
-        let pnl = 0;
-        let collateralToReturn = 0;
-        if (pos.positionType === 'spot') {
-          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-          collateralToReturn = pos.size * pos.averageEntryPrice;
-        } else {
-          const contractValue = pos.size * pos.averageEntryPrice;
-          collateralToReturn = contractValue / (pos.leverage || 1);
-          if (pos.side === 'long') {
-            pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-          } else {
-            pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
-          }
-        }
-        finalBalance += collateralToReturn + pnl;
-        finalRealizedPnl += pnl;
-        if (pnl > 0) {
-          finalWonTrades++;
-        } else {
-          finalLostTrades++;
-        }
-      });
-      
-      const totalClosed = finalWonTrades + finalLostTrades;
-      const finalWinRate = totalClosed > 0 ? (finalWonTrades / totalClosed) * 100 : 0;
-      
-      // Update the main context document with the final calculated metrics
-      await setDocumentNonBlocking(userContextDocRef, {
-        balance: finalBalance,
-        equity: finalBalance, // Equity equals balance when no positions are open
-        unrealizedPnl: 0,
-        realizedPnl: finalRealizedPnl,
-        winRate: finalWinRate,
-        wonTrades: finalWonTrades,
-        lostTrades: finalLostTrades,
-      }, { merge: true });
+        openPositions.forEach(pos => {
+            let pnl = 0;
+            let collateralToReturn = 0;
+            if (pos.positionType === 'spot') {
+                pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+                collateralToReturn = pos.size * pos.averageEntryPrice;
+            } else {
+                const contractValue = pos.size * pos.averageEntryPrice;
+                collateralToReturn = contractValue / (pos.leverage || 1);
+                if (pos.side === 'long') {
+                    pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+                } else {
+                    pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+                }
+            }
+            finalBalance += collateralToReturn + pnl;
+            finalRealizedPnl += pnl;
+            if (pnl > 0) {
+                finalWonTrades++;
+            } else {
+                finalLostTrades++;
+            }
+        });
+        
+        const totalClosed = finalWonTrades + finalLostTrades;
+        const finalWinRate = totalClosed > 0 ? (finalWonTrades / totalClosed) * 100 : 0;
+        
+        // Update the main context document with the final calculated metrics
+        setDocumentNonBlocking(userContextDocRef, {
+            balance: finalBalance,
+            equity: finalBalance,
+            unrealizedPnl: 0,
+            realizedPnl: finalRealizedPnl,
+            winRate: finalWinRate,
+            wonTrades: finalWonTrades,
+            lostTrades: finalLostTrades,
+        }, { merge: true });
 
-      toast({
-        title: 'All Positions Marked for Closing',
-        description: 'The backend is processing closures. Metrics updated.',
-      });
+        toast({
+            title: 'All Positions Marked for Closing',
+            description: 'The backend is processing closures. Metrics updated.',
+        });
 
     } catch (error) {
-      console.error("Error in closeAllPositions:", error);
-      toast({
-        title: "Error Closing Positions",
-        description: "Could not initiate closing all positions.",
-        variant: "destructive"
-      });
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: collection(userContextDocRef, 'openPositions').path,
-        operation: 'write',
-      }));
+        console.error("Error in closeAllPositions:", error);
+        toast({
+            title: "Error Closing Positions",
+            description: "Could not initiate closing all positions.",
+            variant: "destructive"
+        });
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: collection(userContextDocRef, 'openPositions').path,
+            operation: 'write',
+        }));
     }
   }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
@@ -1315,5 +1309,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
