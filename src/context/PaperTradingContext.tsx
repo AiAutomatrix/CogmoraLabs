@@ -289,12 +289,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       dataLoadedRef.current = false;
     };
   }, [userContextDocRef, firestore, initialSpotTickersMap]);
+
+  const symbolsToWatch = useMemo(() => {
+    const spot = new Set<string>();
+    const futures = new Set<string>();
+    openPositions.forEach(p => (p.positionType === 'spot' ? spot : futures).add(p.symbol));
+    tradeTriggers.forEach(t => (t.type === 'spot' ? spot : futures).add(t.symbol));
+    watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
+    return { spot: Array.from(spot), futures: Array.from(futures) };
+  }, [openPositions, tradeTriggers, watchlist]);
   
   useEffect(() => {
-    if (dataLoadedRef.current && isWsConnected) {
-      setIsLoaded(true);
-    } else if (dataLoadedRef.current && symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0) {
-      // If there's nothing to watch, we can consider it loaded.
+    if (dataLoadedRef.current && (isWsConnected || (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0))) {
       setIsLoaded(true);
     }
   }, [isWsConnected, dataLoadedRef.current, symbolsToWatch]);
@@ -1020,16 +1026,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [toast, futuresContracts, userContextDocRef, firestore, watchlist]);
 
-  const symbolsToWatch = useMemo(() => {
-    if (!isLoaded) return { spot: [], futures: [] };
-    const spot = new Set<string>();
-    const futures = new Set<string>();
-    openPositions.forEach(p => (p.positionType === 'spot' ? spot : futures).add(p.symbol));
-    tradeTriggers.forEach(t => (t.type === 'spot' ? spot : futures).add(t.symbol));
-    watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
-    return { spot: Array.from(spot), futures: Array.from(futures) };
-  }, [isLoaded, openPositions, tradeTriggers, watchlist]);
-
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
       statusSetter: React.Dispatch<React.SetStateAction<string>>,
@@ -1137,83 +1133,84 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const closeAllPositions = useCallback(async () => {
     if (!firestore || !userContextDocRef || openPositions.length === 0) {
-        toast({ title: "No Positions to Close" });
-        return;
+      toast({ title: "No Positions to Close" });
+      return;
     }
-
+  
     toast({
-        title: 'Closing All Positions...',
-        description: `Sending close orders for ${openPositions.length} positions.`,
+      title: 'Closing All Positions...',
+      description: `Sending close orders for ${openPositions.length} positions.`,
     });
-
+  
     try {
-        const batch = writeBatch(firestore);
-        openPositions.forEach(pos => {
-            const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
-            batch.update(positionRef, { 'details.status': 'closing' });
-        });
-        await batch.commit();
-
-        // Immediately calculate final client-side metrics and save them.
-        let finalBalance = balance;
-        let finalRealizedPnl = accountMetrics.realizedPnl;
-        let finalWonTrades = accountMetrics.wonTrades;
-        let finalLostTrades = accountMetrics.lostTrades;
-
-        openPositions.forEach(pos => {
-            let pnl = 0;
-            let collateralToReturn = 0;
-            if (pos.positionType === 'spot') {
-                pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-                collateralToReturn = pos.size * pos.averageEntryPrice;
-            } else {
-                const contractValue = pos.size * pos.averageEntryPrice;
-                collateralToReturn = contractValue / (pos.leverage || 1);
-                if (pos.side === 'long') {
-                    pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-                } else {
-                    pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
-                }
-            }
-            finalBalance += collateralToReturn + pnl;
-            finalRealizedPnl += pnl;
-            if (pnl > 0) {
-                finalWonTrades++;
-            } else {
-                finalLostTrades++;
-            }
-        });
-        
-        const totalClosed = finalWonTrades + finalLostTrades;
-        const finalWinRate = totalClosed > 0 ? (finalWonTrades / totalClosed) * 100 : 0;
-        
-        // Update the main context document with the final calculated metrics
-        setDocumentNonBlocking(userContextDocRef, {
-            balance: finalBalance,
-            equity: finalBalance,
-            unrealizedPnl: 0,
-            realizedPnl: finalRealizedPnl,
-            winRate: finalWinRate,
-            wonTrades: finalWonTrades,
-            lostTrades: finalLostTrades,
-        }, { merge: true });
-
-        toast({
-            title: 'All Positions Marked for Closing',
-            description: 'The backend is processing closures. Metrics updated.',
-        });
-
+      const batch = writeBatch(firestore);
+      openPositions.forEach(pos => {
+        const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
+        batch.update(positionRef, { 'details.status': 'closing' });
+      });
+  
+      await batch.commit();
+  
+      // Immediately calculate final client-side metrics and save them.
+      let finalBalance = balance;
+      let finalRealizedPnl = accountMetrics.realizedPnl;
+      let finalWonTrades = accountMetrics.wonTrades;
+      let finalLostTrades = accountMetrics.lostTrades;
+  
+      openPositions.forEach(pos => {
+        let pnl = 0;
+        let collateralToReturn = 0;
+        if (pos.positionType === 'spot') {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+          collateralToReturn = pos.size * pos.averageEntryPrice;
+        } else {
+          const contractValue = pos.size * pos.averageEntryPrice;
+          collateralToReturn = contractValue / (pos.leverage || 1);
+          if (pos.side === 'long') {
+            pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+          } else {
+            pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+          }
+        }
+        finalBalance += collateralToReturn + pnl;
+        finalRealizedPnl += pnl;
+        if (pnl > 0) {
+          finalWonTrades++;
+        } else {
+          finalLostTrades++;
+        }
+      });
+  
+      const totalClosed = finalWonTrades + finalLostTrades;
+      const finalWinRate = totalClosed > 0 ? (finalWonTrades / totalClosed) * 100 : 0;
+  
+      // Update the main context document with the final calculated metrics
+      setDocumentNonBlocking(userContextDocRef, {
+        balance: finalBalance,
+        equity: finalBalance, // Equity equals balance when all positions are closed
+        unrealizedPnl: 0,
+        realizedPnl: finalRealizedPnl,
+        winRate: finalWinRate,
+        wonTrades: finalWonTrades,
+        lostTrades: finalLostTrades,
+      }, { merge: true });
+  
+      toast({
+        title: 'All Positions Marked for Closing',
+        description: 'The backend is processing closures. Metrics updated.',
+      });
+  
     } catch (error) {
-        console.error("Error in closeAllPositions:", error);
-        toast({
-            title: "Error Closing Positions",
-            description: "Could not initiate closing all positions.",
-            variant: "destructive"
-        });
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-            path: collection(userContextDocRef, 'openPositions').path,
-            operation: 'write',
-        }));
+      console.error("Error in closeAllPositions:", error);
+      toast({
+        title: "Error Closing Positions",
+        description: "Could not initiate closing all positions.",
+        variant: "destructive"
+      });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: collection(userContextDocRef, 'openPositions').path,
+        operation: 'write',
+      }));
     }
   }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
@@ -1309,3 +1306,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
