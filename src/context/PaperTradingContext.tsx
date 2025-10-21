@@ -41,7 +41,7 @@ import type {
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
 import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
-import { useKucoinTickers } from "@/hooks/useKucoinAllTickersSocket";
+import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
 
 
 const INITIAL_BALANCE = 100000;
@@ -150,7 +150,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isWsConnected, setIsWsConnected] = useState(false);
+  const [isWsConnected, setIsWsConnected] = useState(isWsConnected);
   const dataLoadedRef = useRef(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
 
@@ -298,12 +298,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
     return { spot: Array.from(spot), futures: Array.from(futures) };
   }, [openPositions, tradeTriggers, watchlist]);
-
+  
   useEffect(() => {
-      if (dataLoadedRef.current && (isWsConnected || (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0))) {
-        setIsLoaded(true);
-      }
-  }, [isWsConnected, symbolsToWatch, dataLoadedRef]);
+    if (dataLoadedRef.current && (isWsConnected || (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0))) {
+      setIsLoaded(true);
+    }
+  }, [isWsConnected, dataLoadedRef.current, symbolsToWatch]);
 
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
@@ -687,13 +687,66 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     const positionRef = doc(userContextDocRef, 'openPositions', positionId);
-    setDocumentNonBlocking(positionRef, { 'details.status': 'closing' }, { merge: true });
+    // This is a client-only implementation. No backend function is triggered.
+    try {
+      const batch = writeBatch(firestore);
+      
+      let pnl = 0;
+      let collateralToReturn = 0;
 
-    toast({
-        title: 'Closing Position...',
-        description: `Closing order for ${pos.symbolName} has been sent.`,
-    });
-  }, [firestore, userContextDocRef, openPositions, toast]);
+      if (pos.positionType === 'spot') {
+        pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        collateralToReturn = pos.size * pos.averageEntryPrice;
+      } else { // Futures
+        const contractValue = pos.size * pos.averageEntryPrice;
+        collateralToReturn = contractValue / (pos.leverage || 1);
+        if (pos.side === 'long') {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+        } else {
+          pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
+        }
+      }
+
+      const newBalance = balance + collateralToReturn + pnl;
+
+      // Create history record
+      const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
+      const historyRecord: Omit<PaperTrade, 'id'> = {
+        positionId: pos.id,
+        positionType: pos.positionType,
+        symbol: pos.symbol,
+        symbolName: pos.symbolName,
+        size: pos.size,
+        price: pos.currentPrice,
+        side: pos.side === 'buy' || pos.side === 'long' ? 'sell' : 'buy',
+        leverage: pos.leverage || null,
+        timestamp: Date.now(),
+        status: 'closed',
+        pnl,
+      };
+      batch.set(historyRef, historyRecord);
+
+      // Delete the open position
+      batch.delete(positionRef);
+
+      // Update the main balance
+      batch.update(userContextDocRef, { balance: newBalance });
+
+      await batch.commit();
+
+      toast({
+        title: 'Position Closed',
+        description: `${pos.symbolName} closed. P&L: ${formatPrice(pnl)}`,
+      });
+    } catch (error) {
+      console.error('Failed to close position:', error);
+      toast({ title: 'Error Closing Position', description: 'Could not update Firestore.', variant: 'destructive' });
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: positionRef.path,
+        operation: 'write',
+      }));
+    }
+  }, [firestore, userContextDocRef, openPositions, balance, toast]);
 
 
   const processUpdateRef = useRef((symbol: string, isSpot: boolean, data: any) => {});
@@ -952,7 +1005,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         let orderIndex = 0;
         config.rules.forEach(rule => {
-            let sourceData: (any)[];
+            let sourceData: (KucoinTicker | KucoinFuturesContract)[];
             let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct';
 
             if (rule.source === 'spot') {
@@ -964,12 +1017,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
 
             const sorted = [...sourceData].sort((a, b) => {
-                const valA = parseFloat(a[sortKey]) || 0;
-                const valB = parseFloat(b[sortKey]) || 0;
+                const valA = parseFloat(a[sortKey as keyof typeof a] as string) || 0;
+                const valB = parseFloat(b[sortKey as keyof typeof b] as string) || 0;
                 return valB - valA;
             });
 
-            let selected: (any)[];
+            let selected: (KucoinTicker | KucoinFuturesContract)[];
             if (rule.criteria.startsWith('top')) {
                 selected = sorted.slice(0, rule.count);
             } else { // bottom
@@ -982,12 +1035,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                     const isSpot = rule.source === 'spot';
                     finalItems.push({
                         symbol: item.symbol,
-                        symbolName: isSpot ? item.symbolName : item.symbol.replace(/M$/, ''),
+                        symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
                         type: rule.source,
-                        currentPrice: isSpot ? parseFloat(item.last) : item.markPrice,
-                        priceChgPct: isSpot ? parseFloat(item.changeRate) : item.priceChgPct,
-                        high: isSpot ? parseFloat(item.high) : item.highPrice,
-                        low: isSpot ? parseFloat(item.low) : item.lowPrice,
+                        currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
+                        priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                        high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
+                        low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                         order: orderIndex++,
                     });
                 }
@@ -1144,24 +1197,76 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
     try {
       const batch = writeBatch(firestore);
-      
-      openPositions.forEach(pos => {
+      let totalPnl = 0;
+      let totalCollateralToReturn = 0;
+  
+      for (const pos of openPositions) {
+        let pnl = 0;
+        let collateralToReturn = 0;
+  
+        if (pos.positionType === 'spot') {
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
+          collateralToReturn = pos.size * pos.averageEntryPrice;
+        } else {
+          const contractValue = pos.size * pos.averageEntryPrice;
+          collateralToReturn = contractValue / (pos.leverage || 1);
+          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
+        }
+  
+        totalPnl += pnl;
+        totalCollateralToReturn += collateralToReturn;
+  
+        const historyRef = doc(collection(userContextDocRef, 'tradeHistory'));
+        const historyRecord: Omit<PaperTrade, 'id'> = {
+          positionId: pos.id,
+          positionType: pos.positionType,
+          symbol: pos.symbol,
+          symbolName: pos.symbolName,
+          size: pos.size,
+          price: pos.currentPrice,
+          side: pos.side === 'buy' || pos.side === 'long' ? 'sell' : 'buy',
+          leverage: pos.leverage || null,
+          timestamp: Date.now(),
+          status: 'closed',
+          pnl,
+        };
+        batch.set(historyRef, historyRecord);
+  
         const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
-        batch.update(positionRef, { 'details.status': 'closing' });
-      });
+        batch.delete(positionRef);
+      }
+  
+      const finalBalance = balance + totalCollateralToReturn + totalPnl;
+      const finalRealizedPnl = accountMetrics.realizedPnl + totalPnl;
       
+      const closedCount = openPositions.length;
+      const newWonTrades = accountMetrics.wonTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) > 0).length;
+      const newLostTrades = accountMetrics.lostTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) <= 0).length;
+      const newTotalClosed = newWonTrades + newLostTrades;
+      const newWinRate = newTotalClosed > 0 ? (newWonTrades / newTotalClosed) * 100 : 0;
+  
+      batch.update(userContextDocRef, {
+        balance: finalBalance,
+        equity: finalBalance,
+        unrealizedPnl: 0,
+        realizedPnl: finalRealizedPnl,
+        winRate: newWinRate,
+        wonTrades: newWonTrades,
+        lostTrades: newLostTrades,
+      });
+  
       await batch.commit();
   
       toast({
-        title: 'All Positions Marked for Closing',
-        description: 'The backend is processing the closures. Your account metrics will update in real-time.',
+        title: 'All Positions Closed',
+        description: `Your account has been updated.`,
       });
   
     } catch (error) {
       console.error("Error in closeAllPositions:", error);
       toast({
         title: "Error Closing Positions",
-        description: "Could not initiate closing all positions.",
+        description: "Could not update Firestore.",
         variant: "destructive"
       });
       errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -1169,7 +1274,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         operation: 'write',
       }));
     }
-  }, [firestore, userContextDocRef, openPositions, toast]);
+  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
@@ -1263,3 +1368,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
