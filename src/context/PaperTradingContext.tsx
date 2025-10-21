@@ -18,6 +18,11 @@ import {
   deleteDoc,
   getDocs,
   onSnapshot,
+  query,
+  where,
+  limit,
+  orderBy,
+  updateDoc,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking } from '@/firebase';
 import type {
@@ -43,7 +48,7 @@ import type {
 import { useToast } from "@/hooks/use-toast";
 import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
 import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
-import { useKucoinTickers, type KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
+import { KucoinTicker, useKucoinTickers } from "@/hooks/useKucoinAllTickersSocket";
 
 
 const INITIAL_BALANCE = 100000;
@@ -292,6 +297,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
   }, [userContextDocRef, firestore, initialSpotTickersMap]);
 
+  const symbolsToWatch = useMemo(() => {
+    const spot = new Set<string>();
+    const futures = new Set<string>();
+    openPositions.forEach(p => (p.positionType === 'spot' ? spot : futures).add(p.symbol));
+    tradeTriggers.forEach(t => (t.type === 'spot' ? spot : futures).add(t.symbol));
+    watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
+    return { spot: Array.from(spot), futures: Array.from(futures) };
+  }, [openPositions, tradeTriggers, watchlist]);
+
   useEffect(() => {
     if (dataLoadedRef.current) {
         const needsSpot = symbolsToWatch.spot.length > 0;
@@ -304,16 +318,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             setIsLoaded(true);
         }
     }
-  }, [isWsConnected, dataLoadedRef.current, watchlist, openPositions, tradeTriggers]);
-
-  const symbolsToWatch = useMemo(() => {
-    const spot = new Set<string>();
-    const futures = new Set<string>();
-    openPositions.forEach(p => (p.positionType === 'spot' ? spot : futures).add(p.symbol));
-    tradeTriggers.forEach(t => (t.type === 'spot' ? spot : futures).add(t.symbol));
-    watchlist.forEach(w => (w.type === 'spot' ? spot : futures).add(w.symbol));
-    return { spot: Array.from(spot), futures: Array.from(futures) };
-  }, [openPositions, tradeTriggers, watchlist]);
+  }, [isWsConnected, dataLoadedRef, symbolsToWatch]);
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -462,7 +467,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           batch.update(positionRef, { size: totalSize, averageEntryPrice: newAverageEntry, details });
       } else {
           positionId = crypto.randomUUID();
-          const details: OpenPositionDetails = { triggeredBy, status: 'open', stopLoss, takeProfit };
+          
+          const details: OpenPositionDetails = { triggeredBy, status: 'open' };
+          // Only add SL/TP to details if they are defined
+          if (stopLoss !== undefined) details.stopLoss = stopLoss;
+          if (takeProfit !== undefined) details.takeProfit = takeProfit;
+          
           const newPosition: OpenPosition = {
               id: positionId, positionType: 'spot', symbol, symbolName, size,
               averageEntryPrice: currentPrice, currentPrice, side: 'buy', openTimestamp: Date.now(), details,
@@ -504,7 +514,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
-      const details: OpenPositionDetails = { triggeredBy, status: 'open', stopLoss, takeProfit };
+      
+      const details: OpenPositionDetails = { triggeredBy, status: 'open' };
+      if (stopLoss !== undefined) details.stopLoss = stopLoss;
+      if (takeProfit !== undefined) details.takeProfit = takeProfit;
 
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(), positionType: "futures", symbol, symbolName: symbol.replace(/M$/, ""),
@@ -547,8 +560,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
-      const details: OpenPositionDetails = { triggeredBy, status: 'open', stopLoss, takeProfit };
-
+      
+      const details: OpenPositionDetails = { triggeredBy, status: 'open' };
+      if (stopLoss !== undefined) details.stopLoss = stopLoss;
+      if (takeProfit !== undefined) details.takeProfit = takeProfit;
+      
       const newPosition: OpenPosition = {
           id: crypto.randomUUID(), positionType: "futures", symbol, symbolName: symbol.replace(/M$/, ""),
           size, averageEntryPrice: entryPrice, currentPrice: entryPrice, side: "short",
@@ -628,14 +644,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
     
+    // Find the corresponding open trade in history to update it
     const tradeHistoryRef = collection(userContextDocRef, 'tradeHistory');
-    const q = (await getDocs(tradeHistoryRef)).docs.find(doc => doc.data().positionId === positionId && doc.data().status === 'open');
+    const q = query(tradeHistoryRef, where("positionId", "==", positionId), where("status", "==", "open"), limit(1));
+    const tradeHistorySnapshot = await getDocs(q);
 
-    if (!q) {
+    if (tradeHistorySnapshot.empty) {
       toast({ title: "Error", description: "Open trade history record not found.", variant: "destructive" });
       return;
     }
-    const tradeDocRef = q.ref;
+    const tradeDocRef = tradeHistorySnapshot.docs[0].ref;
 
     try {
       let pnl = 0;
@@ -1144,8 +1162,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     });
 
     const batch = writeBatch(firestore);
-    let finalBalance = balance;
-    let totalPnlFromBatch = 0;
+    let closingPnl = 0;
+    let closingCollateral = 0;
 
     for (const pos of openPositions) {
       let pnl = 0;
@@ -1163,14 +1181,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           pnl = (pos.averageEntryPrice - pos.currentPrice) * pos.size;
         }
       }
+      closingPnl += pnl;
+      closingCollateral += collateralToReturn;
 
-      finalBalance += collateralToReturn + pnl;
-      totalPnlFromBatch += pnl;
-
-      // Update the trade history record for this position
-      const historyQuery = (await getDocs(collection(userContextDocRef, 'tradeHistory'))).docs.find(doc => doc.data().positionId === pos.id && doc.data().status === 'open');
-      if (historyQuery) {
-        const tradeDocRef = historyQuery.ref;
+      // Find the corresponding trade history record and update it
+      const historyQuery = query(collection(userContextDocRef, 'tradeHistory'), where("positionId", "==", pos.id), where("status", "==", "open"), limit(1));
+      const historySnapshot = await getDocs(historyQuery);
+      if (!historySnapshot.empty) {
+        const tradeDocRef = historySnapshot.docs[0].ref;
         batch.update(tradeDocRef, {
             status: 'closed',
             pnl: pnl,
@@ -1178,23 +1196,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             closeTimestamp: Date.now(),
         });
       }
-
-      // Delete the open position
+      
       const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
       batch.delete(positionRef);
     }
     
     // Now, calculate the final aggregate metrics
-    const finalRealizedPnl = accountMetrics.realizedPnl + totalPnlFromBatch;
-    const finalWonTrades = accountMetrics.wonTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) * p.size > 0).length;
-    const finalLostTrades = accountMetrics.lostTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) * p.size <= 0).length;
+    const finalBalance = balance + closingCollateral + closingPnl;
+    const finalRealizedPnl = accountMetrics.realizedPnl + closingPnl;
+    const newWonTrades = openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) * p.size > 0).length;
+    const newLostTrades = openPositions.length - newWonTrades;
+    const finalWonTrades = accountMetrics.wonTrades + newWonTrades;
+    const finalLostTrades = accountMetrics.lostTrades + newLostTrades;
     const finalTotalClosed = finalWonTrades + finalLostTrades;
     const finalWinRate = finalTotalClosed > 0 ? (finalWonTrades / finalTotalClosed) * 100 : 0;
     
-    // Update the main context doc with final values
     batch.update(userContextDocRef, {
         balance: finalBalance,
-        equity: finalBalance, // Since all positions are closed, equity equals balance
+        equity: finalBalance,
         unrealizedPnl: 0,
         realizedPnl: finalRealizedPnl,
         winRate: finalWinRate,
