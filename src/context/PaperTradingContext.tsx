@@ -300,10 +300,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, tradeTriggers, watchlist]);
 
   useEffect(() => {
-    if (dataLoadedRef.current && (isWsConnected || (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0))) {
-      setIsLoaded(true);
-    }
-  }, [isWsConnected, symbolsToWatch]);
+      if (dataLoadedRef.current && (isWsConnected || (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0))) {
+        setIsLoaded(true);
+      }
+  }, [isWsConnected, symbolsToWatch, dataLoadedRef]);
+
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -1144,60 +1145,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     try {
       const batch = writeBatch(firestore);
       
-      let closingPnl = 0;
-      let closingCollateral = 0;
-      let newWonTrades = accountMetrics.wonTrades;
-      let newLostTrades = accountMetrics.lostTrades;
-      
       openPositions.forEach(pos => {
         const positionRef = doc(userContextDocRef, 'openPositions', pos.id);
         batch.update(positionRef, { 'details.status': 'closing' });
-  
-        // Calculate P&L for this closing position
-        let pnl = 0;
-        let collateralToReturn = 0;
-        if (pos.positionType === 'spot') {
-          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size;
-          collateralToReturn = pos.size * pos.averageEntryPrice;
-        } else { // Futures
-          const contractValue = pos.size * pos.averageEntryPrice;
-          collateralToReturn = contractValue / (pos.leverage || 1);
-          pnl = (pos.currentPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1);
-        }
-        
-        closingPnl += pnl;
-        closingCollateral += collateralToReturn;
-
-        if (pnl > 0) {
-            newWonTrades++;
-        } else {
-            newLostTrades++;
-        }
       });
       
-      // Calculate final metrics
-      const finalBalance = balance + closingCollateral + closingPnl;
-      const finalRealizedPnl = accountMetrics.realizedPnl + closingPnl;
-      const totalClosed = newWonTrades + newLostTrades;
-      const finalWinRate = totalClosed > 0 ? (newWonTrades / totalClosed) * 100 : 0;
-      
-      // Update the main context document with final calculated metrics
-      batch.update(userContextDocRef, {
-        balance: finalBalance,
-        equity: finalBalance, // Equity equals balance when all positions are closed
-        unrealizedPnl: 0,
-        realizedPnl: finalRealizedPnl,
-        winRate: finalWinRate,
-        wonTrades: newWonTrades,
-        lostTrades: newLostTrades,
-      });
-
-      // Commit all Firestore changes at once
       await batch.commit();
   
       toast({
         title: 'All Positions Marked for Closing',
-        description: 'The backend is processing closures. Metrics updated.',
+        description: 'The backend is processing the closures. Your account metrics will update in real-time.',
       });
   
     } catch (error) {
@@ -1212,7 +1169,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         operation: 'write',
       }));
     }
-  }, [firestore, userContextDocRef, openPositions, balance, accountMetrics, toast]);
+  }, [firestore, userContextDocRef, openPositions, toast]);
 
   const addPriceAlert = useCallback((symbol: string, price: number, condition: 'above' | 'below') => {
     const newAlert: PriceAlert = { price, condition, triggered: false, notified: false };
@@ -1306,5 +1263,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
