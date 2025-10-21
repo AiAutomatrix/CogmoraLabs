@@ -12,8 +12,10 @@ import React, {
 } from "react";
 import {
   doc,
+  setDoc,
   collection,
   writeBatch,
+  deleteDoc,
   getDocs,
   onSnapshot,
 } from 'firebase/firestore';
@@ -150,7 +152,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isWsConnected, setIsWsConnected] = useState(false);
+  const [isWsConnected, setIsWsConnected] = useState(isWsConnected);
   const dataLoadedRef = useRef(false);
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
 
@@ -300,10 +302,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, tradeTriggers, watchlist]);
   
   useEffect(() => {
-    if (dataLoadedRef.current && (isWsConnected || (symbolsToWatch.spot.length === 0 && symbolsToWatch.futures.length === 0))) {
+    if (dataLoadedRef.current) {
       setIsLoaded(true);
     }
-  }, [isWsConnected, symbolsToWatch.spot.length, symbolsToWatch.futures.length]);
+  }, [dataLoadedRef.current]);
 
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
@@ -1150,6 +1152,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     try {
         const batch = writeBatch(firestore);
+        
         let totalPnlFromBatch = 0;
         let totalCollateralToReturn = 0;
 
@@ -1191,7 +1194,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         const finalBalance = balance + totalCollateralToReturn + totalPnlFromBatch;
         const finalRealizedPnl = accountMetrics.realizedPnl + totalPnlFromBatch;
-        const finalEquity = finalBalance; // Since all positions are closed, equity equals balance
         
         const closedCount = openPositions.length;
         const newWonTrades = accountMetrics.wonTrades + openPositions.filter(p => (p.currentPrice - p.averageEntryPrice) * (p.side === 'short' ? -1 : 1) > 0).length;
@@ -1201,7 +1203,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         batch.update(userContextDocRef, {
             balance: finalBalance,
-            equity: finalEquity,
+            equity: finalBalance,
             unrealizedPnl: 0,
             realizedPnl: finalRealizedPnl,
             winRate: newWinRate,
@@ -1322,3 +1324,6 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+
+    
