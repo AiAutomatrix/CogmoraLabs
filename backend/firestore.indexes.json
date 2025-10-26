@@ -56,8 +56,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "timestamp",
-          "order": "DESCENDING"
+          "fieldPath": "openTimestamp",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -78,5 +78,3 @@
   ],
   "fieldOverrides": []
 }
-
-    

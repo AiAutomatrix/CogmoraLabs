@@ -155,6 +155,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       let pnl = 0;
       let collateralToReturn = 0;
 
+      // Prioritize the closePrice set by the client, fallback to currentPrice for backend triggers
       const closePrice = position.details?.closePrice ?? position.currentPrice;
 
       if (position.positionType === "spot") {
