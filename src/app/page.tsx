@@ -56,12 +56,10 @@ const LiveDemo = () => (
     <div className="container mx-auto text-center">
       <h2 className="text-4xl font-bold mb-4">Live Watchlist Demo</h2>
       <p className="text-muted-foreground mb-8 max-w-3xl mx-auto">
-        This is a live, real-time demonstration of our watchlist component, powered by the same engine used in the main application. Add symbols like BTC-USDT, ETH-USDT, or SOL-USDT to see it in action.
+        This is a live, real-time demonstration of our watchlist component, powered by the same engine used in the main application. It's pre-populated with a few popular symbols to show live price updates from the KuCoin WebSocket feed.
       </p>
       <div className="max-w-4xl mx-auto">
-        <LandingPageDemoProvider>
-          <LandingPageWatchlist />
-        </LandingPageDemoProvider>
+        <LandingPageWatchlist />
       </div>
     </div>
   </section>
@@ -86,7 +84,9 @@ export default function LandingPage() {
     <main>
       <FirebaseClientProvider>
         <HeroContent />
-        <LiveDemo />
+        <LandingPageDemoProvider>
+          <LiveDemo />
+        </LandingPageDemoProvider>
         <Features />
         <Footer />
       </FirebaseClientProvider>
