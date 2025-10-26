@@ -214,92 +214,86 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
  * This is the single source of truth for creating trades from triggers.
  */
 export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradingContext/main/executedTriggers/{triggerId}", async (event) => {
-    const { userId, triggerId } = event.params;
-    const executedTrigger = event.data?.data();
+  const {userId, triggerId} = event.params;
+  const executedTrigger = event.data?.data();
 
-    if (!executedTrigger) {
-        logger.error(`No data for executed trigger ${triggerId} for user ${userId}.`);
-        return;
-    }
+  if (!executedTrigger) {
+    logger.error(`No data for executed trigger ${triggerId} for user ${userId}.`);
+    return;
+  }
 
-    logger.info(`Detected executed trigger ${triggerId} for user ${userId}. Opening position...`);
-    
-    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+  logger.info(`Detected executed trigger ${triggerId} for user ${userId}. Opening position...`);
+  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
 
-    try {
-        await db.runTransaction(async (transaction) => {
-            const userContextDoc = await transaction.get(userContextRef);
-            if (!userContextDoc.exists) {
-                throw new Error(`User context not found for user ${userId}.`);
-            }
+  try {
+    await db.runTransaction(async (transaction) => {
+      const userContextDoc = await transaction.get(userContextRef);
+      if (!userContextDoc.exists) {
+        throw new Error(`User context not found for user ${userId}.`);
+      }
 
-            const currentBalance = userContextDoc.data()?.balance ?? 0;
-            const { type, action, amount, leverage, symbol, symbolName, id, stopLoss, takeProfit } = executedTrigger;
-            const currentPrice = executedTrigger.currentPrice; // Price at execution time
+      const currentBalance = userContextDoc.data()?.balance ?? 0;
+      const {type, action, amount, leverage, symbol, symbolName, id, stopLoss, takeProfit} = executedTrigger;
+      const currentPrice = executedTrigger.currentPrice; // Price at execution time
 
-            if (type === 'spot') {
-                if (currentBalance < amount) {
-                    throw new Error("Insufficient balance for spot buy.");
-                }
-                const size = amount / currentPrice;
-                const newBalance = currentBalance - amount;
+      if (type === "spot") {
+        if (currentBalance < amount) {
+          throw new Error("Insufficient balance for spot buy.");
+        }
+        const size = amount / currentPrice;
+        const newBalance = currentBalance - amount;
 
-                // Check for existing position to average into
-                const openPositionsRef = userContextRef.collection('openPositions');
-                const existingPositionQuery = openPositionsRef.where('symbol', '==', symbol).where('positionType', '==', 'spot').limit(1);
-                const existingPositionSnapshot = await transaction.get(existingPositionQuery);
-                
-                let positionId: string;
-                if (!existingPositionSnapshot.empty) {
-                    const posDoc = existingPositionSnapshot.docs[0];
-                    const posData = posDoc.data();
-                    positionId = posDoc.id;
-                    const totalSize = posData.size + size;
-                    const totalValue = (posData.size * posData.averageEntryPrice) + (size * currentPrice);
-                    transaction.update(posDoc.ref, { size: totalSize, averageEntryPrice: totalValue / totalSize });
-                } else {
-                    const newPositionRef = openPositionsRef.doc();
-                    positionId = newPositionRef.id;
-                    const newPosition = { id: positionId, positionType: 'spot', symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side: 'buy', details: { triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: 'open' } };
-                    transaction.set(newPositionRef, newPosition);
-                }
-                
-                const newTrade = { positionId, positionType: 'spot', symbol, symbolName, size, entryPrice: currentPrice, side: 'buy', leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: 'open' };
-                transaction.set(userContextRef.collection('tradeHistory').doc(), newTrade);
-                transaction.update(userContextRef, { balance: newBalance });
+        // Check for existing position to average into
+        const openPositionsRef = userContextRef.collection("openPositions");
+        const existingPositionQuery = openPositionsRef.where("symbol", "==", symbol).where("positionType", "==", "spot").limit(1);
+        const existingPositionSnapshot = await transaction.get(existingPositionQuery);
+        let positionId: string;
+        if (!existingPositionSnapshot.empty) {
+          const posDoc = existingPositionSnapshot.docs[0];
+          const posData = posDoc.data();
+          positionId = posDoc.id;
+          const totalSize = posData.size + size;
+          const totalValue = (posData.size * posData.averageEntryPrice) + (size * currentPrice);
+          transaction.update(posDoc.ref, {size: totalSize, averageEntryPrice: totalValue / totalSize});
+        } else {
+          const newPositionRef = openPositionsRef.doc();
+          positionId = newPositionRef.id;
+          const newPosition = {id: positionId, positionType: "spot", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side: "buy", details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
+          transaction.set(newPositionRef, newPosition);
+        }
+        const newTrade = {positionId, positionType: "spot", symbol, symbolName, size, entryPrice: currentPrice, side: "buy", leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
+        transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
+        transaction.update(userContextRef, {balance: newBalance});
+      } else { // Futures
+        if (currentBalance < amount) {
+          throw new Error("Insufficient balance for futures collateral.");
+        }
+        const positionValue = amount * leverage;
+        const size = positionValue / currentPrice;
+        const newBalance = currentBalance - amount;
+        const side = action as "long" | "short";
+        const liquidationPrice = side === "long" ? currentPrice * (1 - (1/leverage)) : currentPrice * (1 + (1/leverage));
+        const newPositionRef = userContextRef.collection("openPositions").doc();
+        const positionId = newPositionRef.id;
 
-            } else { // Futures
-                if (currentBalance < amount) {
-                    throw new Error("Insufficient balance for futures collateral.");
-                }
-                const positionValue = amount * leverage;
-                const size = positionValue / currentPrice;
-                const newBalance = currentBalance - amount;
-                const side = action as 'long' | 'short';
-                const liquidationPrice = side === 'long' ? currentPrice * (1 - (1/leverage)) : currentPrice * (1 + (1/leverage));
-                
-                const newPositionRef = userContextRef.collection('openPositions').doc();
-                const positionId = newPositionRef.id;
+        const newPosition = {id: positionId, positionType: "futures", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
+        transaction.set(newPositionRef, newPosition);
 
-                const newPosition = { id: positionId, positionType: 'futures', symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details: { triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: 'open' } };
-                transaction.set(newPositionRef, newPosition);
+        const newTrade = {positionId, positionType: "futures", symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
+        transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
+        transaction.update(userContextRef, {balance: newBalance});
+      }
 
-                const newTrade = { positionId, positionType: 'futures', symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: 'open' };
-                transaction.set(userContextRef.collection('tradeHistory').doc(), newTrade);
-                transaction.update(userContextRef, { balance: newBalance });
-            }
+      // Finally, delete the executed trigger document
+      transaction.delete(event.data!.ref);
+    });
 
-            // Finally, delete the executed trigger document
-            transaction.delete(event.data!.ref);
-        });
-
-        logger.info(`Successfully opened position for trigger ${triggerId}.`);
-
-    } catch (error) {
-        logger.error(`Transaction failed for opening position from trigger ${triggerId}:`, error);
-        // Delete the failed trigger to prevent retries
-        await event.data!.ref.delete();
-    }
+    logger.info(`Successfully opened position for trigger ${triggerId}.`);
+  } catch (error) {
+    logger.error(`Transaction failed for opening position from trigger ${triggerId}:`, error);
+    // Delete the failed trigger to prevent retries
+    await event.data!.ref.delete();
+  }
 });
 
 
