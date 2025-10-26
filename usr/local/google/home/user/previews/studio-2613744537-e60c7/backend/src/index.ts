@@ -148,8 +148,10 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const currentBalance = userContextDoc.data()?.balance ?? 0;
       let pnl = 0;
       let collateralToReturn = 0;
-      
+
+      // THE FIX: Prioritize the closePrice from the client if it exists.
       const closePrice = position.details?.closePrice ?? position.currentPrice;
+
 
       if (position.positionType === "spot") {
         pnl = (closePrice - position.averageEntryPrice) * position.size;
@@ -172,7 +174,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       // 2. Create the trade history record for the closed position
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
-      
+
       // Find the original open trade in history to get its timestamp
       const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
         .where("positionId", "==", positionId)
@@ -182,6 +184,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       const openTradeSnapshot = await transaction.get(openTradeQuery);
       const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
+
 
       const historyRecord = {
         positionId: positionId,
@@ -286,3 +289,5 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
+
+    
