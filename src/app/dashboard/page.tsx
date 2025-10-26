@@ -228,6 +228,8 @@ const PageContent: React.FC = () => {
                 </SheetTrigger>
                 <SheetContent side="right" className="w-72 p-0 flex flex-col">
                     <SheetHeader className="p-4 border-b">
+                        <SheetTitle className="sr-only">Main Navigation</SheetTitle>
+                        <SheetDescription className="sr-only">User profile and app navigation links.</SheetDescription>
                         <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10">
                               <AvatarImage src={user?.photoURL || ''} alt={user?.displayName || 'User'} />
