@@ -65,6 +65,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
   const spotWs = useRef<WebSocket | null>(null);
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const subscribedSpotSymbols = useRef(new Set<string>());
   
   const processUpdate = useCallback((symbol: string, data: Partial<SpotSnapshotData>) => {
     const newPrice = data.lastTradedPrice;
@@ -91,18 +92,19 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
     if (spotWs.current) {
-        // Handle changes in subscription list
-        const currentSubs = new Set(JSON.parse(spotWs.current.url.split('subs=')[1] || '[]'));
         const newSubs = new Set(symbolsToSubscribe);
 
-        const toAdd = [...newSubs].filter(s => !currentSubs.has(s));
-        const toRemove = [...currentSubs].filter(s => !newSubs.has(s));
+        const toAdd = [...newSubs].filter(s => !subscribedSpotSymbols.current.has(s));
+        const toRemove = [...subscribedSpotSymbols.current].filter(s => !newSubs.has(s));
 
-        toAdd.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}` })));
-        toRemove.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}` })));
-        
-        // Update URL for reference
-        spotWs.current.url = spotWs.current.url.split('subs=')[0] + 'subs=' + JSON.stringify(symbolsToSubscribe);
+        toAdd.forEach(symbol => {
+          spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}` }));
+          subscribedSpotSymbols.current.add(symbol);
+        });
+        toRemove.forEach(symbol => {
+          spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}` }));
+          subscribedSpotSymbols.current.delete(symbol);
+        });
         return;
     }
     if (symbolsToSubscribe.length === 0) return;
@@ -113,8 +115,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
       if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
 
       const { token, instanceServers } = tokenData.data;
-      // Stash subscriptions in URL to help manage re-subscriptions if needed
-      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-landing-demo-${Date.now()}&subs=${JSON.stringify(symbolsToSubscribe)}`;
+      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-landing-demo-${Date.now()}`;
 
       setSpotWsStatus("connecting");
       const ws = new WebSocket(wsUrl);
@@ -129,6 +130,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
         
         symbolsToSubscribe.forEach((symbol) => {
           ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
+          subscribedSpotSymbols.current.add(symbol);
         });
       };
 
@@ -140,8 +142,16 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
           processUpdate(symbol, wrapper.data);
         }
       };
-      ws.onclose = () => { setSpotWsStatus("disconnected"); spotWs.current = null; };
-      ws.onerror = () => { setSpotWsStatus("error"); spotWs.current = null; };
+      ws.onclose = () => { 
+        setSpotWsStatus("disconnected"); 
+        spotWs.current = null;
+        subscribedSpotSymbols.current.clear();
+      };
+      ws.onerror = () => { 
+        setSpotWsStatus("error"); 
+        spotWs.current = null;
+        subscribedSpotSymbols.current.clear();
+      };
     } catch (error) {
       setSpotWsStatus("error");
       const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
@@ -152,10 +162,12 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   useEffect(() => {
     const symbols = watchlist.map(item => item.symbol);
-    if (symbols.length > 0) {
-      connectToSpot(symbols);
-    } else if (spotWs.current) {
+    connectToSpot(symbols);
+    
+    return () => {
+      if(spotWs.current?.readyState === WebSocket.OPEN) {
         spotWs.current.close();
+      }
     }
   }, [watchlist, connectToSpot]);
 
@@ -293,5 +305,3 @@ export const useLandingPageDemo = (): LandingPageDemoContextType => {
   }
   return context;
 };
-
-    
