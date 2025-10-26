@@ -17,6 +17,9 @@ import type {
   KucoinSnapshotDataWrapper,
   SpotSnapshotData,
   AutomationConfig,
+  AutomationRule,
+  KucoinFuturesContract,
+  KucoinTicker,
 } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { getSpotWsToken } from "@/app/actions/kucoinActions";
@@ -86,16 +89,32 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, [priceAlerts, toast]);
 
-  const connectToSpot = useCallback(async () => {
-    if (spotWs.current) return;
-    setSpotWsStatus("fetching_token");
+  const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
+    if (spotWs.current) {
+        // Handle changes in subscription list
+        const currentSubs = new Set(JSON.parse(spotWs.current.url.split('subs=')[1] || '[]'));
+        const newSubs = new Set(symbolsToSubscribe);
 
+        const toAdd = [...newSubs].filter(s => !currentSubs.has(s));
+        const toRemove = [...currentSubs].filter(s => !newSubs.has(s));
+
+        toAdd.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}` })));
+        toRemove.forEach(symbol => spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}` })));
+        
+        // Update URL for reference
+        spotWs.current.url = spotWs.current.url.split('subs=')[0] + 'subs=' + JSON.stringify(symbolsToSubscribe);
+        return;
+    }
+    if (symbolsToSubscribe.length === 0) return;
+
+    setSpotWsStatus("fetching_token");
     try {
       const tokenData = await getSpotWsToken();
       if (tokenData.code !== "200000") throw new Error("Failed to fetch KuCoin Spot WebSocket token");
 
       const { token, instanceServers } = tokenData.data;
-      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-landing-demo-${Date.now()}`;
+      // Stash subscriptions in URL to help manage re-subscriptions if needed
+      const wsUrl = `${instanceServers[0].endpoint}?token=${token}&connectId=cogmora-landing-demo-${Date.now()}&subs=${JSON.stringify(symbolsToSubscribe)}`;
 
       setSpotWsStatus("connecting");
       const ws = new WebSocket(wsUrl);
@@ -108,8 +127,8 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
         }, instanceServers[0].pingInterval / 2);
         
-        watchlist.forEach((item) => {
-          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${item.symbol}`, response: true }));
+        symbolsToSubscribe.forEach((symbol) => {
+          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
         });
       };
 
@@ -121,32 +140,31 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
           processUpdate(symbol, wrapper.data);
         }
       };
-      ws.onclose = () => setSpotWsStatus("disconnected");
-      ws.onerror = () => setSpotWsStatus("error");
+      ws.onclose = () => { setSpotWsStatus("disconnected"); spotWs.current = null; };
+      ws.onerror = () => { setSpotWsStatus("error"); spotWs.current = null; };
     } catch (error) {
       setSpotWsStatus("error");
       const errorMessage = error instanceof Error ? error.message : "Unknown connection error";
       console.error("Demo Spot WS Error", error);
       toast({ title: "Demo WebSocket Error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
     }
-  }, [toast, processUpdate, watchlist]);
+  }, [toast, processUpdate]);
 
   useEffect(() => {
-    connectToSpot();
-    return () => {
-      spotWs.current?.close();
-      if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
+    const symbols = watchlist.map(item => item.symbol);
+    if (symbols.length > 0) {
+      connectToSpot(symbols);
+    } else if (spotWs.current) {
+        spotWs.current.close();
     }
-  }, [connectToSpot]);
+  }, [watchlist, connectToSpot]);
 
   const toggleWatchlist = (symbol: string, symbolName: string, type: 'spot' | 'futures') => {
     setWatchlist(prev => {
         const existing = prev.find(item => item.symbol === symbol);
         if (existing) {
-            spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: `/market/snapshot:${symbol}` }));
             return prev.filter(item => item.symbol !== symbol);
         } else {
-            spotWs.current?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: `/market/snapshot:${symbol}` }));
             return [...prev, { symbol, symbolName, type, currentPrice: 0, priceChgPct: 0, order: prev.length + 1 }];
         }
     });
@@ -177,9 +195,74 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
     toast({ title: 'Demo Trigger Removed' });
   };
   
-  const applyWatchlistAutomation = () => {
-    toast({ title: 'Automation In Demo', description: 'This would scrape screeners and update your watchlist in the full app!' });
+  const applyWatchlistAutomation = async () => {
+    toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data...' });
+
+    try {
+        const spotResponse = await fetch('/api/kucoin-tickers');
+        const spotData = await spotResponse.json();
+        const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+
+        if (!allSpotTickers.length) {
+            throw new Error('Could not fetch any screener data.');
+        }
+
+        let finalItems: WatchlistItem[] = [];
+        const addedSymbols = new Set<string>();
+
+        let orderIndex = 0;
+        automationConfig.rules.forEach(rule => {
+            if (rule.source !== 'spot') return; // Demo only supports spot
+
+            const sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+            
+            const sorted = [...allSpotTickers].sort((a, b) => {
+                const valA = parseFloat((a as any)[sortKey]) || 0;
+                const valB = parseFloat((b as any)[sortKey]) || 0;
+                return valB - valA;
+            });
+
+            let selected: KucoinTicker[];
+            if (rule.criteria.startsWith('top')) {
+                selected = sorted.slice(0, rule.count);
+            } else { // bottom
+                selected = sorted.slice(-rule.count).reverse();
+            }
+
+            selected.forEach(item => {
+                if (!addedSymbols.has(item.symbol)) {
+                    addedSymbols.add(item.symbol);
+                    finalItems.push({
+                        symbol: item.symbol,
+                        symbolName: item.symbolName,
+                        type: 'spot',
+                        currentPrice: parseFloat(item.last),
+                        priceChgPct: parseFloat(item.changeRate),
+                        high: parseFloat(item.high),
+                        low: parseFloat(item.low),
+                        order: orderIndex++,
+                    });
+                }
+            });
+        });
+        
+        if (automationConfig.clearExisting) {
+            setWatchlist(finalItems);
+        } else {
+            setWatchlist(prev => {
+                const existingSymbols = new Set(prev.map(i => i.symbol));
+                const newItems = finalItems.filter(i => !existingSymbols.has(i.symbol));
+                return [...prev, ...newItems];
+            });
+        }
+        
+        toast({ title: 'Watchlist Updated', description: `Demo watchlist has been updated based on your rules.`});
+    } catch(error) {
+      console.error('Demo watchlist automation failed:', error);
+      toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
+    }
   };
+
 
   return (
     <LandingPageDemoContext.Provider
@@ -210,3 +293,5 @@ export const useLandingPageDemo = (): LandingPageDemoContextType => {
   }
   return context;
 };
+
+    
