@@ -27,7 +27,7 @@ export const aiAgentScheduler = onSchedule({
 
   try {
     const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-      .where("aiSettings.scheduleInterval", ">", 0) // Ensures we only get users with scheduling enabled
+      .where("aiSettings.scheduleInterval", ">", 0)
       .where("aiSettings.nextRun", "<=", currentTime)
       .get();
 
@@ -149,9 +149,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       let pnl = 0;
       let collateralToReturn = 0;
 
-      // THE FIX: Prioritize the closePrice from the client if it exists.
       const closePrice = position.details?.closePrice ?? position.currentPrice;
-
 
       if (position.positionType === "spot") {
         pnl = (closePrice - position.averageEntryPrice) * position.size;
@@ -168,7 +166,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const newBalance = currentBalance + collateralToReturn + pnl;
 
       // --- WRITES LAST ---
-
       // 1. Update the main balance
       transaction.update(userContextRef, {balance: newBalance});
 
@@ -184,7 +181,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       const openTradeSnapshot = await transaction.get(openTradeQuery);
       const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
-
 
       const historyRecord = {
         positionId: positionId,
@@ -289,5 +285,3 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
-
-    

@@ -1,4 +1,3 @@
-
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -27,7 +26,7 @@ export const aiAgentScheduler = onSchedule({
 
   try {
     const aiUsersSnapshot = await db.collectionGroup("paperTradingContext")
-      .where("aiSettings.scheduleInterval", ">", 0) // Ensures we only get users with scheduling enabled
+      .where("aiSettings.scheduleInterval", ">", 0)
       .where("aiSettings.nextRun", "<=", currentTime)
       .get();
 
@@ -48,9 +47,6 @@ export const aiAgentScheduler = onSchedule({
 
       logger.info(`Processing AI task for user: ${userId}`);
 
-      // In a real implementation, you would invoke the Genkit flow here.
-      // ...
-
       const nextRun = currentTime + aiSettings.scheduleInterval;
       await doc.ref.update({"aiSettings.nextRun": nextRun});
 
@@ -61,7 +57,6 @@ export const aiAgentScheduler = onSchedule({
     logger.error("This likely means you are missing a Firestore composite index. Required index: collectionGroup='paperTradingContext', fields=[(aiSettings.nextRun, ASCENDING), (aiSettings.scheduleInterval, ASCENDING)]");
   }
 });
-
 
 /**
  * Scheduled function that runs every minute to execute due watchlist scraper tasks.
@@ -75,10 +70,9 @@ export const watchlistScraperScheduler = onSchedule({
   const currentTime = now.toMillis();
 
   try {
-    // Corrected query to use both fields in the composite index.
     const scraperUsersSnapshot = await db.collectionGroup("paperTradingContext")
       .where("automationConfig.updateMode", "==", "auto-refresh")
-      .where("automationConfig.lastRun", "<=", currentTime - 60000) // 1-minute buffer
+      .where("automationConfig.lastRun", "<=", currentTime - 60000)
       .get();
 
     if (scraperUsersSnapshot.empty) {
@@ -90,7 +84,6 @@ export const watchlistScraperScheduler = onSchedule({
 
     for (const doc of scraperUsersSnapshot.docs) {
       const config = doc.data().automationConfig;
-      // The main time check is now in the query, but we add a small buffer here to be safe.
       if (!config || !config.lastRun || (config.lastRun + config.refreshInterval > currentTime)) {
         continue;
       }
@@ -99,9 +92,6 @@ export const watchlistScraperScheduler = onSchedule({
       if (!userId) continue;
 
       logger.info(`Processing watchlist scraper task for user: ${userId}`);
-
-      // In a real implementation, you would invoke scraping logic here.
-      // ...
 
       await doc.ref.update({"automationConfig.lastRun": currentTime});
       logger.info(`Watchlist scraper task for user ${userId} completed.`);
@@ -112,10 +102,8 @@ export const watchlistScraperScheduler = onSchedule({
   }
 });
 
-
 /**
  * Firestore trigger to handle the closing of a paper trading position.
- * This function calculates P&L, updates the user's balance, and cleans up records.
  */
 export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTradingContext/main/openPositions/{positionId}", async (event) => {
   const change = event.data;
@@ -136,55 +124,43 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
   try {
     await db.runTransaction(async (transaction) => {
-      // --- READS FIRST ---
       const userContextDoc = await transaction.get(userContextRef);
 
-      // --- VALIDATION ---
       if (!userContextDoc.exists) {
         throw new Error("User context document does not exist!");
       }
 
-      // --- CALCULATIONS ---
       const currentBalance = userContextDoc.data()?.balance ?? 0;
       let pnl = 0;
       let collateralToReturn = 0;
-      
-      // THE FIX: Prioritize the closePrice from the client if it exists.
-      const closePrice = position.details?.closePrice ?? position.currentPrice;
 
+      const closePrice = position.details?.closePrice ?? position.currentPrice;
 
       if (position.positionType === "spot") {
         pnl = (closePrice - position.averageEntryPrice) * position.size;
         collateralToReturn = position.size * position.averageEntryPrice;
-      } else { // Futures
+      } else {
         const contractValue = position.size * position.averageEntryPrice;
         collateralToReturn = contractValue / position.leverage;
         if (position.side === "long") {
           pnl = (closePrice - position.averageEntryPrice) * position.size;
-        } else { // short
+        } else {
           pnl = (position.averageEntryPrice - closePrice) * position.size;
         }
       }
       const newBalance = currentBalance + collateralToReturn + pnl;
 
-      // --- WRITES LAST ---
-
-      // 1. Update the main balance
       transaction.update(userContextRef, {balance: newBalance});
 
-      // 2. Create the trade history record for the closed position
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
-      
-      // Find the original open trade in history to get its timestamp
       const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
-          .where("positionId", "==", positionId)
-          .where("status", "==", "open")
-          .orderBy("openTimestamp", "asc")
-          .limit(1);
+        .where("positionId", "==", positionId)
+        .where("status", "==", "open")
+        .orderBy("openTimestamp", "asc")
+        .limit(1);
 
       const openTradeSnapshot = await transaction.get(openTradeQuery);
       const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
-
 
       const historyRecord = {
         positionId: positionId,
@@ -192,9 +168,9 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         symbol: position.symbol,
         symbolName: position.symbolName,
         size: position.size,
-        entryPrice: position.averageEntryPrice, // Log the entry price
-        closePrice: closePrice, // Use the determined closing price
-        side: position.side === "buy" || position.side === "long" ? "sell" : "buy", // Record the closing action
+        entryPrice: position.averageEntryPrice,
+        closePrice: closePrice,
+        side: position.side === "buy" || position.side === "long" ? "sell" : "buy",
         leverage: position.leverage || null,
         openTimestamp: openTimestamp,
         closeTimestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -203,27 +179,22 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       };
       transaction.set(tradeHistoryRef, historyRecord);
 
-      // 3. Delete the open position
       transaction.delete(change.after.ref);
 
       logger.info(`Transaction successful for position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
-    // Revert status to 'open' on failure to allow for retry
     await change.after.ref.update({"details.status": "open"});
   }
 });
 
-
 /**
  * Recalculates and updates aggregate account metrics.
- * This can be triggered by changes in positions or history.
  */
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{subCollection}/{subDocId}", async (event) => {
   const {userId, subCollection} = event.params;
 
-  // Only trigger for relevant subcollections
   if (subCollection !== "openPositions" && subCollection !== "tradeHistory") {
     return;
   }
@@ -243,18 +214,15 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     }
 
     const balance = userContextSnap.data()?.balance ?? 0;
-
-    // Calculate Unrealized P&L
     let unrealizedPnl = 0;
+
     openPositionsSnapshot.forEach((doc) => {
       const pos = doc.data();
       unrealizedPnl += pos.unrealizedPnl || 0;
     });
 
-    // Calculate Equity
     const equity = balance + unrealizedPnl;
 
-    // Calculate Realized P&L and Win Rate
     let realizedPnl = 0;
     let wonTrades = 0;
     let lostTrades = 0;
