@@ -592,7 +592,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
     if (Math.abs(price) < 1) {
         options.minimumFractionDigits = 2;
-        options.maximumFractionDigits = 2;
         options.maximumFractionDigits = 8;
     } else {
         options.minimumFractionDigits = 2;
@@ -642,7 +641,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
     const posDocRef = doc(userContextDocRef, 'openPositions', positionId);
     try {
-      await updateDocumentNonBlocking(posDocRef, { 'details.status': 'closing' });
+      // THE FIX: Pass the current price from the client to the backend
+      const detailsUpdate = {
+        ...pos.details,
+        status: 'closing',
+        closePrice: pos.currentPrice, // Provide the exact closing price
+      };
+      await updateDocumentNonBlocking(posDocRef, { 'details': detailsUpdate });
       toast({
         title: 'Position Closing...',
         description: `${pos.symbolName} position is being processed for closure.`,
@@ -1116,7 +1121,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     try {
       for (const pos of openPositions) {
         const posDocRef = doc(userContextDocRef, 'openPositions', pos.id);
-        await updateDocumentNonBlocking(posDocRef, { 'details.status': 'closing' });
+        const detailsUpdate = {
+            ...pos.details,
+            status: 'closing',
+            closePrice: pos.currentPrice, // Provide close price for manual all-close
+        };
+        await updateDocumentNonBlocking(posDocRef, { 'details': detailsUpdate });
       }
       toast({ title: 'Closing All Positions', description: `Initiated closure for ${openPositions.length} positions.` });
     } catch (error) {
@@ -1218,3 +1228,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+

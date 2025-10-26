@@ -1,4 +1,3 @@
-
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
@@ -148,17 +147,21 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const currentBalance = userContextDoc.data()?.balance ?? 0;
       let pnl = 0;
       let collateralToReturn = 0;
+      
+      // THE FIX: Prioritize the closePrice from the client if it exists.
+      const closePrice = position.details?.closePrice ?? position.currentPrice;
+
 
       if (position.positionType === "spot") {
-        pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
+        pnl = (closePrice - position.averageEntryPrice) * position.size;
         collateralToReturn = position.size * position.averageEntryPrice;
       } else { // Futures
         const contractValue = position.size * position.averageEntryPrice;
         collateralToReturn = contractValue / position.leverage;
         if (position.side === "long") {
-          pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
+          pnl = (closePrice - position.averageEntryPrice) * position.size;
         } else { // short
-          pnl = (position.averageEntryPrice - position.currentPrice) * position.size;
+          pnl = (position.averageEntryPrice - closePrice) * position.size;
         }
       }
       const newBalance = currentBalance + collateralToReturn + pnl;
@@ -170,6 +173,18 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       // 2. Create the trade history record for the closed position
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
+      
+      // Find the original open trade in history to get its timestamp
+      const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
+          .where("positionId", "==", positionId)
+          .where("status", "==", "open")
+          .orderBy("openTimestamp", "asc")
+          .limit(1);
+
+      const openTradeSnapshot = await transaction.get(openTradeQuery);
+      const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
+
+
       const historyRecord = {
         positionId: positionId,
         positionType: position.positionType,
@@ -177,10 +192,10 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         symbolName: position.symbolName,
         size: position.size,
         entryPrice: position.averageEntryPrice, // Log the entry price
-        closePrice: position.currentPrice, // Use currentPrice as the closing price
+        closePrice: closePrice, // Use the determined closing price
         side: position.side === "buy" || position.side === "long" ? "sell" : "buy", // Record the closing action
         leverage: position.leverage || null,
-        openTimestamp: position.details?.openTimestamp || null, // Assuming you add openTimestamp to details
+        openTimestamp: openTimestamp,
         closeTimestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: "closed",
         pnl: pnl,

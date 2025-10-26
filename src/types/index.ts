@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 
 //==========================================================================
@@ -42,7 +41,7 @@ export const PaperTradeSchema = z.object({
   closePrice: z.number().optional().nullable(),
   leverage: z.number().nullable(),
   openTimestamp: z.number(),
-  closeTimestamp: z.number().optional().nullable(),
+  closeTimestamp: z.any().optional().nullable(), // Allow Firestore server timestamp
   pnl: z.number().optional().nullable(),
   status: z.enum(['open', 'closed']),
 });
@@ -52,8 +51,9 @@ export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 export const OpenPositionDetailsSchema = z.object({
   stopLoss: z.number().optional(),
   takeProfit: z.number().optional(),
-  triggeredBy: z.string().optional(), // e.g., 'manual', 'trigger:above', 'trigger:below'
-  status: z.enum(['open', 'closing']).optional(), // For backend processing
+  triggeredBy: z.string().optional(),
+  status: z.enum(['open', 'closing']).optional(),
+  closePrice: z.number().optional(), // Price at the moment of manual close
 });
 export type OpenPositionDetails = z.infer<typeof OpenPositionDetailsSchema>;
 
