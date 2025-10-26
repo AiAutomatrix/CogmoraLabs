@@ -160,54 +160,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, [toast, processUpdate]);
 
-  useEffect(() => {
-    const symbols = watchlist.map(item => item.symbol);
-    connectToSpot(symbols);
-    
-    return () => {
-      if(spotWs.current?.readyState === WebSocket.OPEN) {
-        spotWs.current.close();
-      }
-    }
-  }, [watchlist, connectToSpot]);
-
-  const toggleWatchlist = (symbol: string, symbolName: string, type: 'spot' | 'futures') => {
-    setWatchlist(prev => {
-        const existing = prev.find(item => item.symbol === symbol);
-        if (existing) {
-            return prev.filter(item => item.symbol !== symbol);
-        } else {
-            return [...prev, { symbol, symbolName, type, currentPrice: 0, priceChgPct: 0, order: prev.length + 1 }];
-        }
-    });
-  };
-
-  const addPriceAlert = (symbol: string, price: number, condition: 'above' | 'below') => {
-    setPriceAlerts(prev => ({...prev, [symbol]: { price, condition, triggered: false }}));
-    toast({ title: 'Demo Alert Set', description: `Alert set for ${symbol}.` });
-  };
-  
-  const removePriceAlert = (symbol: string) => {
-    setPriceAlerts(prev => {
-      const newAlerts = {...prev};
-      delete newAlerts[symbol];
-      return newAlerts;
-    });
-    toast({ title: 'Demo Alert Removed' });
-  };
-
-  const addTradeTrigger = (trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
-    const newTrigger: TradeTrigger = { ...trigger, id: crypto.randomUUID(), details: { status: 'active' } };
-    setTradeTriggers(prev => [...prev, newTrigger]);
-    toast({ title: 'Demo Trigger Set!', description: `A trigger for ${trigger.symbolName} has been added.` });
-  };
-  
-  const removeTradeTrigger = (triggerId: string) => {
-    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
-    toast({ title: 'Demo Trigger Removed' });
-  };
-  
-  const applyWatchlistAutomation = async () => {
+  const applyWatchlistAutomation = useCallback(async () => {
     toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data...' });
 
     try {
@@ -273,8 +226,60 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
       console.error('Demo watchlist automation failed:', error);
       toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
     }
+  }, [automationConfig, toast]);
+
+
+  useEffect(() => {
+    applyWatchlistAutomation();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const symbols = watchlist.map(item => item.symbol);
+    connectToSpot(symbols);
+    
+    return () => {
+      if(spotWs.current?.readyState === WebSocket.OPEN) {
+        spotWs.current.close();
+      }
+    }
+  }, [watchlist, connectToSpot]);
+
+  const toggleWatchlist = (symbol: string, symbolName: string, type: 'spot' | 'futures') => {
+    setWatchlist(prev => {
+        const existing = prev.find(item => item.symbol === symbol);
+        if (existing) {
+            return prev.filter(item => item.symbol !== symbol);
+        } else {
+            return [...prev, { symbol, symbolName, type, currentPrice: 0, priceChgPct: 0, order: prev.length + 1 }];
+        }
+    });
   };
 
+  const addPriceAlert = (symbol: string, price: number, condition: 'above' | 'below') => {
+    setPriceAlerts(prev => ({...prev, [symbol]: { price, condition, triggered: false }}));
+    toast({ title: 'Demo Alert Set', description: `Alert set for ${symbol}.` });
+  };
+  
+  const removePriceAlert = (symbol: string) => {
+    setPriceAlerts(prev => {
+      const newAlerts = {...prev};
+      delete newAlerts[symbol];
+      return newAlerts;
+    });
+    toast({ title: 'Demo Alert Removed' });
+  };
+
+  const addTradeTrigger = (trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
+    const newTrigger: TradeTrigger = { ...trigger, id: crypto.randomUUID(), details: { status: 'active' } };
+    setTradeTriggers(prev => [...prev, newTrigger]);
+    toast({ title: 'Demo Trigger Set!', description: `A trigger for ${trigger.symbolName} has been added.` });
+  };
+  
+  const removeTradeTrigger = (triggerId: string) => {
+    setTradeTriggers(prev => prev.filter(t => t.id !== triggerId));
+    toast({ title: 'Demo Trigger Removed' });
+  };
 
   return (
     <LandingPageDemoContext.Provider
