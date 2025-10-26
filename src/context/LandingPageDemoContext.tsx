@@ -92,6 +92,11 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
     if (spotWs.current) {
+        if (spotWs.current.readyState !== WebSocket.OPEN) {
+          // If the socket exists but isn't open, do nothing.
+          // The onopen handler will subscribe to the correct symbols.
+          return;
+        }
         const newSubs = new Set(symbolsToSubscribe);
 
         const toAdd = [...newSubs].filter(s => !subscribedSpotSymbols.current.has(s));
@@ -128,7 +133,9 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
         }, instanceServers[0].pingInterval / 2);
         
-        symbolsToSubscribe.forEach((symbol) => {
+        // Use the most up-to-date list of symbols when connection opens
+        const currentSymbols = Array.from(new Set(watchlist.map(item => item.symbol)));
+        currentSymbols.forEach((symbol) => {
           ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
           subscribedSpotSymbols.current.add(symbol);
         });
@@ -158,7 +165,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
       console.error("Demo Spot WS Error", error);
       toast({ title: "Demo WebSocket Error", description: `Connection failed: ${errorMessage}`, variant: "destructive" });
     }
-  }, [toast, processUpdate]);
+  }, [toast, processUpdate, watchlist]);
 
   const applyWatchlistAutomation = useCallback(async () => {
     toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data...' });
