@@ -302,7 +302,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             if (conditionMet) {
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
                 
-                // Create a new document in 'executedTriggers'
+                // NEW LOGIC: Create a new document in 'executedTriggers'
                 const executedTriggerRef = doc.ref.parent.parent.collection('executedTriggers').doc(doc.id);
                 batch.set(executedTriggerRef, { ...trigger, currentPrice: price }); // Add execution price
                 
