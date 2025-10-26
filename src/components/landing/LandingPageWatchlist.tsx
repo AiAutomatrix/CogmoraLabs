@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -28,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LandingPageWatchlistTradeTriggerPopup } from './LandingPageWatchlistTradeTriggerPopup';
 import { LandingPageAutomateWatchlistPopup } from './LandingPageAutomateWatchlistPopup';
+import { useToast } from '@/hooks/use-toast';
 
 const LandingPageWatchlist: React.FC = () => {
   const {
@@ -37,6 +39,7 @@ const LandingPageWatchlist: React.FC = () => {
     addPriceAlert,
     removePriceAlert,
   } = useLandingPageDemo();
+  const { toast } = useToast();
 
   const [alertPrice, setAlertPrice] = useState('');
   const [alertCondition, setAlertCondition] = useState<'above' | 'below'>('above');
@@ -52,6 +55,14 @@ const LandingPageWatchlist: React.FC = () => {
   const sortedWatchlist = useMemo(() => {
     return [...watchlist].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
   }, [watchlist]);
+
+  const handleChartLayoutSelect = (num: number) => {
+    setSelectedChartLayout(num);
+    toast({
+        title: "Chart Layout Changed (Demo)",
+        description: `In the full app, this would display ${num} chart${num > 1 ? 's' : ''}.`
+    });
+  }
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
@@ -102,7 +113,7 @@ const LandingPageWatchlist: React.FC = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {chartOptions.map(num => (
-                  <DropdownMenuItem key={num} onSelect={() => setSelectedChartLayout(num)}>
+                  <DropdownMenuItem key={num} onSelect={() => handleChartLayoutSelect(num)}>
                     Load {num} chart{num > 1 ? 's' : ''}
                   </DropdownMenuItem>
                 ))}
