@@ -40,13 +40,8 @@ const HeroContent: React.FC = () => {
           Explore real-time screeners, advanced charting, and test your strategies risk-free.
         </p>
         <div className="flex gap-4">
-          <Link href="/dashboard" passHref>
-            <Button size="lg" variant="default">
-              Launch the App
-            </Button>
-          </Link>
-          <Button size="lg" variant="secondary" onClick={() => setIsSignInOpen(true)}>
-            Sign In
+          <Button size="lg" variant="default" onClick={() => setIsSignInOpen(true)}>
+            Launch the App
           </Button>
         </div>
       </section>
