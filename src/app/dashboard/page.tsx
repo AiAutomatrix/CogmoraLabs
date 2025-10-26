@@ -7,7 +7,7 @@ import { PaperTradingProvider, usePaperTrading } from '@/context/PaperTradingCon
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut } from 'lucide-react';
+import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -226,63 +226,71 @@ const PageContent: React.FC = () => {
                     <span className="sr-only">Open navigation menu</span>
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="right" className="w-64 p-0">
+                <SheetContent side="right" className="w-72 p-0 flex flex-col">
                     <SheetHeader className="p-4 border-b">
-                        <SheetTitle className="text-lg font-semibold sr-only">Cogmora Labs</SheetTitle>
-                        <SheetDescription className="sr-only">Main navigation menu for the Cogmora Labs application.</SheetDescription>
+                        <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={user?.photoURL || ''} alt={user?.displayName || 'User'} />
+                              <AvatarFallback>{userInitials}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col">
+                                <p className="text-sm font-medium leading-none">{user?.displayName || 'User'}</p>
+                                <p className="text-xs leading-none text-muted-foreground">
+                                {user?.email || (user?.isAnonymous ? 'Anonymous User' : '')}
+                                </p>
+                            </div>
+                        </div>
                     </SheetHeader>
-                    <div className="overflow-y-auto p-4 flex flex-col h-full">
-                        <div className="flex-grow">
-                            <Accordion type="single" collapsible defaultValue="main">
-                                <AccordionItem value="main">
-                                    <Button
-                                        variant="ghost"
-                                        className="w-full justify-start text-base mb-2"
-                                        onClick={() => handleViewChange('paper_trading')}
-                                    >
-                                        <NotebookPen className="mr-2 h-4 w-4" /> Paper Trading
-                                    </Button>
-                                </AccordionItem>
-                                <AccordionItem value="charts">
-                                    <AccordionTrigger>
-                                        <span className="flex items-center"><LineChart className="mr-2 h-4 w-4"/> Charts</span>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="pl-4">
-                                        {chartLayoutOptions.map(o => (
-                                            <Button key={`chart-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { handleChartLayoutChange(o.value); handleViewChange('chart'); }}>{o.label}</Button>
-                                        ))}
-                                    </AccordionContent>
-                                </AccordionItem>
-                                <AccordionItem value="heatmaps">
-                                    <AccordionTrigger>
-                                        <span className="flex items-center"><Columns className="mr-2 h-4 w-4"/> Heatmaps</span>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="pl-4">
-                                        {heatmapViewOptions.map(o => (
-                                            <Button key={`heatmap-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedHeatmapView(o.value); handleViewChange('heatmap'); }}>{o.label}</Button>
-                                        ))}
-                                    </AccordionContent>
-                                </AccordionItem>
-                                <AccordionItem value="screeners">
-                                    <AccordionTrigger>
-                                        <span className="flex items-center"><ListFilter className="mr-2 h-4 w-4"/> Screeners</span>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="pl-4">
-                                        <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('options_screener')}><Settings2 className="mr-2 h-4 w-4"/>Options</Button>
-                                        {cryptoScreenerOptions.map(o => (
-                                            <Button key={`crypto-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedCryptoScreener(o.value); handleViewChange('crypto_screener'); }}>{o.label}</Button>
-                                        ))}
-                                        <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('dex_screener')}><SearchCode className="mr-2 h-4 w-4"/>DEX</Button>
-                                    </AccordionContent>
-                                </AccordionItem>
-                            </Accordion>
-                        </div>
-                        <div className="mt-auto">
-                             <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
-                                <LogOut className="mr-2 h-4 w-4" />
-                                Sign Out
-                            </Button>
-                        </div>
+                    <div className="overflow-y-auto p-4 flex-grow">
+                        <Accordion type="single" collapsible defaultValue="main">
+                            <AccordionItem value="main">
+                                <Button
+                                    variant="ghost"
+                                    className="w-full justify-start text-base mb-2"
+                                    onClick={() => handleViewChange('paper_trading')}
+                                >
+                                    <NotebookPen className="mr-2 h-4 w-4" /> Paper Trading
+                                </Button>
+                            </AccordionItem>
+                            <AccordionItem value="charts">
+                                <AccordionTrigger>
+                                    <span className="flex items-center"><LineChart className="mr-2 h-4 w-4"/> Charts</span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pl-4">
+                                    {chartLayoutOptions.map(o => (
+                                        <Button key={`chart-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { handleChartLayoutChange(o.value); handleViewChange('chart'); }}>{o.label}</Button>
+                                    ))}
+                                </AccordionContent>
+                            </AccordionItem>
+                            <AccordionItem value="heatmaps">
+                                <AccordionTrigger>
+                                    <span className="flex items-center"><Columns className="mr-2 h-4 w-4"/> Heatmaps</span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pl-4">
+                                    {heatmapViewOptions.map(o => (
+                                        <Button key={`heatmap-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedHeatmapView(o.value); handleViewChange('heatmap'); }}>{o.label}</Button>
+                                    ))}
+                                </AccordionContent>
+                            </AccordionItem>
+                            <AccordionItem value="screeners">
+                                <AccordionTrigger>
+                                    <span className="flex items-center"><ListFilter className="mr-2 h-4 w-4"/> Screeners</span>
+                                </AccordionTrigger>
+                                <AccordionContent className="pl-4">
+                                    <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('options_screener')}><Settings2 className="mr-2 h-4 w-4"/>Options</Button>
+                                    {cryptoScreenerOptions.map(o => (
+                                        <Button key={`crypto-${o.value}`} variant="ghost" className="w-full justify-start" onClick={() => { setSelectedCryptoScreener(o.value); handleViewChange('crypto_screener'); }}>{o.label}</Button>
+                                    ))}
+                                    <Button variant="ghost" className="w-full justify-start" onClick={() => handleViewChange('dex_screener')}><SearchCode className="mr-2 h-4 w-4"/>DEX</Button>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
+                    </div>
+                    <div className="p-4 border-t mt-auto">
+                         <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Sign Out
+                        </Button>
                     </div>
                 </SheetContent>
               </Sheet>
@@ -292,11 +300,8 @@ const PageContent: React.FC = () => {
           <div className="hidden lg:flex items-center">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={user?.photoURL || ''} alt={user?.displayName || 'User'} />
-                    <AvatarFallback>{userInitials}</AvatarFallback>
-                  </Avatar>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+                  <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
