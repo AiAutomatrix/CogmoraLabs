@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -6,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { LandingPageDemoProvider } from '@/context/LandingPageDemoContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
 import Features from '@/components/landing/Features';
-import { Github, Twitter } from 'lucide-react';
+import { Github, Linkedin } from 'lucide-react';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { FirebaseClientProvider, useUser } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -68,7 +67,7 @@ const Footer = () => (
         <div className="container mx-auto text-center text-muted-foreground">
             <div className="flex justify-center gap-6 mb-4">
                 <Link href="#" className="hover:text-white"><Github /></Link>
-                <Link href="#" className="hover:text-white"><Twitter /></Link>
+                <Link href="https://www.linkedin.com/in/bigtimetreat?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app" className="hover:text-white" target="_blank" rel="noopener noreferrer"><Linkedin /></Link>
             </div>
             <p>&copy; {new Date().getFullYear()} Cogmora Labs. All Rights Reserved.</p>
         </div>
