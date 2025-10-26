@@ -138,12 +138,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await db.runTransaction(async (transaction) => {
       // --- READS FIRST ---
       const userContextDoc = await transaction.get(userContextRef);
-      const historyQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
-        .where("positionId", "==", positionId)
-        .where("status", "==", "open")
-        .orderBy("timestamp", "desc")
-        .limit(1);
-      const historySnapshot = await transaction.get(historyQuery);
 
       // --- VALIDATION ---
       if (!userContextDoc.exists) {
@@ -155,109 +149,142 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       let pnl = 0;
       let collateralToReturn = 0;
 
+      // THE FIX: Prioritize the closePrice from the client if it exists.
+      const closePrice = position.details?.closePrice ?? position.currentPrice;
+
+
       if (position.positionType === "spot") {
-        pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
+        pnl = (closePrice - position.averageEntryPrice) * position.size;
         collateralToReturn = position.size * position.averageEntryPrice;
       } else { // Futures
         const contractValue = position.size * position.averageEntryPrice;
         collateralToReturn = contractValue / position.leverage;
         if (position.side === "long") {
-          pnl = (position.currentPrice - position.averageEntryPrice) * position.size;
+          pnl = (closePrice - position.averageEntryPrice) * position.size;
         } else { // short
-          pnl = (position.averageEntryPrice - position.currentPrice) * position.size;
+          pnl = (position.averageEntryPrice - closePrice) * position.size;
         }
       }
       const newBalance = currentBalance + collateralToReturn + pnl;
 
       // --- WRITES LAST ---
-      transaction.update(userContextRef, {balance: newBalance});
-      transaction.delete(change.after.ref);
 
-      if (!historySnapshot.empty) {
-        const historyDocRef = historySnapshot.docs[0].ref;
-        transaction.update(historyDocRef, {status: "closed", pnl});
-      }
+      // 1. Update the main balance
+      transaction.update(userContextRef, {balance: newBalance});
+
+      // 2. Create the trade history record for the closed position
+      const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
+
+      // Find the original open trade in history to get its timestamp
+      const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
+        .where("positionId", "==", positionId)
+        .where("status", "==", "open")
+        .orderBy("openTimestamp", "asc")
+        .limit(1);
+
+      const openTradeSnapshot = await transaction.get(openTradeQuery);
+      const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
+
+
+      const historyRecord = {
+        positionId: positionId,
+        positionType: position.positionType,
+        symbol: position.symbol,
+        symbolName: position.symbolName,
+        size: position.size,
+        entryPrice: position.averageEntryPrice, // Log the entry price
+        closePrice: closePrice, // Use the determined closing price
+        side: position.side === "buy" || position.side === "long" ? "sell" : "buy", // Record the closing action
+        leverage: position.leverage || null,
+        openTimestamp: openTimestamp,
+        closeTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+        status: "closed",
+        pnl: pnl,
+      };
+      transaction.set(tradeHistoryRef, historyRecord);
+
+      // 3. Delete the open position
+      transaction.delete(change.after.ref);
 
       logger.info(`Transaction successful for position ${positionId}. New balance: ${newBalance}, P&L: ${pnl}`);
     });
   } catch (error) {
     logger.error(`Transaction failed for closing position ${positionId}:`, error);
-    // Revert status to 'open' on failure
+    // Revert status to 'open' on failure to allow for retry
     await change.after.ref.update({"details.status": "open"});
   }
 });
-
 
 /**
  * Recalculates and updates aggregate account metrics.
  * This can be triggered by changes in positions or history.
  */
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{subCollection}/{subDocId}", async (event) => {
-    const { userId, subCollection } = event.params;
-    
-    // Only trigger for relevant subcollections
-    if (subCollection !== 'openPositions' && subCollection !== 'tradeHistory') {
-      return;
+  const { userId, subCollection } = event.params;
+
+  // Only trigger for relevant subcollections
+  if (subCollection !== 'openPositions' && subCollection !== 'tradeHistory') {
+    return;
+  }
+
+  const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+
+  logger.info(`Metrics calculation triggered for user: ${userId} by change in ${subCollection}`);
+
+  try {
+    const openPositionsSnapshot = await userContextRef.collection('openPositions').get();
+    const tradeHistorySnapshot = await userContextRef.collection('tradeHistory').get();
+    const userContextSnap = await userContextRef.get();
+
+    if (!userContextSnap.exists()) {
+        logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
+        return;
     }
 
-    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-    
-    logger.info(`Metrics calculation triggered for user: ${userId} by change in ${subCollection}`);
+    const balance = userContextSnap.data()?.balance ?? 0;
 
-    try {
-        const openPositionsSnapshot = await userContextRef.collection('openPositions').get();
-        const tradeHistorySnapshot = await userContextRef.collection('tradeHistory').get();
-        const userContextSnap = await userContextRef.get();
+    // Calculate Unrealized P&L
+    let unrealizedPnl = 0;
+    openPositionsSnapshot.forEach(doc => {
+        const pos = doc.data();
+        unrealizedPnl += pos.unrealizedPnl || 0;
+    });
 
-        if (!userContextSnap.exists()) {
-            logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
-            return;
-        }
+    // Calculate Equity
+    const equity = balance + unrealizedPnl;
 
-        const balance = userContextSnap.data()?.balance ?? 0;
+    // Calculate Realized P&L and Win Rate
+    let realizedPnl = 0;
+    let wonTrades = 0;
+    let lostTrades = 0;
 
-        // Calculate Unrealized P&L
-        let unrealizedPnl = 0;
-        openPositionsSnapshot.forEach(doc => {
-            const pos = doc.data();
-            unrealizedPnl += pos.unrealizedPnl || 0;
-        });
-
-        // Calculate Equity
-        const equity = balance + unrealizedPnl;
-
-        // Calculate Realized P&L and Win Rate
-        let realizedPnl = 0;
-        let wonTrades = 0;
-        let lostTrades = 0;
-        
-        tradeHistorySnapshot.forEach(doc => {
-            const trade = doc.data();
-            if (trade.status === 'closed' && trade.pnl !== undefined && trade.pnl !== null) {
-                realizedPnl += trade.pnl;
-                if (trade.pnl > 0) {
-                    wonTrades++;
-                } else {
-                    lostTrades++;
-                }
+    tradeHistorySnapshot.forEach(doc => {
+        const trade = doc.data();
+        if (trade.status === 'closed' && trade.pnl !== undefined && trade.pnl !== null) {
+            realizedPnl += trade.pnl;
+            if (trade.pnl > 0) {
+                wonTrades++;
+            } else {
+                lostTrades++;
             }
-        });
+        }
+    });
 
-        const totalClosedTrades = wonTrades + lostTrades;
-        const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
+    const totalClosedTrades = wonTrades + lostTrades;
+    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
-        const metrics = {
-            equity,
-            unrealizedPnl,
-            realizedPnl,
-            winRate,
-            wonTrades,
-            lostTrades,
-        };
+    const metrics = {
+        equity,
+        unrealizedPnl,
+        realizedPnl,
+        winRate,
+        wonTrades,
+        lostTrades,
+    };
 
-        await userContextRef.update(metrics);
-        logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
-    } catch (error) {
-        logger.error(`Error calculating metrics for user ${userId}:`, error);
-    }
+    await userContextRef.update(metrics);
+    logger.info(`Successfully updated account metrics for user ${userId}.`, metrics);
+  } catch (error) {
+    logger.error(`Error calculating metrics for user ${userId}:`, error);
+  }
 });
