@@ -176,10 +176,12 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         symbol: position.symbol,
         symbolName: position.symbolName,
         size: position.size,
-        price: position.currentPrice, // Use currentPrice as the closing price
+        entryPrice: position.averageEntryPrice, // Log the entry price
+        closePrice: position.currentPrice, // Use currentPrice as the closing price
         side: position.side === "buy" || position.side === "long" ? "sell" : "buy", // Record the closing action
         leverage: position.leverage || null,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        openTimestamp: position.details?.openTimestamp || null, // Assuming you add openTimestamp to details
+        closeTimestamp: admin.firestore.FieldValue.serverTimestamp(),
         status: "closed",
         pnl: pnl,
       };
