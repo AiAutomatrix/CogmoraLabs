@@ -122,10 +122,24 @@ export default function PaperTradingDashboard({
     return size.toPrecision(3);
   };
   
-  const formatTimestamp = (timestamp?: number): string => {
+  const formatTimestamp = (timestamp?: number | any): string => {
     if (!timestamp) return 'N/A';
-    const date = new Date(timestamp);
-    return format(date, "yyyy-MM-dd HH:mm");
+    
+    // Check if it's a Firestore Timestamp object
+    if (typeof timestamp === 'object' && timestamp.toDate) {
+      return format(timestamp.toDate(), "yyyy-MM-dd HH:mm");
+    }
+    
+    // Fallback for number timestamp (milliseconds)
+    if (typeof timestamp === 'number') {
+      const date = new Date(timestamp);
+      // Check if the date is valid
+      if (!isNaN(date.getTime())) {
+        return format(date, "yyyy-MM-dd HH:mm");
+      }
+    }
+    
+    return 'Invalid Date';
   };
 
   const PNLCell = ({ pnl }: { pnl: number | undefined | null }) => {
@@ -143,8 +157,13 @@ export default function PaperTradingDashboard({
   };
 
   const sortedTradeHistory = useMemo(() => {
-    return [...tradeHistory].sort((a, b) => (b.closeTimestamp ?? b.openTimestamp) - (a.closeTimestamp ?? a.openTimestamp));
-  }, [tradeHistory]);
+    return [...tradeHistory].sort((a, b) => {
+        const timeA = a.closeTimestamp?.toDate?.()?.getTime() || a.openTimestamp;
+        const timeB = b.closeTimestamp?.toDate?.()?.getTime() || b.openTimestamp;
+        return timeB - timeA;
+    });
+}, [tradeHistory]);
+
 
   return (
     <>
@@ -509,3 +528,4 @@ export default function PaperTradingDashboard({
     
 
     
+
