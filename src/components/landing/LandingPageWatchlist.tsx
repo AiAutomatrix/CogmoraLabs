@@ -1,8 +1,8 @@
+"use client";
 
-'use client';
-
-import React from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useLandingPageDemo } from '@/context/LandingPageDemoContext';
+import type { WatchlistItem } from '@/types';
 import {
   Card,
   CardContent,
@@ -18,42 +18,97 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, Wand2, Settings } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
-import { cn } from "@/lib/utils";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { LandingPageWatchlistTradeTriggerPopup } from './LandingPageWatchlistTradeTriggerPopup';
+import { LandingPageAutomateWatchlistPopup } from './LandingPageAutomateWatchlistPopup';
 
-// This component is a wrapper to pre-populate the watchlist for the demo.
 const LandingPageWatchlist: React.FC = () => {
-  const { watchlist } = useLandingPageDemo();
+  const {
+    watchlist,
+    priceAlerts,
+    toggleWatchlist,
+    addPriceAlert,
+    removePriceAlert,
+  } = useLandingPageDemo();
+
+  const [alertPrice, setAlertPrice] = useState('');
+  const [alertCondition, setAlertCondition] = useState<'above' | 'below'>('above');
+  
+  const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
+  const [selectedWatchlistItem, setSelectedWatchlistItem] = useState<WatchlistItem | null>(null);
+
+  const [openAlertPopover, setOpenAlertPopover] = useState<string | null>(null);
+  const [isAutomatePopupOpen, setIsAutomatePopupOpen] = useState(false);
+  const [selectedChartLayout, setSelectedChartLayout] = useState(1);
+  const chartOptions = [1, 2, 3, 4];
+
+  const sortedWatchlist = useMemo(() => {
+    return [...watchlist].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  }, [watchlist]);
 
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || isNaN(price)) return "$0.00";
-    const options: Intl.NumberFormatOptions = {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-    };
-    if (price < 0.1) {
-      options.maximumFractionDigits = 8;
-    } else {
-      options.maximumFractionDigits = 4;
-    }
+    const options: Intl.NumberFormatOptions = { style: "currency", currency: "USD", minimumFractionDigits: 2 };
+    if (price < 0.1) options.maximumFractionDigits = 8; else options.maximumFractionDigits = 4;
     return new Intl.NumberFormat("en-US", options).format(price);
   };
+  
+  const handleSetAlert = (symbol: string) => {
+    const price = parseFloat(alertPrice);
+    if (!isNaN(price) && price > 0) {
+      addPriceAlert(symbol, price, alertCondition);
+      setAlertPrice('');
+      setOpenAlertPopover(null);
+    }
+  };
 
-  const formatChange = (changeRate: number | undefined | null) => {
-    if (changeRate === undefined || changeRate === null) return "N/A";
+  const handleTradeClick = (item: WatchlistItem) => {
+    setSelectedWatchlistItem(item);
+    setIsTradePopupOpen(true);
+  };
+
+  const formatChange = (changeRate: number | undefined) => {
+    if (changeRate === undefined) return "N/A";
     const isPositive = changeRate >= 0;
     const colorClass = isPositive ? "text-green-500" : "text-red-500";
     return <span className={colorClass}>{`${isPositive ? "+" : ""}${(changeRate * 100).toFixed(2)}%`}</span>;
   };
-
+  
   return (
+    <>
     <Card>
-      <CardHeader>
-        <CardTitle>Live Watchlist</CardTitle>
-        <CardDescription>
-          Real-time prices from the KuCoin WebSocket feed.
-        </CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>My Watchlist</CardTitle>
+            <CardDescription>
+              Track symbols, set alerts, and create triggers.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
+                <Wand2 className="mr-2 h-4 w-4" />
+                Automate
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4" />{selectedChartLayout}</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {chartOptions.map(num => (
+                  <DropdownMenuItem key={num} onSelect={() => setSelectedChartLayout(num)}>
+                    Load {num} chart{num > 1 ? 's' : ''}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -64,33 +119,86 @@ const LandingPageWatchlist: React.FC = () => {
                 <TableHead className="px-2 py-2 hidden sm:table-cell">Type</TableHead>
                 <TableHead className="text-right px-2 py-2">Current Price</TableHead>
                 <TableHead className="text-right px-2 py-2">24h Change</TableHead>
+                <TableHead className="text-right px-2 py-2">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {watchlist.length > 0 ? (
-                watchlist.map((item) => (
-                  <TableRow key={item.symbol}>
-                    <TableCell className="font-medium px-2 py-2">{item.symbolName}</TableCell>
-                    <TableCell className="px-2 py-2 hidden sm:table-cell"><Badge variant="secondary">{item.type}</Badge></TableCell>
-                    <TableCell className="text-right px-2 py-2">{formatPrice(item.currentPrice)}</TableCell>
-                    <TableCell className="text-right font-mono px-2 py-2">
-                      {formatChange(item.priceChgPct)}
-                    </TableCell>
-                  </TableRow>
-                ))
+              {sortedWatchlist.length > 0 ? (
+                sortedWatchlist.map((item) => {
+                  const alert = priceAlerts[item.symbol];
+                  return (
+                    <TableRow key={item.symbol}>
+                      <TableCell className="font-medium px-2 py-2">{item.symbolName}</TableCell>
+                      <TableCell className="px-2 py-2 hidden sm:table-cell"><Badge variant="secondary">{item.type}</Badge></TableCell>
+                      <TableCell className="text-right px-2 py-2">{formatPrice(item.currentPrice)}</TableCell>
+                      <TableCell className="text-right font-mono px-2 py-2">{formatChange(item.priceChgPct)}</TableCell>
+                      <TableCell className="text-right px-2 py-2">
+                        <div className="flex items-center justify-end gap-0">
+                           <Popover open={openAlertPopover === item.symbol} onOpenChange={(open) => {
+                              if (open) {
+                                if (item.currentPrice > 0) setAlertPrice(item.currentPrice.toFixed(4));
+                                setOpenAlertPopover(item.symbol);
+                              } else {
+                                setOpenAlertPopover(null);
+                                setAlertPrice('');
+                              }
+                            }}>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className={`h-8 w-8 ${alert ? 'text-primary' : ''}`}><Bell className="h-4 w-4"/></Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-60">
+                                <div className="grid gap-4">
+                                  <div className="space-y-2">
+                                    <h4 className="font-medium leading-none">Set Alert for {item.symbolName}</h4>
+                                    <p className="text-sm text-muted-foreground">Notify when price is...</p>
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <div className="grid grid-cols-2 items-center gap-4">
+                                      <RadioGroup defaultValue="above" onValueChange={(val: 'above' | 'below') => setAlertCondition(val)}>
+                                          <div className="flex items-center space-x-2"><RadioGroupItem value="above" id={`above-${item.symbol}`} /><Label htmlFor={`above-${item.symbol}`}>Above</Label></div>
+                                          <div className="flex items-center space-x-2"><RadioGroupItem value="below" id={`below-${item.symbol}`} /><Label htmlFor={`below-${item.symbol}`}>Below</Label></div>
+                                      </RadioGroup>
+                                      <Input id="price" type="number" placeholder="Price" value={alertPrice} onChange={(e) => setAlertPrice(e.target.value)} className="h-9"/>
+                                    </div>
+                                    <Button size="sm" onClick={() => handleSetAlert(item.symbol)}>Save Alert</Button>
+                                    {alert && (<Button size="sm" variant="destructive" onClick={() => removePriceAlert(item.symbol)}>Remove Alert</Button>)}
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(item)}><BarChartHorizontal className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleWatchlist(item.symbol, item.symbolName, item.type)}><EyeOff className="h-4 w-4" /></Button>
+                        </div>
+                        {alert && (
+                          <div className="flex justify-end mt-1">
+                            <Badge variant={alert.triggered ? "default" : "outline"} className={`border-primary ${alert.triggered ? 'animate-pulse' : ''}`}>
+                              {alert.condition === 'above' ? <ArrowUp className="h-3 w-3 mr-1"/> : <ArrowDown className="h-3 w-3 mr-1"/>}
+                              {formatPrice(alert.price)}
+                            </Badge>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center h-24">
-                    Loading live data...
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center h-24">Loading live data...</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
         </div>
       </CardContent>
     </Card>
+    <LandingPageAutomateWatchlistPopup isOpen={isAutomatePopupOpen} onOpenChange={setIsAutomatePopupOpen} />
+     {selectedWatchlistItem && (
+        <LandingPageWatchlistTradeTriggerPopup
+          isOpen={isTradePopupOpen}
+          onOpenChange={setIsTradePopupOpen}
+          item={selectedWatchlistItem}
+        />
+      )}
+    </>
   );
-};
+}
 
 export default LandingPageWatchlist;

@@ -16,7 +16,6 @@ const HeroContent: React.FC = () => {
   const { user, isUserLoading } = useUser();
   const router = useRouter();
 
-  // This effect will watch for a user to be logged in, and then redirect to the dashboard.
   useEffect(() => {
     if (!isUserLoading && user) {
       router.push('/dashboard');
@@ -40,7 +39,7 @@ const HeroContent: React.FC = () => {
           Explore real-time screeners, advanced charting, and test your strategies risk-free.
         </p>
         <div className="flex gap-4">
-          <Button size="lg" variant="default" onClick={() => setIsSignInOpen(true)}>
+           <Button size="lg" variant="default" onClick={() => setIsSignInOpen(true)}>
             Launch the App
           </Button>
         </div>
@@ -50,13 +49,12 @@ const HeroContent: React.FC = () => {
   );
 }
 
-// Live Demo Section Component
 const LiveDemo = () => (
   <section className="py-20 px-4">
     <div className="container mx-auto text-center">
       <h2 className="text-4xl font-bold mb-4">Live Watchlist Demo</h2>
       <p className="text-muted-foreground mb-8 max-w-3xl mx-auto">
-        This is a live, real-time demonstration of our watchlist component, powered by the same engine used in the main application. It's pre-populated with a few popular symbols to show live price updates from the KuCoin WebSocket feed.
+        This is a live, fully-interactive demonstration of our watchlist component, powered by the same engine used in the main application. It's pre-populated with a few popular symbols to show live price updates from the KuCoin WebSocket feed. Try setting alerts or creating trade triggers.
       </p>
       <div className="max-w-4xl mx-auto">
         <LandingPageWatchlist />
@@ -65,7 +63,6 @@ const LiveDemo = () => (
   </section>
 );
 
-// Footer Component
 const Footer = () => (
     <footer className="border-t border-border/20 py-8">
         <div className="container mx-auto text-center text-muted-foreground">
