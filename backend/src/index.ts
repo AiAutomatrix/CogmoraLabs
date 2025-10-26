@@ -138,6 +138,12 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
     await db.runTransaction(async (transaction) => {
       // --- READS FIRST ---
       const userContextDoc = await transaction.get(userContextRef);
+      const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
+        .where("positionId", "==", positionId)
+        .where("status", "==", "open")
+        .orderBy("openTimestamp", "asc")
+        .limit(1);
+      const openTradeSnapshot = await transaction.get(openTradeQuery);
 
       // --- VALIDATION ---
       if (!userContextDoc.exists) {
@@ -171,15 +177,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       // 2. Create the trade history record for the closed position
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
-
-      // Find the original open trade in history to get its timestamp
-      const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
-        .where("positionId", "==", positionId)
-        .where("status", "==", "open")
-        .orderBy("openTimestamp", "asc")
-        .limit(1);
-
-      const openTradeSnapshot = await transaction.get(openTradeQuery);
       const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
 
       const historyRecord = {
