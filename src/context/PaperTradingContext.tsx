@@ -261,28 +261,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         unsubscribers.push(unsub);
     };
 
-    createSubcollectionListener<OpenPosition>('openPositions', setOpenPositions, 'id');
-    createSubcollectionListener<PaperTrade>('tradeHistory', setTradeHistory, 'id');
-    createSubcollectionListener<WatchlistItem>('watchlist', setWatchlist, 'symbol');
-    createSubcollectionListener<TradeTrigger>('tradeTriggers', setTradeTriggers, 'id');
-    createRecordListener<PriceAlert>('priceAlerts', setPriceAlerts);
-
-
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-      setIsLoaded(false);
-      dataLoadedRef.current = false;
-    };
-  }, [userContextDocRef, firestore]);
-  
-  // New Effect to apply initial snapshot data to open positions
-  useEffect(() => {
-    // Only run if we have positions and haven't connected to websockets yet
-    if (openPositions.length > 0 && !isWsConnected) {
-        const applySnapshot = async () => {
-            console.log("Applying initial price snapshot to open positions...");
+    // Special handler for Open Positions to re-hydrate with live data
+    const openPositionsRef = collection(userContextDocRef, 'openPositions');
+    const unsubOpenPositions = onSnapshot(openPositionsRef, async (snapshot) => {
+        const positionsFromDb = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as OpenPosition));
+        
+        if (positionsFromDb.length > 0) {
             try {
-                // Fetch both spot and futures tickers
+                // Fetch latest prices for all position symbols
                 const spotRes = await fetch('/api/kucoin-tickers');
                 const futuresRes = await fetch('/api/kucoin-futures-tickers');
 
@@ -302,37 +288,57 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                     }
                 }
 
-                setOpenPositions(currentPositions => {
-                    return currentPositions.map(pos => {
-                        let newPrice: number | undefined;
-                        if (pos.positionType === 'spot') {
-                            const ticker = spotTickerMap.get(pos.symbol);
-                            newPrice = ticker ? parseFloat(ticker.last) : undefined;
-                        } else { // futures
-                            const contract = futuresTickerMap.get(pos.symbol);
-                            newPrice = contract ? contract.markPrice : undefined;
-                        }
+                // Enrich positions with the latest price data
+                const enrichedPositions = positionsFromDb.map(pos => {
+                    let newPrice: number | undefined;
+                    if (pos.positionType === 'spot') {
+                        const ticker = spotTickerMap.get(pos.symbol);
+                        newPrice = ticker ? parseFloat(ticker.last) : pos.currentPrice;
+                    } else { // futures
+                        const contract = futuresTickerMap.get(pos.symbol);
+                        newPrice = contract ? contract.markPrice : pos.currentPrice;
+                    }
 
-                        if (newPrice !== undefined && newPrice > 0) {
-                            return {
-                                ...pos,
-                                currentPrice: newPrice,
-                                unrealizedPnl: (newPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1)
-                            };
-                        }
-                        return pos; // Return original if no price found
-                    });
+                    if (newPrice !== undefined && newPrice > 0) {
+                        return {
+                            ...pos,
+                            currentPrice: newPrice,
+                            unrealizedPnl: (newPrice - pos.averageEntryPrice) * pos.size * (pos.side === 'short' ? -1 : 1)
+                        };
+                    }
+                    return pos; // Return original if no price found
                 });
-                console.log("Initial price snapshot applied successfully.");
+                setOpenPositions(enrichedPositions);
+
             } catch (error) {
                 console.error("Failed to fetch initial ticker snapshot:", error);
+                setOpenPositions(positionsFromDb); // Fallback to DB data
             }
-        };
+        } else {
+            setOpenPositions([]); // No open positions
+        }
+    }, (error) => {
+        console.error(`Error listening to openPositions:`, error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: openPositionsRef.path,
+            operation: 'list',
+        }));
+    });
+    unsubscribers.push(unsubOpenPositions);
+    
+    // Listeners for other collections
+    createSubcollectionListener<PaperTrade>('tradeHistory', setTradeHistory, 'id');
+    createSubcollectionListener<WatchlistItem>('watchlist', setWatchlist, 'symbol');
+    createSubcollectionListener<TradeTrigger>('tradeTriggers', setTradeTriggers, 'id');
+    createRecordListener<PriceAlert>('priceAlerts', setPriceAlerts);
 
-        applySnapshot();
-    }
-  }, [openPositions.length, isWsConnected]); // Reruns if positions appear, but stops after WebSocket connects.
 
+    return () => {
+      unsubscribers.forEach(unsub => unsub());
+      setIsLoaded(false);
+      dataLoadedRef.current = false;
+    };
+  }, [userContextDocRef, firestore]);
 
   const saveDataToFirestore = useCallback((data: Partial<FirestorePaperTradingContext>) => {
     if (userContextDocRef) {
@@ -475,9 +481,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const details: OpenPositionDetails = { ...(existingPosition.details || {}), triggeredBy, status: 'open' };
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
-
-          // Optimistic update for open positions
-          setOpenPositions(prev => prev.map(p => p.id === positionId ? { ...p, size: totalSize, averageEntryPrice: newAverageEntry, details } : p));
+          
           updateDocumentNonBlocking(doc(userContextDocRef, 'openPositions', positionId), { size: totalSize, averageEntryPrice: newAverageEntry, details });
       } else {
           positionId = crypto.randomUUID();
@@ -490,9 +494,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               id: positionId, positionType: 'spot', symbol, symbolName, size,
               averageEntryPrice: currentPrice, currentPrice: currentPrice, side: 'buy', details
           };
-
-          // Optimistic update for open positions
-          setOpenPositions(prev => [...prev, newPosition]);
           setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', positionId), newPosition, {});
       }
       
@@ -503,9 +504,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         openTimestamp: Date.now(),
         status: 'open',
       };
-
-      // Optimistic update for trade history
-      setTradeHistory(prev => [...prev, { ...newTrade, id: crypto.randomUUID() }]);
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
       
       toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
@@ -544,7 +542,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       // Optimistic updates
       const newBalance = balance - collateral;
       setBalance(newBalance);
-      setOpenPositions(prev => [...prev, newPosition]);
       
       // Firestore updates
       saveDataToFirestore({ balance: newBalance });
@@ -554,9 +551,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "long", leverage, openTimestamp: Date.now(), status: "open",
       };
-
-      // Optimistic and firestore update for history
-      setTradeHistory(prev => [...prev, { ...newTrade, id: crypto.randomUUID() }]);
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
@@ -593,7 +587,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       // Optimistic updates
       const newBalance = balance - collateral;
       setBalance(newBalance);
-      setOpenPositions(prev => [...prev, newPosition]);
       
       // Firestore updates
       saveDataToFirestore({ balance: newBalance });
@@ -603,9 +596,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "short", leverage, openTimestamp: Date.now(), status: "open",
       };
-      
-      // Optimistic and firestore update for history
-      setTradeHistory(prev => [...prev, { ...newTrade, id: crypto.randomUUID() }]);
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
@@ -1171,5 +1161,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
