@@ -13,7 +13,7 @@ export function initializeFirebase() {
     
     // Vercel and other environments require explicit config.
     // Firebase App Hosting provides config via environment variables.
-    if (process.env.NEXT_PUBLIC_VERCEL_ENV) {
+    if (process.env.VERCEL_ENV) {
       firebaseApp = initializeApp(firebaseConfig);
     } else {
       try {
