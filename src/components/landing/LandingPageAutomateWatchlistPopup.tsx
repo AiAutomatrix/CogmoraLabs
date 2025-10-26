@@ -27,12 +27,12 @@ interface LandingPageAutomateWatchlistPopupProps {
 }
 
 export const LandingPageAutomateWatchlistPopup: React.FC<LandingPageAutomateWatchlistPopupProps> = ({ isOpen, onOpenChange }) => {
-  const { automationConfig, applyWatchlistAutomation, setAutomationConfig: saveAutomationConfig } = useLandingPageDemo();
+  const { automationConfig: initialConfig, applyWatchlistAutomation, setAutomationConfig: saveAutomationConfig } = useLandingPageDemo();
   
-  const [rules, setRules] = useState<AutomationRule[]>(automationConfig.rules);
-  const [updateMode, setUpdateMode] = useState<'one-time' | 'auto-refresh'>(automationConfig.updateMode);
-  const [refreshInterval, setRefreshInterval] = useState<number>(automationConfig.refreshInterval);
-  const [clearExisting, setClearExisting] = useState<boolean>(automationConfig.clearExisting);
+  const [rules, setRules] = useState<AutomationRule[]>(initialConfig.rules);
+  const [updateMode, setUpdateMode] = useState<'one-time' | 'auto-refresh'>(initialConfig.updateMode);
+  const [refreshInterval, setRefreshInterval] = useState<number>(initialConfig.refreshInterval);
+  const [clearExisting, setClearExisting] = useState<boolean>(initialConfig.clearExisting);
 
   const addRule = () => {
     setRules([...rules, { id: crypto.randomUUID(), source: 'spot', criteria: 'top_volume', count: 10 }]);
@@ -47,7 +47,8 @@ export const LandingPageAutomateWatchlistPopup: React.FC<LandingPageAutomateWatc
   };
   
   const handleApply = () => {
-    applyWatchlistAutomation();
+    const config: AutomationConfig = { rules, updateMode, refreshInterval, clearExisting };
+    applyWatchlistAutomation(config);
     onOpenChange(false);
   };
   
@@ -80,7 +81,10 @@ export const LandingPageAutomateWatchlistPopup: React.FC<LandingPageAutomateWatc
                                 <Label className="text-xs">Source</Label>
                                 <Select value={rule.source} onValueChange={(value) => updateRule(rule.id, { source: value as any })}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent><SelectItem value="spot">KuCoin Spot</SelectItem><SelectItem value="futures" disabled>KuCoin Futures (Demo)</SelectItem></SelectContent>
+                                    <SelectContent>
+                                        <SelectItem value="spot">KuCoin Spot</SelectItem>
+                                        <SelectItem value="futures">KuCoin Futures</SelectItem>
+                                    </SelectContent>
                                 </Select>
                             </div>
                              <div className="space-y-1">
@@ -89,7 +93,9 @@ export const LandingPageAutomateWatchlistPopup: React.FC<LandingPageAutomateWatc
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="top_volume">Top Volume</SelectItem>
+                                        <SelectItem value="bottom_volume">Bottom Volume</SelectItem>
                                         <SelectItem value="top_change">Top 24h Change</SelectItem>
+                                        <SelectItem value="bottom_change">Bottom 24h Change</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>

@@ -36,7 +36,7 @@ interface LandingPageDemoContextType {
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'details'>) => void;
   removeTradeTrigger: (triggerId: string) => void;
   setAutomationConfig: (config: AutomationConfig) => void;
-  applyWatchlistAutomation: () => void;
+  applyWatchlistAutomation: (config: AutomationConfig) => void;
 }
 
 const LandingPageDemoContext = createContext<LandingPageDemoContextType | undefined>(undefined);
@@ -93,12 +93,9 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
   const connectToSpot = useCallback(async (symbolsToSubscribe: string[]) => {
     if (spotWs.current) {
         if (spotWs.current.readyState !== WebSocket.OPEN) {
-          // If the socket exists but isn't open, do nothing.
-          // The onopen handler will subscribe to the correct symbols.
           return;
         }
         const newSubs = new Set(symbolsToSubscribe);
-
         const toAdd = [...newSubs].filter(s => !subscribedSpotSymbols.current.has(s));
         const toRemove = [...subscribedSpotSymbols.current].filter(s => !newSubs.has(s));
 
@@ -133,11 +130,12 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
           if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
         }, instanceServers[0].pingInterval / 2);
         
-        // Use the most up-to-date list of symbols when connection opens
         const currentSymbols = Array.from(new Set(watchlist.map(item => item.symbol)));
         currentSymbols.forEach((symbol) => {
-          ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
-          subscribedSpotSymbols.current.add(symbol);
+            if (spotWs.current?.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: `/market/snapshot:${symbol}`, response: true }));
+                subscribedSpotSymbols.current.add(symbol);
+            }
         });
       };
 
@@ -167,15 +165,20 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, [toast, processUpdate, watchlist]);
 
-  const applyWatchlistAutomation = useCallback(async () => {
-    toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data...' });
+  const applyWatchlistAutomation = useCallback(async (config: AutomationConfig) => {
+    toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data for demo...' });
+    setAutomationConfig(config);
 
     try {
         const spotResponse = await fetch('/api/kucoin-tickers');
         const spotData = await spotResponse.json();
         const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
 
-        if (!allSpotTickers.length) {
+        const futuresResponse = await fetch('/api/kucoin-futures-tickers');
+        const futuresData = await futuresResponse.json();
+        const allFuturesContracts: KucoinFuturesContract[] = futuresData?.data || [];
+
+        if (!allSpotTickers.length && !allFuturesContracts.length) {
             throw new Error('Could not fetch any screener data.');
         }
 
@@ -183,18 +186,25 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
         const addedSymbols = new Set<string>();
 
         let orderIndex = 0;
-        automationConfig.rules.forEach(rule => {
-            if (rule.source !== 'spot') return; // Demo only supports spot
-
-            const sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+        config.rules.forEach(rule => {
+            let sourceData: (KucoinTicker | KucoinFuturesContract)[];
+            let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct';
             
-            const sorted = [...allSpotTickers].sort((a, b) => {
+            if (rule.source === 'spot') {
+                sourceData = allSpotTickers;
+                sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
+            } else {
+                sourceData = allFuturesContracts;
+                sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
+            }
+            
+            const sorted = [...sourceData].sort((a, b) => {
                 const valA = parseFloat((a as any)[sortKey]) || 0;
                 const valB = parseFloat((b as any)[sortKey]) || 0;
                 return valB - valA;
             });
 
-            let selected: KucoinTicker[];
+            let selected: (KucoinTicker | KucoinFuturesContract)[];
             if (rule.criteria.startsWith('top')) {
                 selected = sorted.slice(0, rule.count);
             } else { // bottom
@@ -204,21 +214,22 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
             selected.forEach(item => {
                 if (!addedSymbols.has(item.symbol)) {
                     addedSymbols.add(item.symbol);
+                    const isSpot = rule.source === 'spot';
                     finalItems.push({
                         symbol: item.symbol,
-                        symbolName: item.symbolName,
-                        type: 'spot',
-                        currentPrice: parseFloat(item.last),
-                        priceChgPct: parseFloat(item.changeRate),
-                        high: parseFloat(item.high),
-                        low: parseFloat(item.low),
+                        symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
+                        type: rule.source,
+                        currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
+                        priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
+                        high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
+                        low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                         order: orderIndex++,
                     });
                 }
             });
         });
         
-        if (automationConfig.clearExisting) {
+        if (config.clearExisting) {
             setWatchlist(finalItems);
         } else {
             setWatchlist(prev => {
@@ -233,13 +244,11 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
       console.error('Demo watchlist automation failed:', error);
       toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
     }
-  }, [automationConfig, toast]);
-
+  }, [toast]);
 
   useEffect(() => {
-    applyWatchlistAutomation();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    applyWatchlistAutomation(INITIAL_AUTOMATION_CONFIG);
+  }, [applyWatchlistAutomation]);
 
   useEffect(() => {
     const symbols = watchlist.map(item => item.symbol);
