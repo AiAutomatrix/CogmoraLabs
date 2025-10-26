@@ -183,7 +183,6 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const openTradeSnapshot = await transaction.get(openTradeQuery);
       const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
 
-
       const historyRecord = {
         positionId: positionId,
         positionType: position.positionType,
