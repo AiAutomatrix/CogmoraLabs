@@ -457,11 +457,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
       const size = amountUSD / currentPrice;
-      const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
-      
+
+      // Optimistic update for balance
       const newBalance = balance - amountUSD;
+      setBalance(newBalance);
       saveDataToFirestore({ balance: newBalance });
 
+      const existingPosition = openPositions.find(p => p.symbol === symbol && p.positionType === 'spot');
+      
       let positionId = existingPosition?.id;
       if (existingPosition) {
           positionId = existingPosition.id;
@@ -472,7 +475,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           const details: OpenPositionDetails = { ...(existingPosition.details || {}), triggeredBy, status: 'open' };
           if (stopLoss !== undefined) details.stopLoss = stopLoss;
           if (takeProfit !== undefined) details.takeProfit = takeProfit;
-          
+
+          // Optimistic update for open positions
+          setOpenPositions(prev => prev.map(p => p.id === positionId ? { ...p, size: totalSize, averageEntryPrice: newAverageEntry, details } : p));
           updateDocumentNonBlocking(doc(userContextDocRef, 'openPositions', positionId), { size: totalSize, averageEntryPrice: newAverageEntry, details });
       } else {
           positionId = crypto.randomUUID();
@@ -485,6 +490,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               id: positionId, positionType: 'spot', symbol, symbolName, size,
               averageEntryPrice: currentPrice, currentPrice: currentPrice, side: 'buy', details
           };
+
+          // Optimistic update for open positions
+          setOpenPositions(prev => [...prev, newPosition]);
           setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', positionId), newPosition, {});
       }
       
@@ -495,6 +503,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         openTimestamp: Date.now(),
         status: 'open',
       };
+
+      // Optimistic update for trade history
+      setTradeHistory(prev => [...prev, { ...newTrade, id: crypto.randomUUID() }]);
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
       
       toast({ title: "Spot Trade Executed", description: `Bought ${size.toFixed(4)} ${symbolName}` });
@@ -530,7 +541,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           leverage, liquidationPrice, details
       };
 
+      // Optimistic updates
       const newBalance = balance - collateral;
+      setBalance(newBalance);
+      setOpenPositions(prev => [...prev, newPosition]);
+      
+      // Firestore updates
       saveDataToFirestore({ balance: newBalance });
       setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', newPosition.id), newPosition, {});
 
@@ -538,6 +554,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "long", leverage, openTimestamp: Date.now(), status: "open",
       };
+
+      // Optimistic and firestore update for history
+      setTradeHistory(prev => [...prev, { ...newTrade, id: crypto.randomUUID() }]);
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
@@ -571,7 +590,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           leverage, liquidationPrice, details
       };
 
+      // Optimistic updates
       const newBalance = balance - collateral;
+      setBalance(newBalance);
+      setOpenPositions(prev => [...prev, newPosition]);
+      
+      // Firestore updates
       saveDataToFirestore({ balance: newBalance });
       setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', newPosition.id), newPosition, {});
 
@@ -579,6 +603,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "short", leverage, openTimestamp: Date.now(), status: "open",
       };
+      
+      // Optimistic and firestore update for history
+      setTradeHistory(prev => [...prev, { ...newTrade, id: crypto.randomUUID() }]);
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
@@ -1144,3 +1171,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
