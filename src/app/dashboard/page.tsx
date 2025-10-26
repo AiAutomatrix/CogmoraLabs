@@ -209,15 +209,15 @@ const PageContent: React.FC = () => {
         <div className="container mx-auto flex items-center justify-between h-14">
           {/* Desktop Header */}
           <div className="hidden lg:flex items-center gap-4">
-            <Link href="/" passHref>
-              <h1 className="text-xl font-bold cursor-pointer">Cogmora Labs</h1>
-            </Link>
+            <h1 className="text-xl font-bold cursor-pointer" onClick={() => handleViewChange('paper_trading')}>
+              Cogmora Labs
+            </h1>
           </div>
            {/* Mobile Header */}
            <div className="flex items-center justify-between w-full lg:hidden">
-              <Link href="/" passHref>
-                <h1 className="text-xl font-bold cursor-pointer">Cogmora Labs</h1>
-              </Link>
+              <h1 className="text-xl font-bold cursor-pointer" onClick={() => handleViewChange('paper_trading')}>
+                Cogmora Labs
+              </h1>
             <div>
               <Sheet open={isMobileNavOpen} onOpenChange={setIsMobileNavOpen}>
                 <SheetTrigger asChild>
