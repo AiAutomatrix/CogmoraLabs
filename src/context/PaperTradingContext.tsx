@@ -584,53 +584,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
   }, [balance, toast, saveDataToFirestore, userContextDocRef]);
   
-  const formatPrice = (price?: number) => {
-    if (price === undefined || isNaN(price)) return "N/A";
-    const options: Intl.NumberFormatOptions = {
-        style: "currency",
-        currency: "USD",
-    };
-    if (Math.abs(price) < 1) {
-        options.minimumFractionDigits = 2;
-        options.maximumFractionDigits = 8;
-    } else {
-        options.minimumFractionDigits = 2;
-        options.maximumFractionDigits = 4;
-    }
-    return price.toLocaleString('en-US', options);
-  };
-  
-  const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
-    // This function is now only called when manually creating a trigger
-    // that should execute immediately. Backend handles all other cases.
-    toast({
-        title: 'Trade Trigger Executed!',
-        description: `Executing ${trigger.action} for ${trigger.symbolName} at ${formatPrice(currentPrice)}`
-    });
-
-    const symbolName = trigger.type === 'spot' ? trigger.symbolName : trigger.symbolName.replace(/M$/, "");
-
-    if (trigger.type === 'spot') {
-        buy(trigger.symbol, symbolName, trigger.amount, currentPrice, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
-    } else if (trigger.type === 'futures') {
-        if (trigger.action === 'long') {
-            futuresBuy(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
-        } else {
-            futuresSell(trigger.symbol, trigger.amount, currentPrice, trigger.leverage, trigger.stopLoss, trigger.takeProfit, `trigger:${trigger.id}`);
-        }
-    }
-
-    deleteSubcollectionDoc('tradeTriggers', trigger.id);
-
-    if (trigger.cancelOthers) {
-        tradeTriggers.forEach(t => {
-            if (t.symbol === trigger.symbol && t.id !== trigger.id) {
-                deleteSubcollectionDoc('tradeTriggers', t.id);
-            }
-        });
-    }
-  }, [buy, futuresBuy, futuresSell, toast, deleteSubcollectionDoc, tradeTriggers]);
-  
   const closePosition = useCallback(async (positionId: string) => {
     if (!firestore || !userContextDocRef) return;
     
@@ -642,11 +595,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   
     const posDocRef = doc(userContextDocRef, 'openPositions', positionId);
     try {
-      // THE FIX: Pass the current price from the client to the backend
       const detailsUpdate = {
         ...pos.details,
         status: 'closing',
-        closePrice: pos.currentPrice, // Provide the exact closing price
+        closePrice: pos.currentPrice,
       };
       await updateDocumentNonBlocking(posDocRef, { 'details': detailsUpdate });
       toast({
@@ -736,24 +688,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       id: crypto.randomUUID(),
       details: { status: 'active' },
     };
-
-    const watchlistItem = watchlist.find(item => item.symbol === trigger.symbol);
-    const currentPrice = watchlistItem?.currentPrice;
-
-    let shouldExecuteImmediately = false;
-    if (currentPrice) {
-        shouldExecuteImmediately =
-            (newTrigger.condition === 'above' && currentPrice >= newTrigger.targetPrice) ||
-            (newTrigger.condition === 'below' && currentPrice <= newTrigger.targetPrice);
-    }
-
-    if (shouldExecuteImmediately && currentPrice) {
-        executeTrigger(newTrigger, currentPrice);
-    } else {
-        saveSubcollectionDoc('tradeTriggers', newTrigger.id, newTrigger);
-        toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
-    }
-  }, [toast, watchlist, executeTrigger, saveSubcollectionDoc]);
+    saveSubcollectionDoc('tradeTriggers', newTrigger.id, newTrigger);
+    toast({ title: 'Trade Trigger Set', description: `Trigger set for ${trigger.symbolName}.` });
+  }, [toast, saveSubcollectionDoc]);
 
   const updateTradeTrigger = useCallback((triggerId: string, updates: Partial<TradeTrigger>) => {
     const triggerToUpdate = tradeTriggers.find(t => t.id === triggerId);
