@@ -148,10 +148,8 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const currentBalance = userContextDoc.data()?.balance ?? 0;
       let pnl = 0;
       let collateralToReturn = 0;
-
-      // THE FIX: Prioritize the closePrice from the client if it exists.
+      
       const closePrice = position.details?.closePrice ?? position.currentPrice;
-
 
       if (position.positionType === "spot") {
         pnl = (closePrice - position.averageEntryPrice) * position.size;
@@ -174,7 +172,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
 
       // 2. Create the trade history record for the closed position
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
-
+      
       // Find the original open trade in history to get its timestamp
       const openTradeQuery = db.collection(`users/${userId}/paperTradingContext/main/tradeHistory`)
         .where("positionId", "==", positionId)
@@ -215,15 +213,16 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   }
 });
 
+
 /**
  * Recalculates and updates aggregate account metrics.
  * This can be triggered by changes in positions or history.
  */
 export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperTradingContext/main/{subCollection}/{subDocId}", async (event) => {
-  const { userId, subCollection } = event.params;
+  const {userId, subCollection} = event.params;
 
   // Only trigger for relevant subcollections
-  if (subCollection !== 'openPositions' && subCollection !== 'tradeHistory') {
+  if (subCollection !== "openPositions" && subCollection !== "tradeHistory") {
     return;
   }
 
@@ -232,22 +231,22 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
   logger.info(`Metrics calculation triggered for user: ${userId} by change in ${subCollection}`);
 
   try {
-    const openPositionsSnapshot = await userContextRef.collection('openPositions').get();
-    const tradeHistorySnapshot = await userContextRef.collection('tradeHistory').get();
+    const openPositionsSnapshot = await userContextRef.collection("openPositions").get();
+    const tradeHistorySnapshot = await userContextRef.collection("tradeHistory").get();
     const userContextSnap = await userContextRef.get();
 
-    if (!userContextSnap.exists()) {
-        logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
-        return;
+    if (!userContextSnap.exists) {
+      logger.warn(`User context for ${userId} not found. Skipping metrics calculation.`);
+      return;
     }
 
     const balance = userContextSnap.data()?.balance ?? 0;
 
     // Calculate Unrealized P&L
     let unrealizedPnl = 0;
-    openPositionsSnapshot.forEach(doc => {
-        const pos = doc.data();
-        unrealizedPnl += pos.unrealizedPnl || 0;
+    openPositionsSnapshot.forEach((doc) => {
+      const pos = doc.data();
+      unrealizedPnl += pos.unrealizedPnl || 0;
     });
 
     // Calculate Equity
@@ -258,28 +257,28 @@ export const calculateAccountMetrics = onDocumentWritten("/users/{userId}/paperT
     let wonTrades = 0;
     let lostTrades = 0;
 
-    tradeHistorySnapshot.forEach(doc => {
-        const trade = doc.data();
-        if (trade.status === 'closed' && trade.pnl !== undefined && trade.pnl !== null) {
-            realizedPnl += trade.pnl;
-            if (trade.pnl > 0) {
-                wonTrades++;
-            } else {
-                lostTrades++;
-            }
+    tradeHistorySnapshot.forEach((doc) => {
+      const trade = doc.data();
+      if (trade.status === "closed" && trade.pnl !== undefined && trade.pnl !== null) {
+        realizedPnl += trade.pnl;
+        if (trade.pnl > 0) {
+          wonTrades++;
+        } else {
+          lostTrades++;
         }
+      }
     });
 
     const totalClosedTrades = wonTrades + lostTrades;
     const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
 
     const metrics = {
-        equity,
-        unrealizedPnl,
-        realizedPnl,
-        winRate,
-        wonTrades,
-        lostTrades,
+      equity,
+      unrealizedPnl,
+      realizedPnl,
+      winRate,
+      wonTrades,
+      lostTrades,
     };
 
     await userContextRef.update(metrics);
