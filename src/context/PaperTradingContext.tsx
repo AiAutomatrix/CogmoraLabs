@@ -1,3 +1,4 @@
+
 "use client";
 import React, {
   createContext,
@@ -158,7 +159,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [futuresContracts, setFuturesContracts] = useState<KucoinFuturesContract[]>([]);
 
   // Queues for processing side effects from price updates
-  const executedTriggerIds = useRef(new Set<string>());
   const triggeredAlerts = useRef(new Set<string>());
 
   const [spotWsStatus, setSpotWsStatus] = useState<string>("idle");
@@ -488,7 +488,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', positionId), newPosition, {});
       }
       
-      const newTrade: Omit<PaperTrade, 'id'> = {
+      const newTrade: Omit<PaperTrade, 'id'|'closePrice'> = {
         positionId: positionId!,
         positionType: 'spot', symbol, symbolName, size,
         entryPrice: currentPrice, side: 'buy', leverage: null,
@@ -534,7 +534,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ balance: newBalance });
       setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', newPosition.id), newPosition, {});
 
-      const newTrade: Omit<PaperTrade, 'id'> = {
+      const newTrade: Omit<PaperTrade, 'id'|'closePrice'> = {
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "long", leverage, openTimestamp: Date.now(), status: "open",
       };
@@ -575,7 +575,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ balance: newBalance });
       setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', newPosition.id), newPosition, {});
 
-      const newTrade: Omit<PaperTrade, 'id'> = {
+      const newTrade: Omit<PaperTrade, 'id'|'closePrice'> = {
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "short", leverage, openTimestamp: Date.now(), status: "open",
       };
@@ -601,7 +601,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   };
   
   const executeTrigger = useCallback((trigger: TradeTrigger, currentPrice: number) => {
-
+    // This function is now only called when manually creating a trigger
+    // that should execute immediately. Backend handles all other cases.
     toast({
         title: 'Trade Trigger Executed!',
         description: `Executing ${trigger.action} for ${trigger.symbolName} at ${formatPrice(currentPrice)}`
@@ -708,32 +709,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 triggeredAlerts.current.add(symbol);
             }
         }
-
-        tradeTriggers.forEach(trigger => {
-            if (trigger.symbol === symbol && trigger.details.status === 'active') {
-                const conditionMet = (trigger.condition === 'above' && newPrice! >= trigger.targetPrice) || (trigger.condition === 'below' && newPrice! <= trigger.targetPrice);
-                if (conditionMet) {
-                    executedTriggerIds.current.add(trigger.id);
-                }
-            }
-        });
     };
-  }, [priceAlerts, tradeTriggers]);
+  }, [priceAlerts]);
 
   useEffect(() => {
-    if (executedTriggerIds.current.size > 0) {
-      const triggersToExecute = Array.from(executedTriggerIds.current);
-      executedTriggerIds.current.clear();
-
-      triggersToExecute.forEach(triggerId => {
-        const trigger = tradeTriggers.find(t => t.id === triggerId);
-        const watchlistItem = watchlist.find(w => w.symbol === trigger?.symbol);
-        if (trigger && watchlistItem?.currentPrice) {
-          executeTrigger(trigger, watchlistItem.currentPrice);
-        }
-      });
-    }
-
     if (triggeredAlerts.current.size > 0) {
         const alertsToFire = Array.from(triggeredAlerts.current);
         triggeredAlerts.current.clear();
@@ -748,7 +727,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         });
     }
 
-  }, [openPositions, tradeTriggers, watchlist, priceAlerts, executeTrigger, saveSubcollectionDoc, toast]);
+  }, [openPositions, watchlist, priceAlerts, saveSubcollectionDoc, toast]);
 
 
   const addTradeTrigger = useCallback((trigger: Omit<TradeTrigger, 'id' | 'details'>) => {
@@ -1228,4 +1207,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
