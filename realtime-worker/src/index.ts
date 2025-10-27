@@ -97,7 +97,7 @@ class WebSocketManager {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10-second timeout for fetch
         
         const res = await fetch(this.tokenEndpoint, { 
             method: 'POST', 
@@ -199,7 +199,7 @@ class WebSocketManager {
     this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, MAX_RECONNECT_ATTEMPTS);
     const baseDelay = 1000 * 2 ** this.reconnectAttempts;
     const jitter = Math.random() * 1000;
-    const delay = Math.min(baseDelay + jitter, 30_000);
+    const delay = Math.min(baseDelay + jitter, 60_000);
 
     console.log(`[${this.name}] Scheduling reconnect in ${delay.toFixed(0)}ms.`);
     this.reconnectTimeout = setTimeout(() => {
@@ -255,8 +255,8 @@ class WebSocketManager {
     if(this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     this.reconnectTimeout = null;
     if (this.ws) {
+      try { this.ws.close(1000, 'Session ended by worker'); } catch(e) {/* ignore */}
       this.ws.removeAllListeners();
-      this.ws.close();
       this.ws = null;
     }
     this.actualSubscriptions.clear();
@@ -282,7 +282,7 @@ async function collectAllSymbols() {
         if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
       }
     });
-
+    
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
@@ -401,7 +401,14 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`[WORKER ${INSTANCE_ID}] Listening on ${PORT}`);
   startSession();
-  requeryInterval = setInterval(() => startSession(), REQUERY_INTERVAL_MS);
+  requeryInterval = setInterval(() => {
+      if (!sessionActive) {
+          startSession();
+      }
+  }, REQUERY_INTERVAL_MS);
+  setInterval(() => {
+    console.log(`[WORKER ${INSTANCE_ID}] Heartbeat — sessionActive=${sessionActive}`);
+  }, 60_000);
 });
 
 // ========== Graceful Shutdown ==========
@@ -412,10 +419,10 @@ async function shutdown() {
   console.log(`[WORKER ${INSTANCE_ID}] Shutdown signal received.`);
   if(requeryInterval) clearInterval(requeryInterval);
   if(sessionTimeout) clearTimeout(sessionTimeout);
-  sessionActive = false; // Prevent any further session activities
+  sessionActive = false;
   spotManager.disconnect();
   futuresManager.disconnect();
-  try { await admin.app().delete(); } catch(e) { console.error("Error on shutdown", e); }
+  try { await admin.app().delete(); } catch(e) { /* Ignore */ }
   server.close(() => {
       console.log("HTTP server closed.");
       process.exit(0);
