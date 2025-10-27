@@ -4,6 +4,69 @@ import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
 
+// Type definitions moved here to make the worker self-contained.
+interface OpenPositionDetails {
+  stopLoss?: number;
+  takeProfit?: number;
+  triggeredBy?: string;
+  status?: 'open' | 'closing';
+  closePrice?: number;
+}
+
+interface OpenPosition {
+  id: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  side: 'buy' | 'long' | 'short';
+  leverage?: number | null;
+  unrealizedPnl?: number;
+  priceChgPct?: number;
+  liquidationPrice?: number;
+  details?: OpenPositionDetails;
+}
+
+interface PaperTrade {
+  id?: string;
+  positionId: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  entryPrice: number;
+  closePrice?: number | null;
+  side: 'buy' | 'sell' | 'long' | 'short';
+  leverage: number | null;
+  openTimestamp: number;
+  closeTimestamp?: any;
+  status: 'open' | 'closed';
+  pnl?: number | null;
+}
+
+interface TradeTriggerDetails {
+    status: 'active' | 'executed' | 'canceled';
+}
+
+interface TradeTrigger {
+  id: string;
+  symbol: string;
+  symbolName: string;
+  type: 'spot' | 'futures';
+  condition: 'above' | 'below';
+  targetPrice: number;
+  action: 'buy' | 'long' | 'short';
+  amount: number;
+  leverage: number;
+  cancelOthers?: boolean;
+  stopLoss?: number;
+  takeProfit?: number;
+  details: TradeTriggerDetails;
+}
+
+
 // Initialize Firebase Admin SDK for Cloud Run environment
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -180,7 +243,7 @@ class WebSocketManager {
         
         // Diff against actual subscriptions
         const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
-        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.desiredSubscriptions.has(s)));
+        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
 
         toAdd.forEach(symbol => {
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
@@ -389,3 +452,5 @@ server.listen(PORT, () => {
     startSession(SESSION_MS);
     requeryInterval = setInterval(() => startSession(SESSION_MS), REQUERY_INTERVAL_MS);
 });
+
+    
