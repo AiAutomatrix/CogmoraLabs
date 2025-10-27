@@ -288,6 +288,8 @@ const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (sy
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
 
 async function collectAllSymbols() {
+    // This is the "memory reset" you asked for. It clears the lock on every cycle.
+    closingPositions.clear();
     console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
@@ -296,6 +298,7 @@ async function collectAllSymbols() {
         const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
+            // In-memory filter, more resilient than a .where() clause
             if (trigger.details?.status === 'active') {
                 if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
                 if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
@@ -305,6 +308,7 @@ async function collectAllSymbols() {
         const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
+            // In-memory filter
             if (position.details?.status === 'open') {
                 if (position.positionType === 'spot') spotSymbols.add(position.symbol);
                 if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
@@ -374,12 +378,20 @@ async function processPriceUpdate(symbol: string, price: number) {
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
             const trigger = doc.data() as TradeTrigger;
+            if (closingPositions.has(doc.id)) {
+                console.log(`[WORKER_SKIP] Trigger ${doc.id} is already being processed.`);
+                return;
+            }
+
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
             if (conditionMet) {
                 const userId = doc.ref.parent.parent?.parent?.id;
                 if (!userId) return;
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
+                
+                closingPositions.add(doc.id);
+                positionsToClearFromLock.add(doc.id);
                 
                 const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
                 batch.set(executedTriggerRef, { ...trigger, currentPrice: price });
@@ -396,6 +408,8 @@ async function processPriceUpdate(symbol: string, price: number) {
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
     } finally {
+        // This is important: clear the lock for items in this batch regardless of success/failure
+        // to prevent them from being permanently locked if a commit fails.
         positionsToClearFromLock.forEach(id => closingPositions.delete(id));
     }
 }
@@ -411,4 +425,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
-
