@@ -261,7 +261,7 @@ class WebSocketManager {
       // If already connected, manage subscriptions
       if (this.ws?.readyState === WebSocket.OPEN) {
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
-        const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
+        const toRemove = new Set([...this.currentSubscriptions].filter(s => !this.currentSubscriptions.has(s)));
 
         toAdd.forEach(symbol => {
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
