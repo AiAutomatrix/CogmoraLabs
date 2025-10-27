@@ -3,7 +3,6 @@ import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
-import fetch from 'node-fetch';
 
 // Type definitions moved here to make the worker self-contained.
 interface OpenPositionDetails {
@@ -104,8 +103,8 @@ class WebSocketManager {
     ) {}
 
     public connect = async () => {
-        if (this.reconnectTimeout) {
-             console.log(`[${this.name}] Reconnect already scheduled. Aborting new connect attempt.`);
+        if (shuttingDown || this.reconnectTimeout) {
+             console.log(`[${this.name}] Skipping connect: shutdown in progress or reconnect already scheduled.`);
              return;
         }
         if (this.desiredSubscriptions.size === 0) {
@@ -188,16 +187,16 @@ class WebSocketManager {
         console.log(`[${this.name}] WebSocket closed.`);
         if (this.pingInterval) clearInterval(this.pingInterval);
         this.actualSubscriptions.clear();
+        this.ws = null;
         this.scheduleReconnect();
     }
 
     private handleError = (error: Error) => {
         console.error(`[${this.name}] WebSocket error:`, error.message);
-        // The 'close' event will handle the reconnect logic.
     }
 
     private scheduleReconnect = () => {
-        if (this.reconnectTimeout) return;
+        if (shuttingDown || this.reconnectTimeout) return;
         if (this.desiredSubscriptions.size === 0) {
             console.log(`[${this.name}] No desired subscriptions; skipping reconnect.`);
             this.disconnect();
@@ -218,14 +217,14 @@ class WebSocketManager {
     }
     
     private resubscribe = () => {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-            this.actualSubscriptions.clear();
-            console.log(`[${this.name}] Subscribing to ${this.desiredSubscriptions.size} symbols.`);
-            this.desiredSubscriptions.forEach(symbol => {
-                this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
-                this.actualSubscriptions.add(symbol);
-            });
-        }
+        if (shuttingDown || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+        this.actualSubscriptions.clear();
+        console.log(`[${this.name}] Subscribing to ${this.desiredSubscriptions.size} symbols.`);
+        this.desiredSubscriptions.forEach(symbol => {
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
+            this.actualSubscriptions.add(symbol);
+        });
     }
 
     public updateSubscriptions = (newSymbols: Set<string>) => {
@@ -239,11 +238,10 @@ class WebSocketManager {
 
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
              console.log(`[${this.name}] WS not open. Attempting to connect now.`);
-             this.connect(); // Proactively connect
+             this.connect();
              return;
         }
         
-        // Diff against actual subscriptions
         const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
         const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.desiredSubscriptions.has(s)));
 
@@ -278,17 +276,17 @@ class WebSocketManager {
 }
 
 // --- Main Application Logic ---
-
 const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (symbol) => `/market/snapshot:${symbol}`);
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
 
 let sessionTimeout: NodeJS.Timeout | null = null;
 let requeryInterval: NodeJS.Timeout | null = null;
-const closingPositions = new Set<string>(); // In-memory lock for this instance
+const closingPositions = new Set<string>();
 
 async function collectAllSymbols() {
+    if (shuttingDown) return;
     console.log(`[WORKER ${INSTANCE_ID}] Collecting symbols to monitor...`);
-    closingPositions.clear(); // Reset the lock on each collection cycle
+    
     try {
         const spotSymbols = new Set<string>();
         const futuresSymbols = new Set<string>();
@@ -321,19 +319,18 @@ async function collectAllSymbols() {
 }
 
 async function startSession(sessionMs = SESSION_MS) {
+    if (shuttingDown) return;
     console.log(`[WORKER ${INSTANCE_ID}] Starting new session (${sessionMs}ms)`);
     try {
-        await collectAllSymbols(); // This now updates desired state on managers
+        await collectAllSymbols();
         
         spotManager.connect();
         futuresManager.connect();
 
         if (sessionTimeout) clearTimeout(sessionTimeout);
         sessionTimeout = setTimeout(() => {
-            console.log(`[WORKER ${INSTANCE_ID}] Session timeout reached. Disconnecting managers to re-evaluate.`);
-            spotManager.disconnect();
-            futuresManager.disconnect();
-            // Next session will be started by the setInterval in the main block
+            console.log(`[WORKER ${INSTANCE_ID}] Session timeout reached. Disconnecting managers.`);
+            shutdown();
         }, sessionMs);
 
     } catch (e) {
@@ -342,45 +339,41 @@ async function startSession(sessionMs = SESSION_MS) {
 }
 
 async function processPriceUpdate(symbol: string, price: number) {
-    if (!symbol || !price) return;
+    if (shuttingDown || !symbol || !price) return;
     
-    // Check for open positions to hit SL/TP
+    // Process open positions
     try {
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
-        const batch = db.batch();
-        let writesInBatch = 0;
-
-        positionsSnapshot.forEach(doc => {
+        positionsSnapshot.forEach(async (doc) => {
+            if (closingPositions.has(doc.id)) return;
             const pos = doc.data() as OpenPosition;
-
-            if (pos.details?.status !== 'open' || closingPositions.has(doc.id)) {
-                return;
-            }
-
             const isLong = pos.side === 'long' || pos.side === 'buy';
             const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
             const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
             if (slHit || tpHit) {
-                console.log(`[EXECUTION] Closing position ${doc.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                 closingPositions.add(doc.id);
-                writesInBatch++;
+                console.log(`[EXECUTION] Closing position ${doc.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                try {
+                   await db.runTransaction(async tx => {
+                       const freshDoc = await tx.get(doc.ref);
+                       if (freshDoc.exists && freshDoc.data()?.details.status === 'open') {
+                           tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
+                       }
+                   });
+                } catch (e) {
+                    console.error(`Transaction failed for closing position ${doc.id}:`, e);
+                    closingPositions.delete(doc.id);
+                }
             }
         });
-        
-        if (writesInBatch > 0) {
-            await batch.commit();
-            console.log(`[WORKER] Committed ${writesInBatch} SL/TP write(s) for symbol ${symbol}.`);
-        }
-
     } catch (err) {
         console.error(`[WORKER_ERROR] Failed to query/process open positions for ${symbol}:`, err);
     }
     
-    // Check for active trade triggers
+    // Process trade triggers
     try {
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
@@ -393,10 +386,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 try {
                     await db.runTransaction(async (tx) => {
                         const freshDoc = await tx.get(doc.ref);
-                        if (!freshDoc.exists) {
-                            console.log(`[WORKER_SKIP] Trigger ${doc.id} already processed.`);
-                            return;
-                        }
+                        if (!freshDoc.exists) return;
                         
                         const userContextRef = doc.ref.parent.parent;
                         if (!userContextRef) return;
@@ -458,7 +448,10 @@ process.on('SIGTERM', shutdown);
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`[WORKER ${INSTANCE_ID}] Server listening on port ${PORT}`);
-    // Start the main session loop
     startSession(SESSION_MS);
-    requeryInterval = setInterval(() => startSession(SESSION_MS), REQUERY_INTERVAL_MS);
+    requeryInterval = setInterval(() => {
+      if (!shuttingDown) {
+        collectAllSymbols();
+      }
+    }, REQUERY_INTERVAL_MS);
 });
