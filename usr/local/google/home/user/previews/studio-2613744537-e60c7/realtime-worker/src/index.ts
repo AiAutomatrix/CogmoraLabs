@@ -95,11 +95,19 @@ class WebSocketManager {
     ) {}
 
     public connect = async () => {
+        // Do not attempt to connect if a reconnect is already scheduled
+        if (this.reconnectTimeout) {
+            console.log(`[${this.name}] Reconnect already scheduled. Aborting new connection attempt.`);
+            return;
+        }
         console.log(`[${this.name}] Attempting to connect...`);
         try {
             const response = await fetch(this.tokenEndpoint, { method: 'POST' });
+            if (!response.ok) {
+                throw new Error(`Failed to get token with status: ${response.status}`);
+            }
             const tokenData = await response.json() as any;
-            if (tokenData.code !== '200000') throw new Error(tokenData.msg);
+            if (tokenData.code !== '200000') throw new Error(tokenData.msg || 'Invalid token data');
 
             const { token, instanceServers } = tokenData.data;
             const wsUrl = `${instanceServers[0].endpoint}?token=${token}`;
@@ -108,7 +116,11 @@ class WebSocketManager {
 
             this.ws.on('open', () => {
                 console.log(`[${this.name}] WebSocket connection established.`);
-                this.reconnectAttempts = 0;
+                this.reconnectAttempts = 0; // Reset on successful connection
+                if (this.reconnectTimeout) {
+                    clearTimeout(this.reconnectTimeout);
+                    this.reconnectTimeout = null;
+                }
                 this.setupPing(instanceServers[0].pingInterval);
                 this.resubscribe();
             });
@@ -121,31 +133,54 @@ class WebSocketManager {
             this.ws.on('error', this.handleError);
 
         } catch (error) {
-            console.error(`[${this.name}] Failed to get token:`, error);
+            console.error(`[${this.name}] Failed to get token or connect:`, error);
             this.scheduleReconnect();
         }
     }
+    
+    public disconnect = () => {
+        if (this.ws) {
+            console.log(`[${this.name}] Disconnecting WebSocket.`);
+            this.ws.close();
+            this.ws = null;
+        }
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+        this.currentSubscriptions.clear();
+        this.reconnectAttempts = 0;
+    }
+
 
     private handleMessage = (data: string) => {
-        const message = JSON.parse(data);
-        if (message.type === 'message' && message.topic) {
-            let symbol: string | undefined;
-            const priceData = message.data;
-            
-            let price: number | undefined;
+        try {
+            const message = JSON.parse(data);
+            if (message.type === 'message' && message.topic) {
+                let symbol: string | undefined;
+                const priceData = message.data;
+                
+                let price: number | undefined;
 
-            if (this.name === 'SPOT') {
-                symbol = message.topic.replace('/market/snapshot:', '');
-                price = parseFloat(priceData?.data?.lastTradedPrice);
+                if (this.name === 'SPOT') {
+                    symbol = message.topic.replace('/market/snapshot:', '');
+                    price = parseFloat(priceData?.data?.lastTradedPrice);
 
-            } else { // FUTURES
-                symbol = message.topic.replace('/contractMarket/snapshot:', '');
-                price = message.data.markPrice;
+                } else { // FUTURES
+                    symbol = message.topic.replace('/contractMarket/snapshot:', '');
+                    price = message.data.markPrice;
+                }
+
+                if (price && symbol) {
+                    processPriceUpdate(symbol, price).catch(e => console.error(`[WORKER] Error in processPriceUpdate for ${symbol}:`, e));
+                }
             }
-
-            if (price && symbol) {
-                processPriceUpdate(symbol, price).catch(e => console.error(`[WORKER] Error in processPriceUpdate for ${symbol}:`, e));
-            }
+        } catch (error) {
+            console.error(`[${this.name}] Error handling message:`, data, error);
         }
     }
 
@@ -166,14 +201,24 @@ class WebSocketManager {
 
     private handleError = (error: Error) => {
         console.error(`[${this.name}] WebSocket error:`, error.message);
-        // handleClose will be called automatically after an error.
+        // The 'close' event will be triggered after an error, which handles the reconnect logic.
     }
 
     private scheduleReconnect = () => {
+        // Prevent multiple reconnect schedules
         if (this.reconnectTimeout) return;
+        
+        // Don't reconnect if there are no subscriptions needed
+        if (this.currentSubscriptions.size === 0) {
+            console.log(`[${this.name}] No subscriptions, will not reconnect.`);
+            this.disconnect();
+            return;
+        }
+
         this.reconnectAttempts++;
-        const delay = Math.min(1000 * (2 ** this.reconnectAttempts), 30000); // Exponential backoff
+        const delay = Math.min(1000 * (2 ** this.reconnectAttempts), 30000); // Exponential backoff up to 30s
         console.log(`[${this.name}] Scheduling reconnect in ${delay / 1000}s...`);
+        
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
             this.connect();
@@ -195,6 +240,17 @@ class WebSocketManager {
     }
 
     public updateSubscriptions = (newSymbols: Set<string>) => {
+        if (newSymbols.size === 0 && this.currentSubscriptions.size > 0) {
+            this.disconnect();
+            return;
+        }
+        
+        if (newSymbols.size > 0 && !this.ws) {
+            this.currentSubscriptions = newSymbols;
+            this.connect();
+            return;
+        }
+
         if (this.ws?.readyState !== WebSocket.OPEN) {
             this.currentSubscriptions = newSymbols; // Will be subscribed on connect
             return;
@@ -225,10 +281,6 @@ class WebSocketManager {
 
 const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (symbol) => `/market/snapshot:${symbol}`);
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
-
-
-spotManager.connect();
-futuresManager.connect();
 
 async function collectAllSymbols() {
     console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
@@ -283,12 +335,11 @@ async function processPriceUpdate(symbol: string, price: number) {
         
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data() as OpenPosition;
-            if (!pos.details) return; // Skip if no details object
+            if (!pos.details) return;
 
             const isLong = pos.side === 'long' || pos.side === 'buy';
             const { stopLoss, takeProfit } = pos.details;
 
-            // Detailed logging for each position
             if (stopLoss || takeProfit) {
                  console.log(`[WORKER_CHECK] Sym: ${symbol}, Pos: ${doc.id}, Price: ${price}, SL: ${stopLoss}, TP: ${takeProfit}`);
             }
@@ -314,7 +365,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             if (conditionMet) {
                 const userId = doc.ref.parent.parent?.parent?.id;
-                if (!userId) return; // Add null check for safety
+                if (!userId) return;
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
                 
                 const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
@@ -349,3 +400,5 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
+    
