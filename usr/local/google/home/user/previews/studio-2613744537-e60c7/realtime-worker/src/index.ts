@@ -240,16 +240,20 @@ async function collectAllSymbols() {
         const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
-            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            if (trigger.details?.status === 'active') {
+                if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+                if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            }
         });
 
         // Collect from openPositions
         const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
-            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            if (position.details?.status === 'open') {
+                if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+                if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            }
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -274,19 +278,28 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     try {
         // Check for open positions to hit SL/TP
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
+        
         positionsSnapshot.forEach((doc) => {
-            const pos = doc.data();
-            if (pos.details?.status === 'closing') return;
+            const pos = doc.data() as OpenPosition;
+            if (!pos.details) return; // Skip if no details object
 
             const isLong = pos.side === 'long' || pos.side === 'buy';
-            const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+            const { stopLoss, takeProfit } = pos.details;
+
+            // Detailed logging for each position
+            if (stopLoss || takeProfit) {
+                 console.log(`[WORKER_CHECK] Sym: ${symbol}, Pos: ${doc.id}, Price: ${price}, SL: ${stopLoss}, TP: ${takeProfit}`);
+            }
+
+            const slHit = stopLoss && (isLong ? price <= stopLoss : price >= stopLoss);
+            const tpHit = takeProfit && (isLong ? price >= takeProfit : price <= takeProfit);
 
             if (slHit || tpHit) {
-                console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                // Pass the current price for accurate closing
+                const userId = doc.ref.parent.parent?.parent?.id;
+                if (!userId) return;
+                console.log(`[EXECUTION] Position ${doc.id} for user ${userId} hit ${slHit ? 'Stop Loss' : 'Take Profit'} at price ${price}`);
                 batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                 writes++;
             }
@@ -300,25 +313,25 @@ async function processPriceUpdate(symbol: string, price: number) {
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
             if (conditionMet) {
-                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
+                const userId = doc.ref.parent.parent?.parent?.id;
+                if (!userId) return; // Add null check for safety
+                console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
                 
-                // NEW LOGIC: Create a new document in 'executedTriggers'
-                const executedTriggerRef = doc.ref.parent.parent.collection('executedTriggers').doc(doc.id);
-                batch.set(executedTriggerRef, { ...trigger, currentPrice: price }); // Add execution price
+                const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
+                batch.set(executedTriggerRef, { ...trigger, currentPrice: price });
                 
-                // Delete the original trigger
                 batch.delete(doc.ref); 
                 writes++;
                 
                 if (trigger.cancelOthers) {
                   // This part is a bit tricky in a single batch, better to handle in a separate step if needed
-                  // For now, we focus on executing the main trigger correctly.
                 }
             }
         });
 
         if (writes > 0) {
             await batch.commit();
+            console.log(`[WORKER] Committed ${writes} write(s) for symbol ${symbol}.`);
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
