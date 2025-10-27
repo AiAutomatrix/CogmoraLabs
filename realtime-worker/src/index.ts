@@ -83,6 +83,27 @@ const KUCOIN_FUTURES_TOKEN_ENDPOINT = "https://api-futures.kucoin.com/api/v1/bul
 // In-memory set to track positions being closed to prevent race conditions
 const closingPositions = new Set<string>();
 
+// --- Firestore Health Check ---
+let isFirestoreHealthy = true;
+async function checkFirestoreHealth(): Promise<boolean> {
+    try {
+        // Perform a quick, lightweight read operation that is likely to be cached
+        await db.collection('__healthcheck__').doc('__healthcheck__').get();
+        if (!isFirestoreHealthy) {
+            console.log("[WORKER_HEALTH] Firestore connection restored.");
+            isFirestoreHealthy = true;
+        }
+        return true;
+    } catch (error) {
+        if (isFirestoreHealthy) {
+            console.error("[WORKER_HEALTH] Firestore connection unhealthy. Pausing operations.", error);
+            isFirestoreHealthy = false;
+        }
+        return false;
+    }
+}
+setInterval(checkFirestoreHealth, 30000); // Check health every 30 seconds
+
 // --- WebSocket Connection Manager ---
 class WebSocketManager {
     private ws: WebSocket | null = null;
@@ -98,7 +119,11 @@ class WebSocketManager {
     ) {}
 
     public connect = async () => {
-        // Do not attempt to connect if a reconnect is already scheduled
+        if (!isFirestoreHealthy) {
+            console.log(`[${this.name}] Firestore is unhealthy. Aborting connection attempt.`);
+            this.scheduleReconnect(); // Still schedule a reconnect to try again later
+            return;
+        }
         if (this.reconnectTimeout) {
             console.log(`[${this.name}] Reconnect already scheduled. Aborting new connection attempt.`);
             return;
@@ -119,7 +144,7 @@ class WebSocketManager {
 
             this.ws.on('open', () => {
                 console.log(`[${this.name}] WebSocket connection established.`);
-                this.reconnectAttempts = 0; // Reset on successful connection
+                this.reconnectAttempts = 0; 
                 if (this.reconnectTimeout) {
                     clearTimeout(this.reconnectTimeout);
                     this.reconnectTimeout = null;
@@ -204,14 +229,11 @@ class WebSocketManager {
 
     private handleError = (error: Error) => {
         console.error(`[${this.name}] WebSocket error:`, error.message);
-        // The 'close' event will be triggered after an error, which handles the reconnect logic.
     }
 
     private scheduleReconnect = () => {
-        // Prevent multiple reconnect schedules
         if (this.reconnectTimeout) return;
         
-        // Don't reconnect if there are no subscriptions needed
         if (this.currentSubscriptions.size === 0) {
             console.log(`[${this.name}] No subscriptions, will not reconnect.`);
             this.disconnect();
@@ -219,7 +241,7 @@ class WebSocketManager {
         }
 
         this.reconnectAttempts++;
-        const delay = Math.min(1000 * (2 ** this.reconnectAttempts), 30000); // Exponential backoff up to 30s
+        const delay = Math.min(1000 * (2 ** this.reconnectAttempts), 30000); 
         console.log(`[${this.name}] Scheduling reconnect in ${delay / 1000}s...`);
         
         this.reconnectTimeout = setTimeout(() => {
@@ -245,23 +267,20 @@ class WebSocketManager {
     public updateSubscriptions = (newSymbols: Set<string>) => {
       const symbolsAreEqual = newSymbols.size === this.currentSubscriptions.size && [...newSymbols].every(s => this.currentSubscriptions.has(s));
       if (symbolsAreEqual) {
-        return; // No changes needed
+        return;
       }
 
-      // If there are no new symbols, disconnect
       if (newSymbols.size === 0) {
         this.disconnect();
         return;
       }
     
-      // If there are new symbols and we're not connected, connect.
       if (newSymbols.size > 0 && !this.ws) {
         this.currentSubscriptions = newSymbols;
         this.connect();
         return;
       }
       
-      // If already connected, manage subscriptions
       if (this.ws?.readyState === WebSocket.OPEN) {
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !this.currentSubscriptions.has(s)));
@@ -288,29 +307,28 @@ const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (sy
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
 
 async function collectAllSymbols() {
+    if (!isFirestoreHealthy) {
+        console.log("[WORKER_PAUSED] Firestore is unhealthy, skipping symbol collection.");
+        return;
+    }
+
     console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
     try {
-        // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
-            if (trigger.details?.status === 'active') {
-                if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-                if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-            }
+            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
         });
 
-        // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
-            if (position.details?.status === 'open') {
-                if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-                if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-            }
+            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -318,16 +336,18 @@ async function collectAllSymbols() {
         futuresManager.updateSubscriptions(futuresSymbols);
     } catch (e) {
         console.error("[WORKER] CRITICAL: Failed to collect symbols due to Firestore query error.", e);
+        isFirestoreHealthy = false;
     }
 }
 
-// Check for symbols to monitor every 30 seconds
 setInterval(collectAllSymbols, 30000);
-// Initial run after a short delay
 setTimeout(collectAllSymbols, 5000);
 
 
 async function processPriceUpdate(symbol: string, price: number) {
+    if (!isFirestoreHealthy) {
+        return;
+    }
     if (!symbol || !price) return;
     
     const batch = db.batch();
@@ -335,7 +355,6 @@ async function processPriceUpdate(symbol: string, price: number) {
     const positionsToClearFromLock = new Set<string>();
 
     try {
-        // Check for open positions to hit SL/TP
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
@@ -363,7 +382,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 if (!userId) return;
                 console.log(`[EXECUTION] Position ${doc.id} for user ${userId} hit ${slHit ? 'Stop Loss' : 'Take Profit'} at price ${price}`);
                 
-                closingPositions.add(pos.id); // Add to lock
+                closingPositions.add(pos.id); 
                 positionsToClearFromLock.add(pos.id);
                 
                 batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
@@ -371,7 +390,6 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
 
-        // Check for active trade triggers
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
@@ -397,8 +415,8 @@ async function processPriceUpdate(symbol: string, price: number) {
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
+        isFirestoreHealthy = false;
     } finally {
-        // Always clear the positions from the lock after attempting the commit
         positionsToClearFromLock.forEach(id => closingPositions.delete(id));
     }
 }
