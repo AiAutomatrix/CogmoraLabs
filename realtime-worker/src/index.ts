@@ -80,6 +80,9 @@ const db = admin.firestore();
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = "https://api-futures.kucoin.com/api/v1/bullet-public";
 
+// In-memory set to track positions being closed to prevent race conditions
+const closingPositions = new Set<string>();
+
 // --- WebSocket Connection Manager ---
 class WebSocketManager {
     private ws: WebSocket | null = null;
@@ -93,8 +96,6 @@ class WebSocketManager {
         private tokenEndpoint: string,
         private getTopic: (symbol: string) => string,
     ) {}
-
-    public isConnected = () => this.ws?.readyState === WebSocket.OPEN;
 
     public connect = async () => {
         // Do not attempt to connect if a reconnect is already scheduled
@@ -254,7 +255,7 @@ class WebSocketManager {
       }
     
       // If there are new symbols and we're not connected, connect.
-      if (newSymbols.size > 0 && (!this.ws || this.ws.readyState === WebSocket.CLOSED)) {
+      if (newSymbols.size > 0 && !this.ws) {
         this.currentSubscriptions = newSymbols;
         this.connect();
         return;
@@ -290,14 +291,6 @@ async function collectAllSymbols() {
     console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
-    
-    // Safety check: Only query Firestore if we have a stable connection.
-    // This is a simplified check. A more robust solution might use a health check endpoint.
-    // For now, we'll assume that if a WebSocket is connected, Firestore should be reachable.
-    if (!spotManager.isConnected() && !futuresManager.isConnected() && (spotSymbols.size > 0 || futuresSymbols.size > 0)) {
-        console.log("[WORKER] Aborting symbol collection: WebSockets are not connected.");
-        return;
-    }
 
     try {
         // Collect from tradeTriggers
@@ -339,6 +332,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     const batch = db.batch();
     let writes = 0;
+    const positionsToClearFromLock = new Set<string>();
 
     try {
         // Check for open positions to hit SL/TP
@@ -347,6 +341,11 @@ async function processPriceUpdate(symbol: string, price: number) {
         
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data() as OpenPosition;
+            if (closingPositions.has(pos.id)) {
+                console.log(`[WORKER_SKIP] Position ${pos.id} is already being closed.`);
+                return;
+            }
+
             if (!pos.details) return;
 
             const isLong = pos.side === 'long' || pos.side === 'buy';
@@ -363,6 +362,10 @@ async function processPriceUpdate(symbol: string, price: number) {
                 const userId = doc.ref.parent.parent?.parent?.id;
                 if (!userId) return;
                 console.log(`[EXECUTION] Position ${doc.id} for user ${userId} hit ${slHit ? 'Stop Loss' : 'Take Profit'} at price ${price}`);
+                
+                closingPositions.add(pos.id); // Add to lock
+                positionsToClearFromLock.add(pos.id);
+                
                 batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                 writes++;
             }
@@ -385,10 +388,6 @@ async function processPriceUpdate(symbol: string, price: number) {
                 
                 batch.delete(doc.ref); 
                 writes++;
-                
-                if (trigger.cancelOthers) {
-                  // This part is a bit tricky in a single batch, better to handle in a separate step if needed
-                }
             }
         });
 
@@ -398,6 +397,9 @@ async function processPriceUpdate(symbol: string, price: number) {
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
+    } finally {
+        // Always clear the positions from the lock after attempting the commit
+        positionsToClearFromLock.forEach(id => closingPositions.delete(id));
     }
 }
 
