@@ -90,14 +90,13 @@ class WebSocketManager {
   private async getTokenWithRetry(maxRetries = 3): Promise<any> {
     const now = Date.now();
     if (this.cachedToken && now - this.lastTokenTime < 60_000) {
-      console.log(`[${this.name}] Using cached token.`);
       return this.cachedToken;
     }
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000); // Increased timeout to 15 seconds
+        const timeout = setTimeout(() => controller.abort(), 30000); 
         
         const res = await fetch(this.tokenEndpoint, { 
             method: 'POST', 
@@ -125,6 +124,7 @@ class WebSocketManager {
   public async connect() {
     if (this.reconnectTimeout) return;
     if (this.desiredSubscriptions.size === 0) {
+      console.log(`[${this.name}] No desired subscriptions. Aborting connection.`);
       this.disconnect();
       return;
     }
@@ -160,12 +160,17 @@ class WebSocketManager {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ id: Date.now(), type: 'ping' }));
       }
-    }, Math.max(5000, interval / 2)); // Send ping at least every 5 seconds
+    }, Math.max(5000, interval / 2));
   }
 
   private handleMessage = (data: WebSocket.Data) => {
     try {
       const msg = JSON.parse(data.toString());
+
+      if (msg.type === 'pong') {
+        return;
+      }
+
       if (msg.type === 'message' && msg.topic) {
         const symbol = this.name === 'SPOT' ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
         const price = this.name === 'SPOT' ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
@@ -274,24 +279,20 @@ async function collectAllSymbols() {
   const spotSymbols = new Set<string>();
   const futuresSymbols = new Set<string>();
   try {
-    const positionsSnapshot = await db.collectionGroup('openPositions').get();
+    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
-      if (pos.details?.status === 'open') {
-        if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
-        if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
-      }
-    });
-
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
-    triggersSnapshot.forEach(doc => {
-        const trigger = doc.data() as TradeTrigger;
-        if (trigger.details?.status === 'active') {
-            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-        }
+      if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
+      if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
     });
     
+    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+    triggersSnapshot.forEach(doc => {
+      const trigger = doc.data() as TradeTrigger;
+      if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+      if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+    });
+
     console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
     spotManager.updateSubscriptions(spotSymbols);
     futuresManager.updateSubscriptions(futuresSymbols);
@@ -332,7 +333,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
     } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to query/process open positions for ${symbol}:`, err);
+        console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
     }
 
     // Process trade triggers
@@ -364,7 +365,7 @@ async function processPriceUpdate(symbol: string, price: number) {
             }
         });
     } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to query/process triggers for ${symbol}:`, err);
+        console.error(`[WORKER_ERROR] Failed to process triggers for ${symbol}:`, err);
     }
 }
 
@@ -435,6 +436,3 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-
-    
