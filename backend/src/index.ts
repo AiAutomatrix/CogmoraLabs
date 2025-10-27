@@ -258,9 +258,10 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
           const totalValue = (posData.size * posData.averageEntryPrice) + (size * currentPrice);
           transaction.update(posDoc.ref, {size: totalSize, averageEntryPrice: totalValue / totalSize});
         } else {
-          positionId = admin.firestore.v1.Firestore.autoId();
+          const newPositionRef = openPositionsRef.doc();
+          positionId = newPositionRef.id;
           const newPosition = {id: positionId, positionType: "spot", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side: "buy", details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
-          transaction.set(openPositionsRef.doc(positionId), newPosition);
+          transaction.set(newPositionRef, newPosition);
         }
 
         const newTrade = {positionId, positionType: "spot", symbol, symbolName, size, entryPrice: currentPrice, side: "buy", leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
@@ -275,10 +276,11 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         const newBalance = currentBalance - amount;
         const side = action as "long" | "short";
         const liquidationPrice = side === "long" ? currentPrice * (1 - (1/leverage)) : currentPrice * (1 + (1/leverage));
-        const positionId = admin.firestore.v1.Firestore.autoId();
 
+        const newPositionRef = userContextRef.collection("openPositions").doc();
+        const positionId = newPositionRef.id;
         const newPosition = {id: positionId, positionType: "futures", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
-        transaction.set(userContextRef.collection("openPositions").doc(positionId), newPosition);
+        transaction.set(newPositionRef, newPosition);
 
         const newTrade = {positionId, positionType: "futures", symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
         transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
