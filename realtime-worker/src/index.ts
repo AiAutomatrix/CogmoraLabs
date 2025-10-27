@@ -208,18 +208,20 @@ class WebSocketManager {
         // Prevent multiple reconnect schedules
         if (this.reconnectTimeout) return;
         
+        // Don't reconnect if there are no subscriptions needed
+        if (this.currentSubscriptions.size === 0) {
+            console.log(`[${this.name}] No subscriptions, will not reconnect.`);
+            this.disconnect();
+            return;
+        }
+
         this.reconnectAttempts++;
         const delay = Math.min(1000 * (2 ** this.reconnectAttempts), 30000); // Exponential backoff up to 30s
         console.log(`[${this.name}] Scheduling reconnect in ${delay / 1000}s...`);
         
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null;
-            // Only try to connect if there are still symbols to subscribe to
-            if (this.currentSubscriptions.size > 0) {
-              this.connect();
-            } else {
-              console.log(`[${this.name}] No symbols to subscribe to, skipping reconnect.`);
-            }
+            this.connect();
         }, delay);
     }
     
@@ -289,23 +291,19 @@ async function collectAllSymbols() {
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
-            if (trigger.details?.status === 'active') {
-                if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-                if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-            }
+            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
-            if (position.details?.status === 'open') {
-                if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-                if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-            }
+            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -401,4 +399,3 @@ server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
 
-    
