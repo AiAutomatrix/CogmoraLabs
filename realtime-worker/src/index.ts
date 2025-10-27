@@ -237,19 +237,23 @@ async function collectAllSymbols() {
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
-            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            if (trigger.details?.status === 'active') {
+                if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+                if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            }
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
-            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            if (position.details?.status === 'open') {
+                if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+                if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            }
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -283,6 +287,11 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             const isLong = pos.side === 'long' || pos.side === 'buy';
             const { stopLoss, takeProfit } = pos.details;
+
+            // Detailed logging for each position
+            if (stopLoss || takeProfit) {
+                 console.log(`[WORKER_CHECK] Sym: ${symbol}, Pos: ${doc.id}, Price: ${price}, SL: ${stopLoss}, TP: ${takeProfit}`);
+            }
 
             const slHit = stopLoss && (isLong ? price <= stopLoss : price >= stopLoss);
             const tpHit = takeProfit && (isLong ? price >= takeProfit : price <= takeProfit);
@@ -340,5 +349,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
-
-    
