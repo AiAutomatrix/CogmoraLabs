@@ -283,12 +283,11 @@ async function processPriceUpdate(symbol: string, price: number) {
         
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data() as OpenPosition;
-            if (!pos.details) return; // Skip if no details object
+            if (!pos.details) return;
 
             const isLong = pos.side === 'long' || pos.side === 'buy';
             const { stopLoss, takeProfit } = pos.details;
 
-            // Detailed logging for each position
             if (stopLoss || takeProfit) {
                  console.log(`[WORKER_CHECK] Sym: ${symbol}, Pos: ${doc.id}, Price: ${price}, SL: ${stopLoss}, TP: ${takeProfit}`);
             }
@@ -314,7 +313,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             if (conditionMet) {
                 const userId = doc.ref.parent.parent?.parent?.id;
-                if (!userId) return; // Add null check for safety
+                if (!userId) return;
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
                 
                 const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
@@ -349,5 +348,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
-
-    
