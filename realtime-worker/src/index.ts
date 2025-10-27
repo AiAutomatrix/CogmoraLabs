@@ -77,7 +77,6 @@ class WebSocketManager {
   private desiredSubscriptions = new Set<string>();
   private actualSubscriptions = new Set<string>();
   
-  // Token Caching
   private lastTokenTime = 0;
   private cachedToken: any = null;
 
@@ -96,14 +95,7 @@ class WebSocketManager {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000); // 30-second timeout for fetch
-        
-        const res = await fetch(this.tokenEndpoint, { 
-            method: 'POST', 
-            signal: (controller as any).signal,
-        });
-        clearTimeout(timeout);
+        const res = await fetch(this.tokenEndpoint, { method: 'POST', timeout: 30000 });
         
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as any;
@@ -125,7 +117,6 @@ class WebSocketManager {
   public async connect() {
     if (this.reconnectTimeout) return;
     if (this.desiredSubscriptions.size === 0) {
-      console.log(`[${this.name}] No desired subscriptions. Aborting connection.`);
       this.disconnect();
       return;
     }
@@ -169,7 +160,6 @@ class WebSocketManager {
       const msg = JSON.parse(data.toString());
 
       if (msg.type === 'pong') {
-        // console.log(`[${this.name}] 🏓 Pong received.`);
         return;
       }
 
@@ -193,7 +183,6 @@ class WebSocketManager {
     this.actualSubscriptions.clear();
     
     if (!sessionActive) {
-      console.log(`[${this.name}] Session inactive, skipping reconnect.`);
       return;
     }
     this.scheduleReconnect();
@@ -229,12 +218,10 @@ class WebSocketManager {
   public updateSubscriptions(symbols: Set<string>) {
     this.desiredSubscriptions = symbols;
     if (symbols.size === 0) {
-      console.log(`[${this.name}] No symbols to watch. Disconnecting.`);
       this.disconnect();
       return;
     }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.log(`[${this.name}] WS not open. Attempting to connect now.`);
       this.connect();
     } else {
         const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
@@ -281,22 +268,18 @@ async function collectAllSymbols() {
   const spotSymbols = new Set<string>();
   const futuresSymbols = new Set<string>();
   try {
-    const positionsSnapshot = await db.collectionGroup('openPositions').get();
+    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
-      if (pos.details?.status === 'open') {
-        if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
-        if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
-      }
+      if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
+      if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
     });
     
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
-      if (trigger.details?.status === 'active') {
-        if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-        if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-      }
+      if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+      if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
     console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
@@ -311,7 +294,6 @@ async function collectAllSymbols() {
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
-    // Check for open positions to hit SL/TP
     try {
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
@@ -342,7 +324,6 @@ async function processPriceUpdate(symbol: string, price: number) {
         console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
     }
 
-    // Process trade triggers
     try {
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
