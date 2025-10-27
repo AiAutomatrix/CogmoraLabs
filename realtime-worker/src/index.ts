@@ -125,6 +125,7 @@ class WebSocketManager {
   public async connect() {
     if (this.reconnectTimeout) return;
     if (this.desiredSubscriptions.size === 0) {
+      console.log(`[${this.name}] No desired subscriptions. Aborting connection.`);
       this.disconnect();
       return;
     }
@@ -166,6 +167,12 @@ class WebSocketManager {
   private handleMessage = (data: WebSocket.Data) => {
     try {
       const msg = JSON.parse(data.toString());
+
+      if (msg.type === 'pong') {
+        // console.log(`[${this.name}] 🏓 Pong received.`);
+        return;
+      }
+
       if (msg.type === 'message' && msg.topic) {
         const symbol = this.name === 'SPOT' ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
         const price = this.name === 'SPOT' ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
