@@ -237,7 +237,7 @@ async function collectAllSymbols() {
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
             if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
@@ -245,7 +245,7 @@ async function collectAllSymbols() {
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
             if (position.positionType === 'spot') spotSymbols.add(position.symbol);
@@ -274,23 +274,23 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     try {
         // Check for open positions to hit SL/TP
-        // THIS QUERY IS NOW MORE SPECIFIC TO MATCH AN EXISTING INDEX
-        const positionsQuery = db.collectionGroup('openPositions')
-            .where('symbol', '==', symbol)
-            .where('details.status', '==', 'open');
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
         
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data() as OpenPosition;
-            // No need to check for 'closing' status here as the query now handles it
+            if (!pos.details) return; // Skip if no details object
+
             const isLong = pos.side === 'long' || pos.side === 'buy';
-            const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+            const { stopLoss, takeProfit } = pos.details;
+
+            const slHit = stopLoss && (isLong ? price <= stopLoss : price >= stopLoss);
+            const tpHit = takeProfit && (isLong ? price >= takeProfit : price <= takeProfit);
 
             if (slHit || tpHit) {
                 const userId = doc.ref.parent.parent?.parent?.id;
                 if (!userId) return;
-                console.log(`[EXECUTION] Closing position ${doc.id} for user ${userId} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                console.log(`[EXECUTION] Position ${doc.id} for user ${userId} hit ${slHit ? 'Stop Loss' : 'Take Profit'} at price ${price}`);
                 batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                 writes++;
             }
@@ -308,7 +308,7 @@ async function processPriceUpdate(symbol: string, price: number) {
                 if (!userId) return; // Add null check for safety
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
                 
-                const executedTriggerRef = doc.ref.parent.parent.collection('executedTriggers').doc(doc.id);
+                const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
                 batch.set(executedTriggerRef, { ...trigger, currentPrice: price });
                 
                 batch.delete(doc.ref); 
@@ -322,6 +322,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
         if (writes > 0) {
             await batch.commit();
+            console.log(`[WORKER] Committed ${writes} write(s) for symbol ${symbol}.`);
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
@@ -339,3 +340,5 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
+    
