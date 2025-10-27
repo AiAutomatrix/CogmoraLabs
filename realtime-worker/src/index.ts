@@ -243,7 +243,7 @@ class WebSocketManager {
         
         // Diff against actual subscriptions
         const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
-        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
+        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.desiredSubscriptions.has(s)));
 
         toAdd.forEach(symbol => {
             this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
@@ -289,18 +289,22 @@ async function collectAllSymbols() {
         const spotSymbols = new Set<string>();
         const futuresSymbols = new Set<string>();
 
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach(doc => {
-            const trigger = doc.data();
-            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            const trigger = doc.data() as TradeTrigger;
+            if (trigger.details?.status === 'active') {
+              if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+              if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+            }
         });
 
-        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach(doc => {
-            const position = doc.data();
-            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            const position = doc.data() as OpenPosition;
+            if (position.details?.status === 'open') {
+              if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+              if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
+            }
         });
         
         console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
@@ -374,10 +378,15 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     // Check for active trade triggers
     try {
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach(async (doc) => {
-            const trigger = doc.data();
+            const trigger = doc.data() as TradeTrigger;
+            // In-memory filter for status
+            if (trigger.details?.status !== 'active') {
+                return;
+            }
+
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
             if (conditionMet) {
@@ -452,3 +461,5 @@ server.listen(PORT, () => {
     startSession(SESSION_MS);
     requeryInterval = setInterval(() => startSession(SESSION_MS), REQUERY_INTERVAL_MS);
 });
+
+    
