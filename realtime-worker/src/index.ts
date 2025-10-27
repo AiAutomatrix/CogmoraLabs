@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
+import fetch from 'node-fetch';
 
 // Type definitions moved here to make the worker self-contained.
 interface OpenPositionDetails {
@@ -79,7 +80,7 @@ const db = admin.firestore();
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = "https://api-futures.kucoin.com/api/v1/bullet-public";
 
-const SESSION_MS = Number(process.env.SESSION_MS) || 240_000;
+const SESSION_MS = Number(process.env.SESSION_MS) || 480_000;
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
@@ -237,7 +238,8 @@ class WebSocketManager {
         }
 
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-             console.log(`[${this.name}] WS not open. Will connect with new subscriptions on next session.`);
+             console.log(`[${this.name}] WS not open. Attempting to connect now.`);
+             this.connect(); // Proactively connect
              return;
         }
         
@@ -282,9 +284,11 @@ const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDP
 
 let sessionTimeout: NodeJS.Timeout | null = null;
 let requeryInterval: NodeJS.Timeout | null = null;
+const closingPositions = new Set<string>(); // In-memory lock for this instance
 
 async function collectAllSymbols() {
     console.log(`[WORKER ${INSTANCE_ID}] Collecting symbols to monitor...`);
+    closingPositions.clear(); // Reset the lock on each collection cycle
     try {
         const spotSymbols = new Set<string>();
         const futuresSymbols = new Set<string>();
@@ -321,7 +325,6 @@ async function startSession(sessionMs = SESSION_MS) {
     try {
         await collectAllSymbols(); // This now updates desired state on managers
         
-        // Ensure managers attempt to connect if they have desired symbols
         spotManager.connect();
         futuresManager.connect();
 
@@ -343,14 +346,16 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     // Check for open positions to hit SL/TP
     try {
-        const positionsQuery = db.collectionGroup('openPositions');
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
         const positionsSnapshot = await positionsQuery.get();
         
-        positionsSnapshot.forEach(async (doc) => {
+        const batch = db.batch();
+        let writesInBatch = 0;
+
+        positionsSnapshot.forEach(doc => {
             const pos = doc.data() as OpenPosition;
 
-            // In-memory filter
-            if (pos.symbol !== symbol || pos.details?.status !== 'open') {
+            if (pos.details?.status !== 'open' || closingPositions.has(doc.id)) {
                 return;
             }
 
@@ -359,58 +364,47 @@ async function processPriceUpdate(symbol: string, price: number) {
             const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
             if (slHit || tpHit) {
-                 try {
-                    await db.runTransaction(async (tx) => {
-                        const userContextRef = doc.ref.parent.parent;
-                        if (!userContextRef) return;
-                        
-                        const freshDoc = await tx.get(doc.ref);
-                        if (freshDoc.data()?.details?.status !== 'open') {
-                            console.log(`[WORKER_SKIP] Position ${doc.id} already being closed by another instance.`);
-                            return; // Abort transaction
-                        }
-                        console.log(`[EXECUTION] Closing position ${doc.id} for user ${userContextRef.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                        tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
-                    });
-                } catch (e) {
-                    console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
-                }
+                console.log(`[EXECUTION] Closing position ${doc.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
+                closingPositions.add(doc.id);
+                writesInBatch++;
             }
         });
+        
+        if (writesInBatch > 0) {
+            await batch.commit();
+            console.log(`[WORKER] Committed ${writesInBatch} SL/TP write(s) for symbol ${symbol}.`);
+        }
 
     } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to query open positions for ${symbol}:`, err);
+        console.error(`[WORKER_ERROR] Failed to query/process open positions for ${symbol}:`, err);
     }
     
     // Check for active trade triggers
     try {
-        const triggersQuery = db.collectionGroup('tradeTriggers');
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
+        
         triggersSnapshot.forEach(async (doc) => {
             const trigger = doc.data() as TradeTrigger;
-            
-            // In-memory filter
-            if (trigger.symbol !== symbol || trigger.details?.status !== 'active') {
-                return;
-            }
-
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
             if (conditionMet) {
                 try {
                     await db.runTransaction(async (tx) => {
+                        const freshDoc = await tx.get(doc.ref);
+                        if (!freshDoc.exists) {
+                            console.log(`[WORKER_SKIP] Trigger ${doc.id} already processed.`);
+                            return;
+                        }
+                        
                         const userContextRef = doc.ref.parent.parent;
                         if (!userContextRef) return;
-
-                         const freshDoc = await tx.get(doc.ref);
-                         if (!freshDoc.exists) {
-                            console.log(`[WORKER_SKIP] Trigger ${doc.id} already processed by another instance.`);
-                            return;
-                         }
-                         console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userContextRef.id}`);
-                         const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
-                         tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
-                         tx.delete(doc.ref);
+                        
+                        console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userContextRef.id}`);
+                        const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
+                        tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
+                        tx.delete(doc.ref);
                     });
                 } catch(e) {
                      console.error(`[EXECUTION_FAILURE] Transaction to execute trigger ${doc.id} failed:`, e);
