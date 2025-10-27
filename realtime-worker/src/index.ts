@@ -343,11 +343,17 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     // Check for open positions to hit SL/TP
     try {
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
+        const positionsQuery = db.collectionGroup('openPositions');
         const positionsSnapshot = await positionsQuery.get();
         
         positionsSnapshot.forEach(async (doc) => {
-            const pos = doc.data();
+            const pos = doc.data() as OpenPosition;
+
+            // In-memory filter
+            if (pos.symbol !== symbol || pos.details?.status !== 'open') {
+                return;
+            }
+
             const isLong = pos.side === 'long' || pos.side === 'buy';
             const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
             const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
@@ -378,12 +384,13 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     // Check for active trade triggers
     try {
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol);
+        const triggersQuery = db.collectionGroup('tradeTriggers');
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach(async (doc) => {
             const trigger = doc.data() as TradeTrigger;
-            // In-memory filter for status
-            if (trigger.details?.status !== 'active') {
+            
+            // In-memory filter
+            if (trigger.symbol !== symbol || trigger.details?.status !== 'active') {
                 return;
             }
 
@@ -461,5 +468,3 @@ server.listen(PORT, () => {
     startSession(SESSION_MS);
     requeryInterval = setInterval(() => startSession(SESSION_MS), REQUERY_INTERVAL_MS);
 });
-
-    
