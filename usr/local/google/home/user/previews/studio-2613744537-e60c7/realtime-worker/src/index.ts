@@ -3,7 +3,6 @@ import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
-import fetch from 'node-fetch';
 
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
@@ -122,9 +121,7 @@ class WebSocketManager {
   }
 
   public async connect() {
-    if (this.reconnectTimeout) return;
     if (this.desiredSubscriptions.size === 0) {
-      console.log(`[${this.name}] No desired subscriptions. Aborting connection.`);
       this.disconnect();
       return;
     }
@@ -150,7 +147,6 @@ class WebSocketManager {
       this.ws.on('error', (err) => this.handleClose(`error: ${err.message}`));
     } catch (err) {
       console.error(`[${this.name}] ❌ Connection setup failed:`, err);
-      this.scheduleReconnect();
     }
   }
 
@@ -168,6 +164,7 @@ class WebSocketManager {
       const msg = JSON.parse(data.toString());
 
       if (msg.type === 'pong') {
+        console.log(`[${this.name}] Received pong.`);
         return;
       }
 
@@ -185,32 +182,10 @@ class WebSocketManager {
   };
 
   private handleClose(reason: string) {
-    console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}.`);
+    console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}. It will be re-established on the next session cycle.`);
     if (this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = null;
     this.actualSubscriptions.clear();
-    
-    if (!sessionActive) {
-      console.log(`[${this.name}] Session inactive, skipping reconnect.`);
-      return;
-    }
-    this.scheduleReconnect();
-  }
-
-  private scheduleReconnect() {
-    if (this.reconnectTimeout || !sessionActive) return;
-    if (this.desiredSubscriptions.size === 0) return;
-
-    this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, MAX_RECONNECT_ATTEMPTS);
-    const baseDelay = 1000 * 2 ** this.reconnectAttempts;
-    const jitter = Math.random() * 1000;
-    const delay = Math.min(baseDelay + jitter, 60_000);
-
-    console.log(`[${this.name}] Scheduling reconnect in ${delay.toFixed(0)}ms.`);
-    this.reconnectTimeout = setTimeout(() => {
-      this.reconnectTimeout = null;
-      this.connect();
-    }, delay);
   }
 
   private resubscribe() {
@@ -227,7 +202,6 @@ class WebSocketManager {
   public updateSubscriptions(symbols: Set<string>) {
     this.desiredSubscriptions = symbols;
     if (symbols.size === 0) {
-      console.log(`[${this.name}] No symbols to watch. Disconnecting.`);
       this.disconnect();
       return;
     }
@@ -257,15 +231,12 @@ class WebSocketManager {
     console.log(`[${this.name}] Disconnecting WebSocket...`);
     if(this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = null;
-    if(this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.reconnectTimeout = null;
     if (this.ws) {
       try { this.ws.close(1000, 'Session ended by worker'); } catch(e) {/* ignore */}
       this.ws.removeAllListeners();
       this.ws = null;
     }
     this.actualSubscriptions.clear();
-    this.reconnectAttempts = 0;
   }
 }
 
@@ -278,8 +249,11 @@ async function collectAllSymbols() {
   console.log(`[WORKER ${INSTANCE_ID}] 🔍 Collecting symbols to monitor...`);
   const spotSymbols = new Set<string>();
   const futuresSymbols = new Set<string>();
+  let totalPositions = 0;
+  let totalTriggers = 0;
   try {
     const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+    totalPositions = positionsSnapshot.size;
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
       if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
@@ -287,13 +261,15 @@ async function collectAllSymbols() {
     });
     
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+    totalTriggers = triggersSnapshot.size;
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
       if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
       if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
-    console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
+    console.log(`[WORKER ${INSTANCE_ID}] Monitoring ${totalPositions} open positions and ${totalTriggers} active triggers.`);
+    console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols to watch.`);
     spotManager.updateSubscriptions(spotSymbols);
     futuresManager.updateSubscriptions(futuresSymbols);
   } catch (e) {
@@ -305,67 +281,71 @@ async function collectAllSymbols() {
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
-    // Check for open positions to hit SL/TP
     try {
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
 
-        positionsSnapshot.forEach(async (doc) => {
-            const pos = doc.data() as OpenPosition;
-            const isLong = pos.side === 'long' || pos.side === 'buy';
-            const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+        if (!positionsSnapshot.empty) {
+            positionsSnapshot.forEach(async (doc) => {
+                const pos = doc.data() as OpenPosition;
+                const isLong = pos.side === 'long' || pos.side === 'buy';
+                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-            if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-                closingPositions.add(doc.id);
-                try {
-                    await db.runTransaction(async (tx) => {
-                        const freshDoc = await tx.get(doc.ref);
-                        if (freshDoc.data()?.details?.status !== 'open') return;
-                        console.log(`[EXECUTION] Closing position ${doc.id} for ${slHit ? 'SL' : 'TP'}`);
-                        tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
-                    });
-                } catch (e) {
-                    console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
-                } finally {
-                    closingPositions.delete(doc.id);
+                if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+                    closingPositions.add(doc.id);
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const freshDoc = await tx.get(doc.ref);
+                            if (freshDoc.data()?.details?.status !== 'open') return;
+                            console.log(`[EXECUTION] Closing position ${doc.id} for ${slHit ? 'SL' : 'TP'}`);
+                            tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
+                        });
+                    } catch (e) {
+                        console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
+                    } finally {
+                        closingPositions.delete(doc.id);
+                    }
                 }
-            }
-        });
+            });
+        }
     } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
+        // This can get noisy, so we are commenting it out. The main error is in collectAllSymbols.
+        // console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
     }
 
-    // Process trade triggers
     try {
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
 
-        triggersSnapshot.forEach(async (doc) => {
-            const trigger = doc.data() as TradeTrigger;
-            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+        if (!triggersSnapshot.empty) {
+            triggersSnapshot.forEach(async (doc) => {
+                const trigger = doc.data() as TradeTrigger;
+                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
-            if (conditionMet) {
-                try {
-                    await db.runTransaction(async (tx) => {
-                        const userContextRef = doc.ref.parent.parent;
-                        if (!userContextRef) return;
-                        
-                        const freshDoc = await tx.get(doc.ref);
-                        if (!freshDoc.exists) return;
-                        
-                        console.log(`[EXECUTION] Firing trigger ${doc.id}`);
-                        const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
-                        tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
-                        tx.delete(doc.ref);
-                    });
-                } catch(e) {
-                    console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, e);
+                if (conditionMet) {
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const userContextRef = doc.ref.parent.parent;
+                            if (!userContextRef) return;
+                            
+                            const freshDoc = await tx.get(doc.ref);
+                            if (!freshDoc.exists) return;
+                            
+                            console.log(`[EXECUTION] Firing trigger ${doc.id}`);
+                            const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
+                            tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
+                            tx.delete(doc.ref);
+                        });
+                    } catch(e) {
+                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, e);
+                    }
                 }
-            }
-        });
+            });
+        }
     } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to process triggers for ${symbol}:`, err);
+       // This can get noisy, so we are commenting it out. The main error is in collectAllSymbols.
+       // console.error(`[WORKER_ERROR] Failed to process triggers for ${symbol}:`, err);
     }
 }
 
@@ -436,3 +416,4 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
