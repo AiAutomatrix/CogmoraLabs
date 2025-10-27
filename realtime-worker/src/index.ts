@@ -231,17 +231,22 @@ async function collectAllSymbols() {
   const spotSymbols = new Set<string>();
   const futuresSymbols = new Set<string>();
   try {
-    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+    const positionsSnapshot = await db.collectionGroup('openPositions').get();
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
-      if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
-      if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
+      if (pos.details?.status === 'open') {
+        if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
+        if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
+      }
     });
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+
+    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
     triggersSnapshot.forEach(doc => {
-        const trigger = doc.data() as TradeTrigger;
+      const trigger = doc.data() as TradeTrigger;
+      if (trigger.details?.status === 'active') {
         if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
         if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
+      }
     });
 
     console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
