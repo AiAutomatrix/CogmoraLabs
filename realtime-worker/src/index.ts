@@ -66,6 +66,7 @@ const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 let sessionActive = false;
 let sessionTimeout: NodeJS.Timeout | null = null;
 let requeryInterval: NodeJS.Timeout | null = null;
+const closingPositions = new Set<string>();
 
 // ========== WebSocket Manager ==========
 class WebSocketManager {
@@ -75,6 +76,10 @@ class WebSocketManager {
   private reconnectAttempts = 0;
   private desiredSubscriptions = new Set<string>();
   private actualSubscriptions = new Set<string>();
+  
+  // Token Caching
+  private lastTokenTime = 0;
+  private cachedToken: any = null;
 
   constructor(
     private name: string,
@@ -83,17 +88,36 @@ class WebSocketManager {
   ) {}
 
   private async getTokenWithRetry(maxRetries = 3): Promise<any> {
+    const now = Date.now();
+    if (this.cachedToken && now - this.lastTokenTime < 60_000) {
+      console.log(`[${this.name}] Using cached token.`);
+      return this.cachedToken;
+    }
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const res = await fetch(this.tokenEndpoint, { method: 'POST', timeout: 10_000 });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+        
+        const res = await fetch(this.tokenEndpoint, { 
+            method: 'POST', 
+            signal: (controller as any).signal,
+        });
+        clearTimeout(timeout);
+        
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as any;
         if (data.code !== '200000') throw new Error(`Invalid response code: ${data.code}`);
+
+        this.cachedToken = data.data;
+        this.lastTokenTime = now;
         return data.data;
+
       } catch (e) {
         console.error(`[${this.name}] Token fetch attempt ${attempt} failed:`, e);
         if (attempt === maxRetries) throw e;
-        await new Promise(r => setTimeout(r, attempt * 2000));
+        const delay = 2000 * attempt;
+        await new Promise(r => setTimeout(r, delay));
       }
     }
   }
@@ -143,13 +167,8 @@ class WebSocketManager {
     try {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'message' && msg.topic) {
-        const symbol = this.name === 'SPOT'
-          ? msg.topic.split(':')[1]
-          : msg.topic.replace('/contractMarket/snapshot:', '');
-          
-        const price = this.name === 'SPOT'
-          ? parseFloat(msg.data?.data?.lastTradedPrice)
-          : parseFloat(msg.data?.markPrice);
+        const symbol = this.name === 'SPOT' ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
+        const price = this.name === 'SPOT' ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
 
         if (symbol && !isNaN(price)) {
           processPriceUpdate(symbol, price);
@@ -163,17 +182,26 @@ class WebSocketManager {
   private handleClose(reason: string) {
     console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}.`);
     if (this.pingInterval) clearInterval(this.pingInterval);
+    this.pingInterval = null;
     this.actualSubscriptions.clear();
+    
+    if (!sessionActive) {
+      console.log(`[${this.name}] Session inactive, skipping reconnect.`);
+      return;
+    }
     this.scheduleReconnect();
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimeout) return;
+    if (this.reconnectTimeout || !sessionActive) return;
     if (this.desiredSubscriptions.size === 0) return;
 
     this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, MAX_RECONNECT_ATTEMPTS);
-    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30_000);
-    console.log(`[${this.name}] Scheduling reconnect in ${delay}ms.`);
+    const baseDelay = 1000 * 2 ** this.reconnectAttempts;
+    const jitter = Math.random() * 1000;
+    const delay = Math.min(baseDelay + jitter, 30_000);
+
+    console.log(`[${this.name}] Scheduling reconnect in ${delay.toFixed(0)}ms.`);
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
       this.connect();
@@ -199,18 +227,33 @@ class WebSocketManager {
       return;
     }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.log(`[${this.name}] WS not open. Attempting to connect now.`);
       this.connect();
     } else {
-      this.resubscribe();
+        const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
+        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.desiredSubscriptions.has(s)));
+
+        toAdd.forEach(symbol => {
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
+            this.actualSubscriptions.add(symbol);
+        });
+        toRemove.forEach(symbol => {
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol), response: true }));
+            this.actualSubscriptions.delete(symbol);
+        });
+
+        if (toAdd.size > 0 || toRemove.size > 0) {
+            console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
+        }
     }
   }
 
   public disconnect() {
     console.log(`[${this.name}] Disconnecting WebSocket...`);
-    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.reconnectTimeout = null;
-    if (this.pingInterval) clearInterval(this.pingInterval);
+    if(this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = null;
+    if(this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    this.reconnectTimeout = null;
     if (this.ws) {
       this.ws.removeAllListeners();
       this.ws.close();
@@ -261,7 +304,7 @@ async function collectAllSymbols() {
 async function processPriceUpdate(symbol: string, price: number) {
     if (!symbol || !price) return;
     
-    // Process SL/TP for open positions
+    // Check for open positions to hit SL/TP
     try {
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
@@ -272,7 +315,8 @@ async function processPriceUpdate(symbol: string, price: number) {
             const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
             const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-            if (slHit || tpHit) {
+            if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+                closingPositions.add(doc.id);
                 try {
                     await db.runTransaction(async (tx) => {
                         const freshDoc = await tx.get(doc.ref);
@@ -282,6 +326,8 @@ async function processPriceUpdate(symbol: string, price: number) {
                     });
                 } catch (e) {
                     console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
+                } finally {
+                    closingPositions.delete(doc.id);
                 }
             }
         });
@@ -328,6 +374,7 @@ async function startSession(ms = SESSION_MS) {
   if (sessionActive) return;
   sessionActive = true;
   console.log(`[WORKER ${INSTANCE_ID}] 🚀 Starting session (${ms}ms)`);
+  
   await collectAllSymbols();
 
   if (sessionTimeout) clearTimeout(sessionTimeout);
@@ -365,9 +412,10 @@ async function shutdown() {
   console.log(`[WORKER ${INSTANCE_ID}] Shutdown signal received.`);
   if(requeryInterval) clearInterval(requeryInterval);
   if(sessionTimeout) clearTimeout(sessionTimeout);
+  sessionActive = false; // Prevent any further session activities
   spotManager.disconnect();
   futuresManager.disconnect();
-  await admin.app().delete().catch(e => console.error("Error deleting Firebase app on shutdown:", e));
+  try { await admin.app().delete(); } catch(e) { console.error("Error on shutdown", e); }
   server.close(() => {
       console.log("HTTP server closed.");
       process.exit(0);
