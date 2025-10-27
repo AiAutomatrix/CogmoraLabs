@@ -2,6 +2,7 @@
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
+import crypto from 'crypto';
 
 // Initialize Firebase Admin SDK for Cloud Run environment
 if (!admin.apps.length) {
@@ -287,12 +288,15 @@ async function processPriceUpdate(symbol: string, price: number) {
             if (slHit || tpHit) {
                  try {
                     await db.runTransaction(async (tx) => {
+                        const userContextRef = doc.ref.parent.parent;
+                        if (!userContextRef) return;
+                        
                         const freshDoc = await tx.get(doc.ref);
                         if (freshDoc.data()?.details?.status !== 'open') {
                             console.log(`[WORKER_SKIP] Position ${doc.id} already being closed by another instance.`);
                             return; // Abort transaction
                         }
-                        console.log(`[EXECUTION] Closing position ${doc.id} for user ${doc.ref.parent.parent?.parent.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
+                        console.log(`[EXECUTION] Closing position ${doc.id} for user ${userContextRef.id} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
                         tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                     });
                 } catch (e) {
@@ -316,13 +320,16 @@ async function processPriceUpdate(symbol: string, price: number) {
             if (conditionMet) {
                 try {
                     await db.runTransaction(async (tx) => {
+                        const userContextRef = doc.ref.parent.parent;
+                        if (!userContextRef) return;
+
                          const freshDoc = await tx.get(doc.ref);
                          if (!freshDoc.exists) {
                             console.log(`[WORKER_SKIP] Trigger ${doc.id} already processed by another instance.`);
                             return;
                          }
-                         console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${doc.ref.parent.parent?.parent.id}`);
-                         const executedTriggerRef = doc.ref.parent.parent.collection('executedTriggers').doc(doc.id);
+                         console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userContextRef.id}`);
+                         const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
                          tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
                          tx.delete(doc.ref);
                     });
