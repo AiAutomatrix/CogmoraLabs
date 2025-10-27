@@ -3,7 +3,6 @@ import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
-import fetch from 'node-fetch';
 
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
@@ -60,7 +59,6 @@ const KUCOIN_SPOT_TOKEN_ENDPOINT = 'https://api.kucoin.com/api/v1/bullet-public'
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = 'https://api-futures.kucoin.com/api/v1/bullet-public';
 const SESSION_MS = Number(process.env.SESSION_MS) || 480000;
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
-const MAX_RECONNECT_ATTEMPTS = 10;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
 let sessionActive = false;
@@ -72,8 +70,6 @@ const closingPositions = new Set<string>();
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
-  private reconnectAttempts = 0;
   private desiredSubscriptions = new Set<string>();
   private actualSubscriptions = new Set<string>();
   
@@ -95,7 +91,7 @@ class WebSocketManager {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const res = await fetch(this.tokenEndpoint, { method: 'POST', timeout: 30000 });
+        const res = await fetch(this.tokenEndpoint, { method: 'POST' });
         
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as any;
@@ -115,7 +111,6 @@ class WebSocketManager {
   }
 
   public async connect() {
-    if (this.reconnectTimeout) return;
     if (this.desiredSubscriptions.size === 0) {
       this.disconnect();
       return;
@@ -132,7 +127,6 @@ class WebSocketManager {
 
       this.ws.on('open', () => {
         console.log(`[${this.name}] ✅ WebSocket connection established.`);
-        this.reconnectAttempts = 0;
         this.setupPing(pingMs);
         this.resubscribe();
       });
@@ -142,7 +136,6 @@ class WebSocketManager {
       this.ws.on('error', (err) => this.handleClose(`error: ${err.message}`));
     } catch (err) {
       console.error(`[${this.name}] ❌ Connection setup failed:`, err);
-      this.scheduleReconnect();
     }
   }
 
@@ -178,31 +171,10 @@ class WebSocketManager {
   };
 
   private handleClose(reason: string) {
-    console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}.`);
+    console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}. It will be re-established on the next session cycle.`);
     if (this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = null;
     this.actualSubscriptions.clear();
-    
-    if (!sessionActive) {
-      return;
-    }
-    this.scheduleReconnect();
-  }
-
-  private scheduleReconnect() {
-    if (this.reconnectTimeout || !sessionActive) return;
-    if (this.desiredSubscriptions.size === 0) return;
-
-    this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, MAX_RECONNECT_ATTEMPTS);
-    const baseDelay = 1000 * 2 ** this.reconnectAttempts;
-    const jitter = Math.random() * 1000;
-    const delay = Math.min(baseDelay + jitter, 60_000);
-
-    console.log(`[${this.name}] Scheduling reconnect in ${delay.toFixed(0)}ms.`);
-    this.reconnectTimeout = setTimeout(() => {
-      this.reconnectTimeout = null;
-      this.connect();
-    }, delay);
   }
 
   private resubscribe() {
@@ -248,15 +220,12 @@ class WebSocketManager {
     console.log(`[${this.name}] Disconnecting WebSocket...`);
     if(this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = null;
-    if(this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.reconnectTimeout = null;
     if (this.ws) {
       try { this.ws.close(1000, 'Session ended by worker'); } catch(e) {/* ignore */}
       this.ws.removeAllListeners();
       this.ws = null;
     }
     this.actualSubscriptions.clear();
-    this.reconnectAttempts = 0;
   }
 }
 
@@ -304,28 +273,31 @@ async function processPriceUpdate(symbol: string, price: number) {
         const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
 
-        positionsSnapshot.forEach(async (doc) => {
-            const pos = doc.data() as OpenPosition;
-            const isLong = pos.side === 'long' || pos.side === 'buy';
-            const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-            const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+        if (!positionsSnapshot.empty) {
+            console.log(`[WORKER_INFO] Found ${positionsSnapshot.size} open position(s) for ${symbol}.`);
+            positionsSnapshot.forEach(async (doc) => {
+                const pos = doc.data() as OpenPosition;
+                const isLong = pos.side === 'long' || pos.side === 'buy';
+                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-            if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-                closingPositions.add(doc.id);
-                try {
-                    await db.runTransaction(async (tx) => {
-                        const freshDoc = await tx.get(doc.ref);
-                        if (freshDoc.data()?.details?.status !== 'open') return;
-                        console.log(`[EXECUTION] Closing position ${doc.id} for ${slHit ? 'SL' : 'TP'}`);
-                        tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
-                    });
-                } catch (e) {
-                    console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
-                } finally {
-                    closingPositions.delete(doc.id);
+                if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+                    closingPositions.add(doc.id);
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const freshDoc = await tx.get(doc.ref);
+                            if (freshDoc.data()?.details?.status !== 'open') return;
+                            console.log(`[EXECUTION] Closing position ${doc.id} for ${slHit ? 'SL' : 'TP'}`);
+                            tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
+                        });
+                    } catch (e) {
+                        console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
+                    } finally {
+                        closingPositions.delete(doc.id);
+                    }
                 }
-            }
-        });
+            });
+        }
     } catch (err) {
         console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
     }
@@ -334,29 +306,32 @@ async function processPriceUpdate(symbol: string, price: number) {
         const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
         const triggersSnapshot = await triggersQuery.get();
 
-        triggersSnapshot.forEach(async (doc) => {
-            const trigger = doc.data() as TradeTrigger;
-            const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+        if (!triggersSnapshot.empty) {
+            console.log(`[WORKER_INFO] Found ${triggersSnapshot.size} active trigger(s) for ${symbol}.`);
+            triggersSnapshot.forEach(async (doc) => {
+                const trigger = doc.data() as TradeTrigger;
+                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
-            if (conditionMet) {
-                try {
-                    await db.runTransaction(async (tx) => {
-                        const userContextRef = doc.ref.parent.parent;
-                        if (!userContextRef) return;
-                        
-                        const freshDoc = await tx.get(doc.ref);
-                        if (!freshDoc.exists) return;
-                        
-                        console.log(`[EXECUTION] Firing trigger ${doc.id}`);
-                        const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
-                        tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
-                        tx.delete(doc.ref);
-                    });
-                } catch(e) {
-                    console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, e);
+                if (conditionMet) {
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const userContextRef = doc.ref.parent.parent;
+                            if (!userContextRef) return;
+                            
+                            const freshDoc = await tx.get(doc.ref);
+                            if (!freshDoc.exists) return;
+                            
+                            console.log(`[EXECUTION] Firing trigger ${doc.id}`);
+                            const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
+                            tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
+                            tx.delete(doc.ref);
+                        });
+                    } catch(e) {
+                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, e);
+                    }
                 }
-            }
-        });
+            });
+        }
     } catch (err) {
         console.error(`[WORKER_ERROR] Failed to process triggers for ${symbol}:`, err);
     }
