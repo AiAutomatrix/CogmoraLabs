@@ -85,7 +85,7 @@ class WebSocketManager {
   private async getTokenWithRetry(maxRetries = 3): Promise<any> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const res = await fetch(this.tokenEndpoint, { method: 'POST' });
+        const res = await fetch(this.tokenEndpoint, { method: 'POST', timeout: 10_000 });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as any;
         if (data.code !== '200000') throw new Error(`Invalid response code: ${data.code}`);
@@ -101,7 +101,6 @@ class WebSocketManager {
   public async connect() {
     if (this.reconnectTimeout) return;
     if (this.desiredSubscriptions.size === 0) {
-      console.log(`[${this.name}] No desired subscriptions. Skipping connection.`);
       this.disconnect();
       return;
     }
@@ -112,6 +111,7 @@ class WebSocketManager {
       const wsUrl = `${instanceServers[0].endpoint}?token=${token}`;
       const pingMs = instanceServers[0].pingInterval || 20000;
 
+      console.log(`[${this.name}] Connecting WebSocket -> ${wsUrl}`);
       this.ws = new WebSocket(wsUrl);
 
       this.ws.on('open', () => {
@@ -143,8 +143,8 @@ class WebSocketManager {
     try {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'message' && msg.topic) {
-        const symbol = this.name === 'SPOT' 
-          ? msg.topic.split(':')[1] 
+        const symbol = this.name === 'SPOT'
+          ? msg.topic.split(':')[1]
           : msg.topic.replace('/contractMarket/snapshot:', '');
           
         const price = this.name === 'SPOT'
@@ -194,6 +194,7 @@ class WebSocketManager {
   public updateSubscriptions(symbols: Set<string>) {
     this.desiredSubscriptions = symbols;
     if (symbols.size === 0) {
+      console.log(`[${this.name}] No symbols to watch. Disconnecting.`);
       this.disconnect();
       return;
     }
@@ -236,7 +237,6 @@ async function collectAllSymbols() {
       if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
       if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
     });
-
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
     triggersSnapshot.forEach(doc => {
         const trigger = doc.data() as TradeTrigger;
@@ -353,7 +353,10 @@ server.listen(PORT, () => {
 });
 
 // ========== Graceful Shutdown ==========
-process.on('SIGTERM', async () => {
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`[WORKER ${INSTANCE_ID}] Shutdown signal received.`);
   if(requeryInterval) clearInterval(requeryInterval);
   if(sessionTimeout) clearTimeout(sessionTimeout);
@@ -364,4 +367,13 @@ process.on('SIGTERM', async () => {
       console.log("HTTP server closed.");
       process.exit(0);
   });
-});
+   setTimeout(() => {
+      console.error(`[WORKER ${INSTANCE_ID}] Could not close connections in time, forcing exit.`);
+      process.exit(1);
+  }, 5000);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
+    
