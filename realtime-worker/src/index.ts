@@ -274,12 +274,15 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     try {
         // Check for open positions to hit SL/TP
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol);
+        // THIS QUERY IS NOW MORE SPECIFIC TO MATCH AN EXISTING INDEX
+        const positionsQuery = db.collectionGroup('openPositions')
+            .where('symbol', '==', symbol)
+            .where('details.status', '==', 'open');
         const positionsSnapshot = await positionsQuery.get();
+        
         positionsSnapshot.forEach((doc) => {
-            const pos = doc.data();
-            if (pos.details?.status === 'closing') return;
-
+            const pos = doc.data() as OpenPosition;
+            // No need to check for 'closing' status here as the query now handles it
             const isLong = pos.side === 'long' || pos.side === 'buy';
             const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
             const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
@@ -288,7 +291,6 @@ async function processPriceUpdate(symbol: string, price: number) {
                 const userId = doc.ref.parent.parent?.parent?.id;
                 if (!userId) return;
                 console.log(`[EXECUTION] Closing position ${doc.id} for user ${userId} due to ${slHit ? 'Stop Loss' : 'Take Profit'}`);
-                // Pass the current price for accurate closing
                 batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                 writes++;
             }
@@ -303,20 +305,17 @@ async function processPriceUpdate(symbol: string, price: number) {
 
             if (conditionMet) {
                 const userId = doc.ref.parent.parent?.parent?.id;
-                if (!userId) return;
+                if (!userId) return; // Add null check for safety
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
                 
-                // NEW LOGIC: Create a new document in 'executedTriggers'
-                const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
-                batch.set(executedTriggerRef, { ...trigger, currentPrice: price }); // Add execution price
+                const executedTriggerRef = doc.ref.parent.parent.collection('executedTriggers').doc(doc.id);
+                batch.set(executedTriggerRef, { ...trigger, currentPrice: price });
                 
-                // Delete the original trigger
                 batch.delete(doc.ref); 
                 writes++;
                 
                 if (trigger.cancelOthers) {
                   // This part is a bit tricky in a single batch, better to handle in a separate step if needed
-                  // For now, we focus on executing the main trigger correctly.
                 }
             }
         });
