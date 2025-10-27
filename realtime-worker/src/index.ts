@@ -97,7 +97,7 @@ class WebSocketManager {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000); // 10-second timeout for fetch
+        const timeout = setTimeout(() => controller.abort(), 30000); // 30-second timeout for fetch
         
         const res = await fetch(this.tokenEndpoint, { 
             method: 'POST', 
