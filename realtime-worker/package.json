@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "firebase-admin": "^12.3.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
