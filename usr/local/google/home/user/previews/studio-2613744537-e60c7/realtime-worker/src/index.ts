@@ -80,6 +80,9 @@ const db = admin.firestore();
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = "https://api-futures.kucoin.com/api/v1/bullet-public";
 
+// In-memory set to track positions being closed to prevent race conditions
+const closingPositions = new Set<string>();
+
 // --- WebSocket Connection Manager ---
 class WebSocketManager {
     private ws: WebSocket | null = null;
@@ -240,40 +243,42 @@ class WebSocketManager {
     }
 
     public updateSubscriptions = (newSymbols: Set<string>) => {
-        if (newSymbols.size === 0 && this.currentSubscriptions.size > 0) {
-            this.disconnect();
-            return;
-        }
-        
-        if (newSymbols.size > 0 && !this.ws) {
-            this.currentSubscriptions = newSymbols;
-            this.connect();
-            return;
-        }
+      const symbolsAreEqual = newSymbols.size === this.currentSubscriptions.size && [...newSymbols].every(s => this.currentSubscriptions.has(s));
+      if (symbolsAreEqual) {
+        return; // No changes needed
+      }
 
-        if (this.ws?.readyState !== WebSocket.OPEN) {
-            this.currentSubscriptions = newSymbols; // Will be subscribed on connect
-            return;
-        }
-
+      // If there are no new symbols, disconnect
+      if (newSymbols.size === 0) {
+        this.disconnect();
+        return;
+      }
+    
+      // If there are new symbols and we're not connected, connect.
+      if (newSymbols.size > 0 && !this.ws) {
+        this.currentSubscriptions = newSymbols;
+        this.connect();
+        return;
+      }
+      
+      // If already connected, manage subscriptions
+      if (this.ws?.readyState === WebSocket.OPEN) {
         const toAdd = new Set([...newSymbols].filter(s => !this.currentSubscriptions.has(s)));
         const toRemove = new Set([...this.currentSubscriptions].filter(s => !newSymbols.has(s)));
 
         toAdd.forEach(symbol => {
-            console.log(`[${this.name}] Subscribing to ${symbol}`);
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol) }));
-            this.currentSubscriptions.add(symbol);
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
         });
-
         toRemove.forEach(symbol => {
-            console.log(`[${this.name}] Unsubscribing from ${symbol}`);
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol) }));
-            this.currentSubscriptions.delete(symbol);
+            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol), response: true }));
         });
-
-        if(toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change complete: +${toAdd.size} / -${toRemove.size}`);
+        
+        if (toAdd.size > 0 || toRemove.size > 0) {
+          console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
         }
+      }
+      
+      this.currentSubscriptions = newSymbols;
     }
 }
 
@@ -283,25 +288,27 @@ const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (sy
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (symbol) => `/contractMarket/snapshot:${symbol}`);
 
 async function collectAllSymbols() {
+    // This is the "memory reset" you asked for. It clears the lock on every cycle.
+    closingPositions.clear();
     console.log("[WORKER] Collecting symbols to monitor from open positions and triggers...");
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
     try {
-        // Collect from tradeTriggers
         const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
+            // In-memory filter, more resilient than a .where() clause
             if (trigger.details?.status === 'active') {
                 if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
                 if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
             }
         });
 
-        // Collect from openPositions
         const positionsSnapshot = await db.collectionGroup('openPositions').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
+            // In-memory filter
             if (position.details?.status === 'open') {
                 if (position.positionType === 'spot') spotSymbols.add(position.symbol);
                 if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
@@ -327,6 +334,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     
     const batch = db.batch();
     let writes = 0;
+    const positionsToClearFromLock = new Set<string>();
 
     try {
         // Check for open positions to hit SL/TP
@@ -335,6 +343,11 @@ async function processPriceUpdate(symbol: string, price: number) {
         
         positionsSnapshot.forEach((doc) => {
             const pos = doc.data() as OpenPosition;
+            if (closingPositions.has(pos.id)) {
+                console.log(`[WORKER_SKIP] Position ${pos.id} is already being closed.`);
+                return;
+            }
+
             if (!pos.details) return;
 
             const isLong = pos.side === 'long' || pos.side === 'buy';
@@ -351,6 +364,10 @@ async function processPriceUpdate(symbol: string, price: number) {
                 const userId = doc.ref.parent.parent?.parent?.id;
                 if (!userId) return;
                 console.log(`[EXECUTION] Position ${doc.id} for user ${userId} hit ${slHit ? 'Stop Loss' : 'Take Profit'} at price ${price}`);
+                
+                closingPositions.add(pos.id); 
+                positionsToClearFromLock.add(pos.id);
+                
                 batch.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                 writes++;
             }
@@ -361,6 +378,11 @@ async function processPriceUpdate(symbol: string, price: number) {
         const triggersSnapshot = await triggersQuery.get();
         triggersSnapshot.forEach((doc) => {
             const trigger = doc.data() as TradeTrigger;
+            if (closingPositions.has(doc.id)) {
+                console.log(`[WORKER_SKIP] Trigger ${doc.id} is already being processed.`);
+                return;
+            }
+
             const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
 
             if (conditionMet) {
@@ -368,15 +390,14 @@ async function processPriceUpdate(symbol: string, price: number) {
                 if (!userId) return;
                 console.log(`[EXECUTION] Firing trigger ${doc.id} for user ${userId}`);
                 
+                closingPositions.add(doc.id);
+                positionsToClearFromLock.add(doc.id);
+                
                 const executedTriggerRef = doc.ref.parent.parent!.collection('executedTriggers').doc(doc.id);
                 batch.set(executedTriggerRef, { ...trigger, currentPrice: price });
                 
                 batch.delete(doc.ref); 
                 writes++;
-                
-                if (trigger.cancelOthers) {
-                  // This part is a bit tricky in a single batch, better to handle in a separate step if needed
-                }
             }
         });
 
@@ -386,6 +407,10 @@ async function processPriceUpdate(symbol: string, price: number) {
         }
     } catch (err) {
         console.error(`Failed to process price update batch for symbol ${symbol}:`, err);
+    } finally {
+        // This is important: clear the lock for items in this batch regardless of success/failure
+        // to prevent them from being permanently locked if a commit fails.
+        positionsToClearFromLock.forEach(id => closingPositions.delete(id));
     }
 }
 
@@ -400,5 +425,3 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
-
-    
