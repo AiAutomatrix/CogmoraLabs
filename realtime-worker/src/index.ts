@@ -291,23 +291,19 @@ async function collectAllSymbols() {
 
     try {
         // Collect from tradeTriggers
-        const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+        const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
         triggersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const trigger = doc.data();
-            if (trigger.details?.status === 'active') {
-                if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-                if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-            }
+            if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+            if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
         });
 
         // Collect from openPositions
-        const positionsSnapshot = await db.collectionGroup('openPositions').get();
+        const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
         positionsSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             const position = doc.data();
-            if (position.details?.status === 'open') {
-                if (position.positionType === 'spot') spotSymbols.add(position.symbol);
-                if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
-            }
+            if (position.positionType === 'spot') spotSymbols.add(position.symbol);
+            if (position.positionType === 'futures') futuresSymbols.add(position.symbol);
         });
         
         console.log(`[WORKER] Found ${spotSymbols.size} spot and ${futuresSymbols.size} futures symbols to watch.`);
