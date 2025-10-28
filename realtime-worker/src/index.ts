@@ -70,7 +70,7 @@ class WebSocketManager {
     throw lastErr;
   }
 
-  async ensureConnected() {
+  public async ensureConnected() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
 
     if (this.desired.size === 0) {
@@ -274,11 +274,11 @@ async function startSession() {
     const s = spot.info();
     const f = futures.info();
     log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
-    if (!s.connected && s.desired.size > 0 && s.lastPongAge > 60000) {
+    if (!s.connected && s.desired.length > 0 && s.lastPongAge > 60000) {
       warn('💀 SPOT websocket dead >60s — full reset');
       spot.forceReconnect();
     }
-     if (!f.connected && f.desired.size > 0 && f.lastPongAge > 60000) {
+     if (!f.connected && f.desired.length > 0 && f.lastPongAge > 60000) {
       warn('💀 FUTURES websocket dead >60s — full reset');
       futures.forceReconnect();
     }
