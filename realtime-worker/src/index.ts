@@ -1,8 +1,18 @@
-
+// index.ts (Cloud Run worker — drop-in)
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
+
+// If runtime provides global fetch (Node 18+), use it; otherwise fall back to node-fetch
+let _fetch: typeof fetch;
+try {
+  // @ts-ignore
+  _fetch = fetch;
+} catch {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  _fetch = require('node-fetch'); // fallback for older node images
+}
 
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
@@ -48,366 +58,534 @@ interface TradeTrigger {
 
 // ========== Firebase Initialization ==========
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-  });
+  admin.initializeApp({ credential: admin.credential.applicationDefault() });
 }
 const db = admin.firestore();
 
 // ========== Constants ==========
 const KUCOIN_SPOT_TOKEN_ENDPOINT = 'https://api.kucoin.com/api/v1/bullet-public';
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = 'https://api-futures.kucoin.com/api/v1/bullet-public';
-const SESSION_MS = Number(process.env.SESSION_MS) || 480000;
-const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
+const SESSION_MS = Number(process.env.SESSION_MS) || 60000; // kept for backwards compatibility
+const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30000;
+const MAX_RECONNECT_ATTEMPTS = Number(process.env.MAX_RECONNECT_ATTEMPTS) || 8;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
+// runtime state
 let sessionActive = false;
-let sessionTimeout: NodeJS.Timeout | null = null;
 let requeryInterval: NodeJS.Timeout | null = null;
 const closingPositions = new Set<string>();
 
-// ========== WebSocket Manager ==========
+// ========== Logging helpers ==========
+const log = (...args: any[]) => console.log(`🟢 [${INSTANCE_ID}]`, ...args);
+const info = (...args: any[]) => console.info(`🔵 [${INSTANCE_ID}]`, ...args);
+const warn = (...args: any[]) => console.warn(`🟡 [${INSTANCE_ID}]`, ...args);
+const error = (...args: any[]) => console.error(`🔴 [${INSTANCE_ID}]`, ...args);
+
+// ========== WebSocketManager - long-lived connections, dynamic subs ==========
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
+  private reconnectTimeout: NodeJS.Timeout | null = null;
+  private reconnectAttempts = 0;
+
+  // desired set (what Firestore says we should be watching)
   private desiredSubscriptions = new Set<string>();
+  // active set (what we believe the server has subscribed)
   private actualSubscriptions = new Set<string>();
-  
-  private lastTokenTime = 0;
+
+  // token caching
   private cachedToken: any = null;
+  private lastTokenTime = 0;
+
+  // pong/watchdog
+  private lastPong = Date.now();
 
   constructor(
-    private name: string,
+    private name: 'SPOT' | 'FUTURES',
     private tokenEndpoint: string,
     private getTopic: (symbol: string) => string,
   ) {}
 
-  private async getTokenWithRetry(maxRetries = 3): Promise<any> {
+  // token fetch with caching + retry/backoff
+  private async fetchToken(retries = 3) {
     const now = Date.now();
     if (this.cachedToken && now - this.lastTokenTime < 60_000) {
-      console.log(`[${this.name}] Using cached token.`);
+      info(`[${this.name}] 🔁 using cached token (age ${Math.floor((now - this.lastTokenTime)/1000)}s)`);
       return this.cachedToken;
     }
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let lastErr: any = null;
+    for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const res = await fetch(this.tokenEndpoint, { method: 'POST' });
+        const res = await _fetch(this.tokenEndpoint, { method: 'POST', signal: undefined as any });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json() as any;
-        if (data.code !== '200000') throw new Error(`Invalid response code: ${data.code}`);
-
+        const data = await res.json();
+        if (data?.code !== '200000') throw new Error(`Unexpected token response code ${data?.code}`);
         this.cachedToken = data.data;
-        this.lastTokenTime = now;
-        return data.data;
-
+        this.lastTokenTime = Date.now();
+        info(`[${this.name}] ✅ fetched token (attempt ${attempt})`);
+        return this.cachedToken;
       } catch (e) {
-        console.error(`[${this.name}] Token fetch attempt ${attempt} failed:`, e);
-        if (attempt === maxRetries) throw e;
-        const delay = 2000 * attempt;
-        await new Promise(r => setTimeout(r, delay));
+        lastErr = e;
+        warn(`[${this.name}] token fetch attempt ${attempt} failed: ${e instanceof Error ? e.message : e}`);
+        const backoff = Math.min(5000 * attempt, 20000);
+        await new Promise(r => setTimeout(r, backoff + Math.random() * 500));
       }
     }
+    throw lastErr;
   }
 
-  public async connect() {
+  // establish websocket (only when needed)
+  public async ensureConnected() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return; // already open
+    }
+    // If there are no desired subscriptions, don't connect
     if (this.desiredSubscriptions.size === 0) {
-      this.disconnect();
+      info(`[${this.name}] No desired subscriptions — skipping connect.`);
+      this.disconnect(); // ensure closed
       return;
     }
 
-    console.log(`[${this.name}] Attempting to fetch KuCoin token and connect...`);
-    try {
-      const { token, instanceServers } = await this.getTokenWithRetry();
-      const wsUrl = `${instanceServers[0].endpoint}?token=${token}`;
-      const pingMs = instanceServers[0].pingInterval || 20000;
+    // If there's a reconnect already scheduled, let it run
+    if (this.reconnectTimeout) {
+      info(`[${this.name}] Reconnect already scheduled, skipping new connect`);
+      return;
+    }
 
-      console.log(`[${this.name}] Connecting WebSocket -> ${wsUrl}`);
+    try {
+      const tokenData = await this.fetchToken(4);
+      const wsUrl = `${tokenData.instanceServers[0].endpoint}?token=${tokenData.token}`;
+      const pingInterval = tokenData.instanceServers[0].pingInterval || 20000;
+      info(`[${this.name}] Connecting -> ${wsUrl}`);
+      // build websocket
       this.ws = new WebSocket(wsUrl);
 
       this.ws.on('open', () => {
-        console.log(`[${this.name}] ✅ WebSocket connection established.`);
-        this.setupPing(pingMs);
-        this.resubscribe();
+        info(`[${this.name}] ✅ socket open`);
+        this.reconnectAttempts = 0;
+        this.lastPong = Date.now();
+        // resubscribe to desired set
+        this.resubscribeAll();
+        // start ping/pong watchdog
+        this.startPingLoop(pingInterval);
       });
 
-      this.ws.on('message', this.handleMessage);
-      this.ws.on('close', () => this.handleClose('closed'));
-      this.ws.on('error', (err) => this.handleClose(`error: ${err.message}`));
-    } catch (err) {
-      console.error(`[${this.name}] ❌ Connection setup failed:`, err);
+      this.ws.on('message', (data) => this.onMessage(data));
+      this.ws.on('close', (code, reason) => {
+        warn(`[${this.name}] socket closed code=${code} reason=${reason?.toString() || 'none'}`);
+        this.onSocketClose();
+      });
+      this.ws.on('error', (err) => {
+        error(`[${this.name}] socket error:`, err?.message || err);
+        // ensure close flow runs
+        try { this.ws?.terminate(); } catch {}
+      });
+    } catch (e) {
+      error(`[${this.name}] failed to connect:`, e instanceof Error ? e.message : e);
+      this.scheduleReconnect();
     }
   }
 
-  private setupPing(interval: number) {
-    if (this.pingInterval) clearInterval(this.pingInterval);
-    this.pingInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ id: Date.now(), type: 'ping' }));
-      }
-    }, Math.max(5000, interval / 2));
-  }
-
-  private handleMessage = (data: WebSocket.Data) => {
+  // handle incoming messages (including pong)
+  private onMessage(data: WebSocket.Data) {
     try {
-      const msg = JSON.parse(data.toString());
-
+      const raw = (typeof data === 'string') ? data : data.toString();
+      const msg = JSON.parse(raw);
       if (msg.type === 'pong') {
-        console.log(`[${this.name}] Received pong.`);
+        this.lastPong = Date.now();
+        // small logging at debug level
+        // info(`[${this.name}] ↩ pong`);
         return;
       }
 
+      // KuCoin returns ping/pong and message objects; when message parse symbol and forward
       if (msg.type === 'message' && msg.topic) {
-        const symbol = this.name === 'SPOT' ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
-        const price = this.name === 'SPOT' ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
+        // message topic shapes: '/market/snapshot:SYMBOL' or '/contractMarket/snapshot:SYMBOL'
+        let symbol = '';
+        if (this.name === 'SPOT') {
+          symbol = msg.topic.includes(':') ? msg.topic.split(':')[1] : msg.topic;
+        } else {
+          symbol = msg.topic.replace('/contractMarket/snapshot:', '');
+        }
 
-        if (symbol && !isNaN(price)) {
-          processPriceUpdate(symbol, price);
+        // extract price (guard)
+        const price = this.name === 'SPOT'
+          ? parseFloat(msg.data?.data?.lastTradedPrice)
+          : parseFloat(msg.data?.markPrice);
+
+        if (symbol && !Number.isNaN(price)) {
+          // emit to global handler
+          log(`[${this.name}] 📈 ${symbol} => ${price}`);
+          // Non-blocking; we intentionally don't await to keep throughput
+          try { processPriceUpdate(symbol, price); } catch (e) { error(`[${this.name}] processPriceUpdate error:`, e); }
+        }
+      } else {
+        // other messages (subscribe acks etc.)
+        // debug: info(`[${this.name}] recv:`, msg);
+      }
+    } catch (e) {
+      error(`[${this.name}] error parsing incoming WS message:`, e);
+    }
+  }
+
+  // start ping watchdog that will detect silent dead connections
+  private startPingLoop(intervalMs: number) {
+    if (this.pingInterval) clearInterval(this.pingInterval);
+    this.pingInterval = setInterval(() => {
+      if (!this.ws) return;
+      if (this.ws.readyState !== WebSocket.OPEN) return;
+      // send ping
+      try {
+        this.ws.send(JSON.stringify({ id: Date.now(), type: 'ping' }));
+      } catch (e) {
+        warn(`[${this.name}] ping send failed:`, e);
+      }
+      // if no pong seen in 2 * interval => treat as dead and reconnect
+      if (Date.now() - this.lastPong > Math.max(10000, intervalMs * 2)) {
+        warn(`[${this.name}] missed pong for ${Date.now() - this.lastPong}ms — forcing reconnect`);
+        this.forceReconnect('ping timeout');
+      }
+    }, Math.max(5000, Math.floor(intervalMs / 2)));
+  }
+
+  // subscribe/unsubscribe helpers (send only diffs)
+  public updateDesiredSubscriptions(newSet: Set<string>) {
+    // compute differences
+    const toAdd = [...newSet].filter(s => !this.desiredSubscriptions.has(s));
+    const toRemove = [...this.desiredSubscriptions].filter(s => !newSet.has(s));
+
+    // update desired set immediately
+    this.desiredSubscriptions = new Set(newSet);
+
+    // If socket open, apply diffs
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      // add
+      for (const sym of toAdd) {
+        const topic = this.getTopic(sym);
+        try {
+          this.ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+          this.actualSubscriptions.add(sym);
+          log(`[${this.name}] ➕ subscribed ${sym}`);
+        } catch (e) {
+          warn(`[${this.name}] failed subscribe ${sym}:`, e);
         }
       }
-    } catch (err) {
-      console.error(`[${this.name}] Error parsing WS message:`, err);
-    }
-  };
-
-  private handleClose(reason: string) {
-    console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}. It will be re-established on the next session cycle.`);
-    if (this.pingInterval) clearInterval(this.pingInterval);
-    this.pingInterval = null;
-    this.actualSubscriptions.clear();
-  }
-
-  private resubscribe() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.actualSubscriptions.clear();
-    console.log(`[${this.name}] Subscribing to ${this.desiredSubscriptions.size} symbols...`);
-    for (const symbol of this.desiredSubscriptions) {
-      const topic = this.getTopic(symbol);
-      this.ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
-      this.actualSubscriptions.add(symbol);
-    }
-  }
-
-  public updateSubscriptions(symbols: Set<string>) {
-    this.desiredSubscriptions = symbols;
-    if (symbols.size === 0) {
-      this.disconnect();
-      return;
-    }
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.log(`[${this.name}] WS not open. Attempting to connect now.`);
-      this.connect();
-    } else {
-        const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
-        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.desiredSubscriptions.has(s)));
-
-        toAdd.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
-            this.actualSubscriptions.add(symbol);
-        });
-        toRemove.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol), response: true }));
-            this.actualSubscriptions.delete(symbol);
-        });
-
-        if (toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
+      // remove
+      for (const sym of toRemove) {
+        const topic = this.getTopic(sym);
+        try {
+          this.ws.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic, response: true }));
+          this.actualSubscriptions.delete(sym);
+          log(`[${this.name}] ➖ unsubscribed ${sym}`);
+        } catch (e) {
+          warn(`[${this.name}] failed unsubscribe ${sym}:`, e);
         }
+      }
+    } else {
+      // if not open, ensure we attempt to connect (connect will resubscribe to desired set)
+      this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e instanceof Error ? e.message : e));
     }
+  }
+
+  // send subscribe for every desired symbol (used on open/resubscribe)
+  private resubscribeAll() {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    // try to subscribe to everything in desiredSubscriptions
+    for (const sym of this.desiredSubscriptions) {
+      const topic = this.getTopic(sym);
+      try {
+        this.ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
+        this.actualSubscriptions.add(sym);
+        log(`[${this.name}] 🔁 subscribed ${sym}`);
+      } catch (e) {
+        warn(`[${this.name}] subscribe ${sym} failed:`, e);
+      }
+    }
+  }
+
+  // socket closed/errored --> schedule reconnect (but do NOT close desiredSubscriptions)
+  private onSocketClose() {
+    // cleanup
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    // clear active set; desired remains
+    this.actualSubscriptions.clear();
+    // schedule reconnect only if sessionActive
+    if (sessionActive) {
+      this.scheduleReconnect();
+    } else {
+      info(`[${this.name}] session not active; not scheduling reconnect`);
+    }
+    // clear ws object
+    try { if (this.ws) this.ws.removeAllListeners(); } catch {}
+    this.ws = null;
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimeout) return;
+    this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, MAX_RECONNECT_ATTEMPTS);
+    const base = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
+    const jitter = Math.random() * 1000;
+    const delay = Math.min(base + jitter, 60000);
+    warn(`[${this.name}] scheduling reconnect in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})`);
+    this.reconnectTimeout = setTimeout(async () => {
+      this.reconnectTimeout = null;
+      if (!sessionActive) {
+        info(`[${this.name}] session inactive; skipping reconnect`);
+        return;
+      }
+      try {
+        await this.ensureConnected();
+        // if successful reset attempts
+        this.reconnectAttempts = 0;
+      } catch (e) {
+        warn(`[${this.name}] reconnect attempt failed:`, e instanceof Error ? e.message : e);
+        // schedule again
+        this.scheduleReconnect();
+      }
+    }, delay);
+  }
+
+  private forceReconnect(reason = 'manual') {
+    warn(`[${this.name}] forcing reconnect due to: ${reason}`);
+    try {
+      if (this.ws) {
+        this.ws.removeAllListeners();
+        try { this.ws.close(1000, `reconnect: ${reason}`); } catch {}
+      }
+    } catch (e) { /* ignore */ }
+    this.ws = null;
+    if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
+    this.actualSubscriptions.clear();
+    // schedule immediate reconnect with tiny jitter
+    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+    this.reconnectTimeout = setTimeout(() => { this.reconnectTimeout = null; this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e)); }, 200 + Math.floor(Math.random()*400));
   }
 
   public disconnect() {
-    console.log(`[${this.name}] Disconnecting WebSocket...`);
-    if(this.pingInterval) clearInterval(this.pingInterval);
-    this.pingInterval = null;
-    if (this.ws) {
-      try { this.ws.close(1000, 'Session ended by worker'); } catch(e) {/* ignore */}
-      this.ws.removeAllListeners();
-      this.ws = null;
-    }
+    info(`[${this.name}] disconnect requested — closing socket (if any) but keeping desiredSubscriptions`);
+    if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
+    if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
+    try {
+      if (this.ws) {
+        try { this.ws.close(1000, 'worker disconnect'); } catch {}
+        this.ws.removeAllListeners();
+      }
+    } catch (e) { /* ignore */ }
+    this.ws = null;
     this.actualSubscriptions.clear();
+    this.reconnectAttempts = 0;
+  }
+
+  // debug helper
+  public info() {
+    return {
+      name: this.name,
+      wsState: this.ws ? this.ws.readyState : 'null',
+      desired: [...this.desiredSubscriptions],
+      actual: [...this.actualSubscriptions],
+      lastPongDeltaMs: Date.now() - this.lastPong,
+    };
   }
 }
 
-// ========== Managers ==========
-const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
-const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
+// ========== managers (single connection each) ==========
+const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, s => `/market/snapshot:${s}`);
+const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, s => `/contractMarket/snapshot:${s}`);
 
-// ========== Symbol Collector ==========
+// ========== Firestore sync loop ==========
+// This loop simply computes the desired symbol sets and asks managers to update.
+// The managers themselves keep sockets alive and only reconnect when they break.
 async function collectAllSymbols() {
-  console.log(`[WORKER ${INSTANCE_ID}] 🔍 Collecting symbols to monitor...`);
-  const spotSymbols = new Set<string>();
-  const futuresSymbols = new Set<string>();
-  let totalPositions = 0;
-  let totalTriggers = 0;
   try {
+    log('🔍 collecting symbols from Firestore...');
+    const spotSymbols = new Set<string>();
+    const futuresSymbols = new Set<string>();
+    let totalPositions = 0;
+    let totalTriggers = 0;
+
     const positionsSnapshot = await db.collectionGroup('openPositions').get();
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
-      if (pos.details?.status === 'open') {
+      if (pos?.details?.status === 'open') {
         totalPositions++;
         if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
         if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
       }
     });
-    
+
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
-       if (trigger.details?.status === 'active') {
+      if (trigger?.details?.status === 'active') {
         totalTriggers++;
         if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
         if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-       }
+      }
     });
 
-    console.log(`[WORKER ${INSTANCE_ID}] Monitoring ${totalPositions} open positions and ${totalTriggers} active triggers.`);
-    console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols to watch.`);
-    spotManager.updateSubscriptions(spotSymbols);
-    futuresManager.updateSubscriptions(futuresSymbols);
+    log(`📊 Found ${totalPositions} open positions and ${totalTriggers} active triggers`);
+    log(`📡 Subscriptions => SPOT: ${spotSymbols.size}, FUTURES: ${futuresSymbols.size}`);
+
+    // Now update managers: this will add/remove subscriptions (without tearing down socket)
+    spotManager.updateDesiredSubscriptions(spotSymbols);
+    futuresManager.updateDesiredSubscriptions(futuresSymbols);
+
+    // Ensure connections are established if needed
+    await Promise.all([
+      spotManager.ensureConnected().catch(e => warn('[SPOT] ensureConnected err', e instanceof Error ? e.message : e)),
+      futuresManager.ensureConnected().catch(e => warn('[FUTURES] ensureConnected err', e instanceof Error ? e.message : e)),
+    ]);
   } catch (e) {
-    console.error(`[WORKER ${INSTANCE_ID}] ❌ Failed to collect symbols:`, e);
+    error('❌ collectAllSymbols error:', e);
   }
 }
 
-// ========== Price Processing ==========
+// ========== price handler (keeps your existing Firestore transaction logic) ==========
 async function processPriceUpdate(symbol: string, price: number) {
-    if (!symbol || !price) return;
-    
-    try {
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
-        const positionsSnapshot = await positionsQuery.get();
-
-        if (!positionsSnapshot.empty) {
-            console.log(`[WORKER_INFO] Found ${positionsSnapshot.size} open position(s) for ${symbol}.`);
-            positionsSnapshot.forEach(async (doc) => {
-                const pos = doc.data() as OpenPosition;
-                const isLong = pos.side === 'long' || pos.side === 'buy';
-                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
-
-                if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-                    closingPositions.add(doc.id);
-                    try {
-                        await db.runTransaction(async (tx) => {
-                            const freshDoc = await tx.get(doc.ref);
-                            if (freshDoc.data()?.details?.status !== 'open') return;
-                            console.log(`[EXECUTION] Closing position ${doc.id} for ${slHit ? 'SL' : 'TP'}`);
-                            tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
-                        });
-                    } catch (e) {
-                        console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
-                    } finally {
-                        closingPositions.delete(doc.id);
-                    }
-                }
+  if (!symbol || !price) return;
+  try {
+    const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
+    const positionsSnapshot = await positionsQuery.get();
+    if (!positionsSnapshot.empty) {
+      info(`🔎 Found ${positionsSnapshot.size} open positions for ${symbol}`);
+      positionsSnapshot.forEach(async (doc) => {
+        const pos = doc.data() as OpenPosition;
+        const isLong = pos.side === 'long' || pos.side === 'buy';
+        const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+        const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+        if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+          closingPositions.add(doc.id);
+          try {
+            await db.runTransaction(async (tx) => {
+              const fresh = await tx.get(doc.ref);
+              if (fresh.data()?.details?.status !== 'open') return;
+              log(`⚔️ Closing ${doc.id} due to ${slHit ? 'SL' : 'TP'} @ ${price}`);
+              tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
             });
+          } catch (e) {
+            error('⚠️ tx close position failed:', e);
+          } finally {
+            closingPositions.delete(doc.id);
+          }
         }
-    } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
+      });
     }
+  } catch (e) {
+    error('❌ processPriceUpdate positions error:', e);
+  }
 
-    try {
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
-        const triggersSnapshot = await triggersQuery.get();
-
-        if (!triggersSnapshot.empty) {
-            console.log(`[WORKER_INFO] Found ${triggersSnapshot.size} active trigger(s) for ${symbol}.`);
-            triggersSnapshot.forEach(async (doc) => {
-                const trigger = doc.data() as TradeTrigger;
-                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-                if (conditionMet) {
-                    try {
-                        await db.runTransaction(async (tx) => {
-                            const userContextRef = doc.ref.parent.parent;
-                            if (!userContextRef) return;
-                            
-                            const freshDoc = await tx.get(doc.ref);
-                            if (!freshDoc.exists) return;
-                            
-                            console.log(`[EXECUTION] Firing trigger ${doc.id}`);
-                            const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
-                            tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
-                            tx.delete(doc.ref);
-                        });
-                    } catch(e) {
-                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, e);
-                    }
-                }
+  // triggers
+  try {
+    const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
+    const triggersSnapshot = await triggersQuery.get();
+    if (!triggersSnapshot.empty) {
+      info(`🔎 Found ${triggersSnapshot.size} triggers for ${symbol}`);
+      triggersSnapshot.forEach(async (doc) => {
+        const trigger = doc.data() as TradeTrigger;
+        const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+        if (conditionMet) {
+          try {
+            await db.runTransaction(async (tx) => {
+              const userCtx = doc.ref.parent.parent;
+              if (!userCtx) return;
+              const fresh = await tx.get(doc.ref);
+              if (!fresh.exists) return;
+              log(`🎯 Firing trigger ${doc.id} @ ${price}`);
+              const execRef = userCtx.collection('executedTriggers').doc(doc.id);
+              tx.set(execRef, { ...trigger, currentPrice: price });
+              tx.delete(doc.ref);
             });
+          } catch (e) {
+            error('⚠️ tx execute trigger failed:', e);
+          }
         }
-    } catch (err) {
-        console.error(`[WORKER_ERROR] Failed to process triggers for ${symbol}:`, err);
+      });
     }
+  } catch (e) {
+    error('❌ processPriceUpdate triggers error:', e);
+  }
 }
 
+// ========== Main loop & lifecycle ==========
+let heartbeatInterval: NodeJS.Timeout | null = null;
 
-// ========== Session Loop ==========
-async function startSession(ms = SESSION_MS) {
+async function startWorkerLoop() {
   if (sessionActive) return;
   sessionActive = true;
-  console.log(`[WORKER ${INSTANCE_ID}] 🚀 Starting session (${ms}ms)`);
-  
+  log('🚀 worker loop starting — sessionActive=true');
+
+  // initial collect
   await collectAllSymbols();
 
-  if (sessionTimeout) clearTimeout(sessionTimeout);
-  sessionTimeout = setTimeout(() => {
-    console.log(`[WORKER ${INSTANCE_ID}] Session complete. Disconnecting.`);
-    spotManager.disconnect();
-    futuresManager.disconnect();
-    sessionActive = false;
-  }, ms);
+  // heartbeat for visibility
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
+  heartbeatInterval = setInterval(() => {
+    const spotInfo = spotManager.info();
+    const futInfo = futuresManager.info();
+    log(`💓 heartbeat — sessionActive=${sessionActive} | SPOT subs=${spotInfo.desired.length} ws=${spotInfo.wsState} | FUT subs=${futInfo.desired.length} ws=${futInfo.wsState}`);
+  }, 60_000);
+
+  // periodic requery loop to update desired subscriptions
+  if (requeryInterval) clearInterval(requeryInterval);
+  requeryInterval = setInterval(() => {
+    if (!sessionActive) return;
+    collectAllSymbols().catch(e => error('collectAllSymbols loop error:', e));
+  }, REQUERY_INTERVAL_MS);
 }
 
-// ========== HTTP Server ==========
+// Expose HTTP server (health + quick debug)
 const server = http.createServer((req, res) => {
   if (req.url === '/healthz') {
-    res.writeHead(200);
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('ok');
-  } else {
-    res.writeHead(200);
-    res.end(`Worker ${INSTANCE_ID} running`);
+    return;
   }
+  if (req.url === '/debug') {
+    const payload = {
+      instance: INSTANCE_ID,
+      time: new Date().toISOString(),
+      spot: spotManager.info(),
+      futures: futuresManager.info(),
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(payload, null, 2));
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end(`Paper trading worker ${INSTANCE_ID} running\n`);
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT) || 8080;
 server.listen(PORT, () => {
-  console.log(`[WORKER ${INSTANCE_ID}] Listening on ${PORT}`);
-  startSession();
-  requeryInterval = setInterval(() => {
-      if (!sessionActive) {
-          startSession();
-      }
-  }, REQUERY_INTERVAL_MS);
-  setInterval(() => {
-    console.log(`[WORKER ${INSTANCE_ID}] Heartbeat — sessionActive=${sessionActive}`);
-  }, 60_000);
+  log(`📡 HTTP server listening on ${PORT}`);
+  // start worker loop
+  startWorkerLoop().catch(e => error('startWorkerLoop error:', e));
 });
 
-// ========== Graceful Shutdown ==========
+// graceful shutdown
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[WORKER ${INSTANCE_ID}] Shutdown signal received.`);
-  if(requeryInterval) clearInterval(requeryInterval);
-  if(sessionTimeout) clearTimeout(sessionTimeout);
+  warn('🛑 shutdown initiated');
   sessionActive = false;
+  if (requeryInterval) clearInterval(requeryInterval);
+  if (heartbeatInterval) clearInterval(heartbeatInterval);
   spotManager.disconnect();
   futuresManager.disconnect();
-  try { await admin.app().delete(); } catch(e) { /* Ignore */ }
+  try { await admin.app().delete(); } catch (e) { /* ignore */ }
   server.close(() => {
-      console.log("HTTP server closed.");
-      process.exit(0);
+    log('🔚 HTTP server closed, exiting');
+    process.exit(0);
   });
-   setTimeout(() => {
-      console.error(`[WORKER ${INSTANCE_ID}] Could not close connections in time, forcing exit.`);
-      process.exit(1);
+  setTimeout(() => {
+    error('⏳ forced exit after timeout');
+    process.exit(1);
   }, 5000);
 }
-
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-
-    
