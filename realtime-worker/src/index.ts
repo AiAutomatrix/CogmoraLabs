@@ -361,24 +361,20 @@ async function collectAllSymbols() {
     let totalPositions = 0;
     let totalTriggers = 0;
 
-    const positionsSnapshot = await db.collectionGroup('openPositions').get();
+    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+    totalPositions = positionsSnapshot.size;
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
-      if (pos?.details?.status === 'open') {
-        totalPositions++;
-        if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
-        if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
-      }
+      if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
+      if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
     });
 
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+    totalTriggers = triggersSnapshot.size;
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
-      if (trigger?.details?.status === 'active') {
-        totalTriggers++;
-        if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-        if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-      }
+      if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+      if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
     log(`📊 Found ${totalPositions} open positions and ${totalTriggers} active triggers.`);
@@ -395,68 +391,68 @@ async function collectAllSymbols() {
 
 // ========== price handler (keeps your existing Firestore transaction logic) ==========
 async function processPriceUpdate(symbol: string, price: number) {
-  if (!symbol || !price) return;
-  try {
-    const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
-    const positionsSnapshot = await positionsQuery.get();
-    if (!positionsSnapshot.empty) {
-      info(`🔎 Found ${positionsSnapshot.size} open positions for ${symbol}`);
-      positionsSnapshot.forEach(async (doc) => {
-        const pos = doc.data() as OpenPosition;
-        const isLong = pos.side === 'long' || pos.side === 'buy';
-        const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-        const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
-        if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-          closingPositions.add(doc.id);
-          try {
-            await db.runTransaction(async (tx) => {
-              const fresh = await tx.get(doc.ref);
-              if (fresh.data()?.details?.status !== 'open') return;
-              log(`⚔️ Closing ${doc.id} due to ${slHit ? 'SL' : 'TP'} @ ${price}`);
-              tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
+    if (!symbol || !price) return;
+    try {
+        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
+        const positionsSnapshot = await positionsQuery.get();
+        if (!positionsSnapshot.empty) {
+            info(`🔎 Found ${positionsSnapshot.size} open positions for ${symbol}`);
+            positionsSnapshot.forEach(async (doc) => {
+                const pos = doc.data() as OpenPosition;
+                const isLong = pos.side === 'long' || pos.side === 'buy';
+                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+                if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+                    closingPositions.add(doc.id);
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const fresh = await tx.get(doc.ref);
+                            if (fresh.data()?.details?.status !== 'open') return;
+                            log(`⚔️ Closing ${doc.id} due to ${slHit ? 'SL' : 'TP'} @ ${price}`);
+                            tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
+                        });
+                    } catch (e) {
+                        error('⚠️ tx close position failed:', e);
+                    } finally {
+                        closingPositions.delete(doc.id);
+                    }
+                }
             });
-          } catch (e) {
-            error('⚠️ tx close position failed:', e);
-          } finally {
-            closingPositions.delete(doc.id);
-          }
         }
-      });
+    } catch (e) {
+        error('❌ processPriceUpdate positions error:', e);
     }
-  } catch (e) {
-    error('❌ processPriceUpdate positions error:', e);
-  }
 
-  // triggers
-  try {
-    const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
-    const triggersSnapshot = await triggersQuery.get();
-    if (!triggersSnapshot.empty) {
-      info(`🔎 Found ${triggersSnapshot.size} triggers for ${symbol}`);
-      triggersSnapshot.forEach(async (doc) => {
-        const trigger = doc.data() as TradeTrigger;
-        const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-        if (conditionMet) {
-          try {
-            await db.runTransaction(async (tx) => {
-              const userCtx = doc.ref.parent.parent;
-              if (!userCtx) return;
-              const fresh = await tx.get(doc.ref);
-              if (!fresh.exists) return;
-              log(`🎯 Firing trigger ${doc.id} @ ${price}`);
-              const execRef = userCtx.collection('executedTriggers').doc(doc.id);
-              tx.set(execRef, { ...trigger, currentPrice: price });
-              tx.delete(doc.ref);
+    // triggers
+    try {
+        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
+        const triggersSnapshot = await triggersQuery.get();
+        if (!triggersSnapshot.empty) {
+            info(`🔎 Found ${triggersSnapshot.size} triggers for ${symbol}`);
+            triggersSnapshot.forEach(async (doc) => {
+                const trigger = doc.data() as TradeTrigger;
+                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
+                if (conditionMet) {
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const userCtx = doc.ref.parent.parent;
+                            if (!userCtx) return;
+                            const fresh = await tx.get(doc.ref);
+                            if (!fresh.exists) return;
+                            log(`🎯 Firing trigger ${doc.id} @ ${price}`);
+                            const execRef = userCtx.collection('executedTriggers').doc(doc.id);
+                            tx.set(execRef, { ...trigger, currentPrice: price });
+                            tx.delete(doc.ref);
+                        });
+                    } catch (e) {
+                        error('⚠️ tx execute trigger failed:', e);
+                    }
+                }
             });
-          } catch (e) {
-            error('⚠️ tx execute trigger failed:', e);
-          }
         }
-      });
+    } catch (e) {
+        error('❌ processPriceUpdate triggers error:', e);
     }
-  } catch (e) {
-    error('❌ processPriceUpdate triggers error:', e);
-  }
 }
 
 // ========== Main loop & lifecycle ==========
@@ -538,5 +534,3 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-    
