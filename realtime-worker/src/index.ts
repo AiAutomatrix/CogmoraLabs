@@ -65,13 +65,14 @@ const db = admin.firestore();
 // ========== Constants ==========
 const KUCOIN_SPOT_TOKEN_ENDPOINT = 'https://api.kucoin.com/api/v1/bullet-public';
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = 'https://api-futures.kucoin.com/api/v1/bullet-public';
-const SESSION_MS = Number(process.env.SESSION_MS) || 60000; // kept for backwards compatibility
-const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30000;
+const SESSION_MS = Number(process.env.SESSION_MS) || 480000; // 8 minutes
+const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30000; // 30 seconds
 const MAX_RECONNECT_ATTEMPTS = Number(process.env.MAX_RECONNECT_ATTEMPTS) || 8;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
 // runtime state
 let sessionActive = false;
+let sessionTimeout: NodeJS.Timeout | null = null;
 let requeryInterval: NodeJS.Timeout | null = null;
 const closingPositions = new Set<string>();
 
@@ -85,8 +86,6 @@ const error = (...args: any[]) => console.error(`🔴 [${INSTANCE_ID}]`, ...args
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
-  private reconnectAttempts = 0;
 
   // desired set (what Firestore says we should be watching)
   private desiredSubscriptions = new Set<string>();
@@ -147,12 +146,6 @@ class WebSocketManager {
       return;
     }
 
-    // If there's a reconnect already scheduled, let it run
-    if (this.reconnectTimeout) {
-      info(`[${this.name}] Reconnect already scheduled, skipping new connect`);
-      return;
-    }
-
     try {
       const tokenData = await this.fetchToken(4);
       const wsUrl = `${tokenData.instanceServers[0].endpoint}?token=${tokenData.token}`;
@@ -163,7 +156,6 @@ class WebSocketManager {
 
       this.ws.on('open', () => {
         info(`[${this.name}] ✅ socket open`);
-        this.reconnectAttempts = 0;
         this.lastPong = Date.now();
         // resubscribe to desired set
         this.resubscribeAll();
@@ -183,7 +175,6 @@ class WebSocketManager {
       });
     } catch (e) {
       error(`[${this.name}] failed to connect:`, e instanceof Error ? e.message : e);
-      this.scheduleReconnect();
     }
   }
 
@@ -216,13 +207,10 @@ class WebSocketManager {
 
         if (symbol && !Number.isNaN(price)) {
           // emit to global handler
-          log(`[${this.name}] 📈 ${symbol} => ${price}`);
+          // log(`[${this.name}] 📈 ${symbol} => ${price}`);
           // Non-blocking; we intentionally don't await to keep throughput
           try { processPriceUpdate(symbol, price); } catch (e) { error(`[${this.name}] processPriceUpdate error:`, e); }
         }
-      } else {
-        // other messages (subscribe acks etc.)
-        // debug: info(`[${this.name}] recv:`, msg);
       }
     } catch (e) {
       error(`[${this.name}] error parsing incoming WS message:`, e);
@@ -297,14 +285,14 @@ class WebSocketManager {
       try {
         this.ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
         this.actualSubscriptions.add(sym);
-        log(`[${this.name}] 🔁 subscribed ${sym}`);
       } catch (e) {
         warn(`[${this.name}] subscribe ${sym} failed:`, e);
       }
     }
+    log(`[${this.name}] Resubscribed to ${this.actualSubscriptions.size} symbols.`);
   }
 
-  // socket closed/errored --> schedule reconnect (but do NOT close desiredSubscriptions)
+  // socket closed/errored
   private onSocketClose() {
     // cleanup
     if (this.pingInterval) {
@@ -313,40 +301,9 @@ class WebSocketManager {
     }
     // clear active set; desired remains
     this.actualSubscriptions.clear();
-    // schedule reconnect only if sessionActive
-    if (sessionActive) {
-      this.scheduleReconnect();
-    } else {
-      info(`[${this.name}] session not active; not scheduling reconnect`);
-    }
     // clear ws object
     try { if (this.ws) this.ws.removeAllListeners(); } catch {}
     this.ws = null;
-  }
-
-  private scheduleReconnect() {
-    if (this.reconnectTimeout) return;
-    this.reconnectAttempts = Math.min(this.reconnectAttempts + 1, MAX_RECONNECT_ATTEMPTS);
-    const base = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-    const jitter = Math.random() * 1000;
-    const delay = Math.min(base + jitter, 60000);
-    warn(`[${this.name}] scheduling reconnect in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts})`);
-    this.reconnectTimeout = setTimeout(async () => {
-      this.reconnectTimeout = null;
-      if (!sessionActive) {
-        info(`[${this.name}] session inactive; skipping reconnect`);
-        return;
-      }
-      try {
-        await this.ensureConnected();
-        // if successful reset attempts
-        this.reconnectAttempts = 0;
-      } catch (e) {
-        warn(`[${this.name}] reconnect attempt failed:`, e instanceof Error ? e.message : e);
-        // schedule again
-        this.scheduleReconnect();
-      }
-    }, delay);
   }
 
   private forceReconnect(reason = 'manual') {
@@ -361,14 +318,12 @@ class WebSocketManager {
     if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
     this.actualSubscriptions.clear();
     // schedule immediate reconnect with tiny jitter
-    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    this.reconnectTimeout = setTimeout(() => { this.reconnectTimeout = null; this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e)); }, 200 + Math.floor(Math.random()*400));
+    setTimeout(() => { this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e)); }, 200 + Math.floor(Math.random()*400));
   }
 
   public disconnect() {
-    info(`[${this.name}] disconnect requested — closing socket (if any) but keeping desiredSubscriptions`);
+    info(`[${this.name}] disconnect requested — closing socket`);
     if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
-    if (this.reconnectTimeout) { clearTimeout(this.reconnectTimeout); this.reconnectTimeout = null; }
     try {
       if (this.ws) {
         try { this.ws.close(1000, 'worker disconnect'); } catch {}
@@ -377,7 +332,6 @@ class WebSocketManager {
     } catch (e) { /* ignore */ }
     this.ws = null;
     this.actualSubscriptions.clear();
-    this.reconnectAttempts = 0;
   }
 
   // debug helper
@@ -427,18 +381,13 @@ async function collectAllSymbols() {
       }
     });
 
-    log(`📊 Found ${totalPositions} open positions and ${totalTriggers} active triggers`);
+    log(`📊 Found ${totalPositions} open positions and ${totalTriggers} active triggers.`);
     log(`📡 Subscriptions => SPOT: ${spotSymbols.size}, FUTURES: ${futuresSymbols.size}`);
 
     // Now update managers: this will add/remove subscriptions (without tearing down socket)
     spotManager.updateDesiredSubscriptions(spotSymbols);
     futuresManager.updateDesiredSubscriptions(futuresSymbols);
 
-    // Ensure connections are established if needed
-    await Promise.all([
-      spotManager.ensureConnected().catch(e => warn('[SPOT] ensureConnected err', e instanceof Error ? e.message : e)),
-      futuresManager.ensureConnected().catch(e => warn('[FUTURES] ensureConnected err', e instanceof Error ? e.message : e)),
-    ]);
   } catch (e) {
     error('❌ collectAllSymbols error:', e);
   }
@@ -513,7 +462,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 // ========== Main loop & lifecycle ==========
 let heartbeatInterval: NodeJS.Timeout | null = null;
 
-async function startWorkerLoop() {
+async function startSession(ms = SESSION_MS) {
   if (sessionActive) return;
   sessionActive = true;
   log('🚀 worker loop starting — sessionActive=true');
@@ -563,7 +512,7 @@ const PORT = Number(process.env.PORT) || 8080;
 server.listen(PORT, () => {
   log(`📡 HTTP server listening on ${PORT}`);
   // start worker loop
-  startWorkerLoop().catch(e => error('startWorkerLoop error:', e));
+  startSession().catch(e => error('startWorkerLoop error:', e));
 });
 
 // graceful shutdown
@@ -589,3 +538,5 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+    
