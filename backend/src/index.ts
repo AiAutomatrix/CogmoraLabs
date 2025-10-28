@@ -11,6 +11,58 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
+// --- TYPE DEFINITIONS ---
+// These are duplicated from the frontend src/types to make the backend self-contained.
+interface OpenPositionDetails {
+  stopLoss?: number;
+  takeProfit?: number;
+  triggeredBy?: string;
+  status?: 'open' | 'closing';
+  closePrice?: number;
+}
+
+interface OpenPosition {
+  id: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  side: 'buy' | 'long' | 'short';
+  leverage?: number | null;
+  details?: OpenPositionDetails;
+}
+
+interface PaperTrade {
+  positionId: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  entryPrice: number;
+  closePrice?: number | null;
+  side: 'buy' | 'sell' | 'long' | 'short';
+  leverage: number | null;
+  openTimestamp: any; // Can be number or Firestore Timestamp
+  closeTimestamp?: any;
+  status: 'open' | 'closed';
+  pnl?: number | null;
+}
+
+interface TradeTrigger {
+  id: string;
+  symbol: string;
+  symbolName: string;
+  type: 'spot' | 'futures';
+  action: 'buy' | 'long' | 'short';
+  amount: number;
+  leverage: number;
+  currentPrice: number; // Price at execution
+  stopLoss?: number;
+  takeProfit?: number;
+}
+
 // Define a runtime option for the scheduler functions
 const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 
@@ -131,7 +183,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
   const {userId, positionId} = event.params;
   logger.info(`Detected position closing event for user ${userId}, position ${positionId}`);
 
-  const position = dataAfter;
+  const position = dataAfter as OpenPosition;
   const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
 
   try {
@@ -163,7 +215,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
         collateralToReturn = position.size * position.averageEntryPrice;
       } else { // Futures
         const contractValue = position.size * position.averageEntryPrice;
-        collateralToReturn = contractValue / position.leverage;
+        collateralToReturn = contractValue / (position.leverage ?? 1);
         if (position.side === "long") {
           pnl = (closePrice - position.averageEntryPrice) * position.size;
         } else { // short
@@ -180,7 +232,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
       const tradeHistoryRef = userContextRef.collection("tradeHistory").doc();
       const openTimestamp = openTradeSnapshot.docs[0]?.data()?.openTimestamp ?? null;
 
-      const historyRecord = {
+      const historyRecord: PaperTrade = {
         positionId: positionId,
         positionType: position.positionType,
         symbol: position.symbol,
@@ -215,7 +267,7 @@ export const closePositionHandler = onDocumentWritten("/users/{userId}/paperTrad
  */
 export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradingContext/main/executedTriggers/{triggerId}", async (event) => {
   const {userId, triggerId} = event.params;
-  const executedTrigger = event.data?.data();
+  const executedTrigger = event.data?.data() as TradeTrigger;
 
   if (!executedTrigger) {
     logger.error(`No data for executed trigger ${triggerId} for user ${userId}.`);
@@ -252,7 +304,7 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         let positionId: string;
         if (!existingPositionSnapshot.empty) {
           const posDoc = existingPositionSnapshot.docs[0];
-          const posData = posDoc.data();
+          const posData = posDoc.data() as OpenPosition;
           positionId = posDoc.id;
           const totalSize = posData.size + size;
           const totalValue = (posData.size * posData.averageEntryPrice) + (size * currentPrice);
@@ -260,11 +312,11 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         } else {
           const newPositionRef = openPositionsRef.doc();
           positionId = newPositionRef.id;
-          const newPosition = {id: positionId, positionType: "spot", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side: "buy", details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
+          const newPosition: OpenPosition = {id: positionId, positionType: "spot", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side: "buy", details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
           transaction.set(newPositionRef, newPosition);
         }
 
-        const newTrade = {positionId, positionType: "spot", symbol, symbolName, size, entryPrice: currentPrice, side: "buy", leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
+        const newTrade: Omit<PaperTrade, 'id' | 'closeTimestamp' | 'pnl' | 'closePrice'> = {positionId, positionType: "spot", symbol, symbolName, size, entryPrice: currentPrice, side: "buy", leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
         transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
         transaction.update(userContextRef, {balance: newBalance});
       } else { // Futures
@@ -279,10 +331,10 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
 
         const newPositionRef = userContextRef.collection("openPositions").doc();
         const positionId = newPositionRef.id;
-        const newPosition = {id: positionId, positionType: "futures", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
+        const newPosition: OpenPosition = {id: positionId, positionType: "futures", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
         transaction.set(newPositionRef, newPosition);
 
-        const newTrade = {positionId, positionType: "futures", symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
+        const newTrade: Omit<PaperTrade, 'id' | 'closeTimestamp' | 'pnl' | 'closePrice'> = {positionId, positionType: "futures", symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
         transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
         transaction.update(userContextRef, {balance: newBalance});
       }
@@ -331,7 +383,7 @@ export const updateAccountMetrics = onDocumentWritten("/users/{userId}/paperTrad
     // Calculate Unrealized P&L
     let unrealizedPnl = 0;
     openPositionsSnapshot.forEach((doc) => {
-      const pos = doc.data();
+      const pos = doc.data() as OpenPosition;
       unrealizedPnl += pos.unrealizedPnl || 0;
     });
 
@@ -344,7 +396,7 @@ export const updateAccountMetrics = onDocumentWritten("/users/{userId}/paperTrad
     let lostTrades = 0;
 
     tradeHistorySnapshot.forEach((doc) => {
-      const trade = doc.data();
+      const trade = doc.data() as PaperTrade;
       if (trade.status === "closed" && trade.pnl !== undefined && trade.pnl !== null) {
         realizedPnl += trade.pnl;
         if (trade.pnl > 0) {

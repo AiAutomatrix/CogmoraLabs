@@ -1,18 +1,8 @@
-// index.ts (Cloud Run worker — drop-in)
+
 import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
-
-// If runtime provides global fetch (Node 18+), use it; otherwise fall back to node-fetch
-let _fetch: typeof fetch;
-try {
-  // @ts-ignore
-  _fetch = fetch;
-} catch {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  _fetch = require('node-fetch'); // fallback for older node images
-}
 
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
@@ -67,7 +57,6 @@ const KUCOIN_SPOT_TOKEN_ENDPOINT = 'https://api.kucoin.com/api/v1/bullet-public'
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = 'https://api-futures.kucoin.com/api/v1/bullet-public';
 const SESSION_MS = Number(process.env.SESSION_MS) || 480000; // 8 minutes
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30000; // 30 seconds
-const MAX_RECONNECT_ATTEMPTS = Number(process.env.MAX_RECONNECT_ATTEMPTS) || 8;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
 // runtime state
@@ -116,9 +105,9 @@ class WebSocketManager {
     let lastErr: any = null;
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const res = await _fetch(this.tokenEndpoint, { method: 'POST', signal: undefined as any });
+        const res = await fetch(this.tokenEndpoint, { method: 'POST' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data:any = await res.json();
         if (data?.code !== '200000') throw new Error(`Unexpected token response code ${data?.code}`);
         this.cachedToken = data.data;
         this.lastTokenTime = Date.now();
@@ -185,30 +174,22 @@ class WebSocketManager {
       const msg = JSON.parse(raw);
       if (msg.type === 'pong') {
         this.lastPong = Date.now();
-        // small logging at debug level
-        // info(`[${this.name}] ↩ pong`);
         return;
       }
 
-      // KuCoin returns ping/pong and message objects; when message parse symbol and forward
       if (msg.type === 'message' && msg.topic) {
-        // message topic shapes: '/market/snapshot:SYMBOL' or '/contractMarket/snapshot:SYMBOL'
         let symbol = '';
         if (this.name === 'SPOT') {
           symbol = msg.topic.includes(':') ? msg.topic.split(':')[1] : msg.topic;
         } else {
           symbol = msg.topic.replace('/contractMarket/snapshot:', '');
         }
-
-        // extract price (guard)
+        
         const price = this.name === 'SPOT'
           ? parseFloat(msg.data?.data?.lastTradedPrice)
           : parseFloat(msg.data?.markPrice);
 
         if (symbol && !Number.isNaN(price)) {
-          // emit to global handler
-          // log(`[${this.name}] 📈 ${symbol} => ${price}`);
-          // Non-blocking; we intentionally don't await to keep throughput
           try { processPriceUpdate(symbol, price); } catch (e) { error(`[${this.name}] processPriceUpdate error:`, e); }
         }
       }
@@ -221,15 +202,14 @@ class WebSocketManager {
   private startPingLoop(intervalMs: number) {
     if (this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = setInterval(() => {
-      if (!this.ws) return;
-      if (this.ws.readyState !== WebSocket.OPEN) return;
-      // send ping
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      
       try {
         this.ws.send(JSON.stringify({ id: Date.now(), type: 'ping' }));
       } catch (e) {
         warn(`[${this.name}] ping send failed:`, e);
       }
-      // if no pong seen in 2 * interval => treat as dead and reconnect
+      
       if (Date.now() - this.lastPong > Math.max(10000, intervalMs * 2)) {
         warn(`[${this.name}] missed pong for ${Date.now() - this.lastPong}ms — forcing reconnect`);
         this.forceReconnect('ping timeout');
@@ -239,16 +219,11 @@ class WebSocketManager {
 
   // subscribe/unsubscribe helpers (send only diffs)
   public updateDesiredSubscriptions(newSet: Set<string>) {
-    // compute differences
     const toAdd = [...newSet].filter(s => !this.desiredSubscriptions.has(s));
     const toRemove = [...this.desiredSubscriptions].filter(s => !newSet.has(s));
-
-    // update desired set immediately
     this.desiredSubscriptions = new Set(newSet);
 
-    // If socket open, apply diffs
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // add
       for (const sym of toAdd) {
         const topic = this.getTopic(sym);
         try {
@@ -259,7 +234,6 @@ class WebSocketManager {
           warn(`[${this.name}] failed subscribe ${sym}:`, e);
         }
       }
-      // remove
       for (const sym of toRemove) {
         const topic = this.getTopic(sym);
         try {
@@ -271,15 +245,12 @@ class WebSocketManager {
         }
       }
     } else {
-      // if not open, ensure we attempt to connect (connect will resubscribe to desired set)
       this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e instanceof Error ? e.message : e));
     }
   }
 
-  // send subscribe for every desired symbol (used on open/resubscribe)
   private resubscribeAll() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    // try to subscribe to everything in desiredSubscriptions
     for (const sym of this.desiredSubscriptions) {
       const topic = this.getTopic(sym);
       try {
@@ -292,16 +263,10 @@ class WebSocketManager {
     log(`[${this.name}] Resubscribed to ${this.actualSubscriptions.size} symbols.`);
   }
 
-  // socket closed/errored
   private onSocketClose() {
-    // cleanup
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
-    }
-    // clear active set; desired remains
+    if (this.pingInterval) clearInterval(this.pingInterval);
+    this.pingInterval = null;
     this.actualSubscriptions.clear();
-    // clear ws object
     try { if (this.ws) this.ws.removeAllListeners(); } catch {}
     this.ws = null;
   }
@@ -317,7 +282,6 @@ class WebSocketManager {
     this.ws = null;
     if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
     this.actualSubscriptions.clear();
-    // schedule immediate reconnect with tiny jitter
     setTimeout(() => { this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e)); }, 200 + Math.floor(Math.random()*400));
   }
 
@@ -333,8 +297,7 @@ class WebSocketManager {
     this.ws = null;
     this.actualSubscriptions.clear();
   }
-
-  // debug helper
+  
   public info() {
     return {
       name: this.name,
@@ -351,18 +314,12 @@ const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, s =
 const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, s => `/contractMarket/snapshot:${s}`);
 
 // ========== Firestore sync loop ==========
-// This loop simply computes the desired symbol sets and asks managers to update.
-// The managers themselves keep sockets alive and only reconnect when they break.
 async function collectAllSymbols() {
   try {
-    log('🔍 collecting symbols from Firestore...');
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
-    let totalPositions = 0;
-    let totalTriggers = 0;
 
     const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
-    totalPositions = positionsSnapshot.size;
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
       if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
@@ -370,22 +327,20 @@ async function collectAllSymbols() {
     });
 
     const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
-    totalTriggers = triggersSnapshot.size;
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
       if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
       if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
-    log(`📊 Found ${totalPositions} open positions and ${totalTriggers} active triggers.`);
-    log(`📡 Subscriptions => SPOT: ${spotSymbols.size}, FUTURES: ${futuresSymbols.size}`);
+    log(`📊 Monitoring: ${positionsSnapshot.size} open positions and ${triggersSnapshot.size} active triggers.`);
+    log(`📡 Subscribing to: ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
 
-    // Now update managers: this will add/remove subscriptions (without tearing down socket)
     spotManager.updateDesiredSubscriptions(spotSymbols);
     futuresManager.updateDesiredSubscriptions(futuresSymbols);
 
-  } catch (e) {
-    error('❌ collectAllSymbols error:', e);
+  } catch (e: any) {
+    error('❌ collectAllSymbols error:', e.message);
   }
 }
 
@@ -411,16 +366,16 @@ async function processPriceUpdate(symbol: string, price: number) {
                             log(`⚔️ Closing ${doc.id} due to ${slHit ? 'SL' : 'TP'} @ ${price}`);
                             tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
                         });
-                    } catch (e) {
-                        error('⚠️ tx close position failed:', e);
+                    } catch (e: any) {
+                        error('⚠️ tx close position failed:', e.message);
                     } finally {
                         closingPositions.delete(doc.id);
                     }
                 }
             });
         }
-    } catch (e) {
-        error('❌ processPriceUpdate positions error:', e);
+    } catch (e: any) {
+        error('❌ processPriceUpdate positions error:', e.message);
     }
 
     // triggers
@@ -444,14 +399,14 @@ async function processPriceUpdate(symbol: string, price: number) {
                             tx.set(execRef, { ...trigger, currentPrice: price });
                             tx.delete(doc.ref);
                         });
-                    } catch (e) {
-                        error('⚠️ tx execute trigger failed:', e);
+                    } catch (e: any) {
+                        error('⚠️ tx execute trigger failed:', e.message);
                     }
                 }
             });
         }
-    } catch (e) {
-        error('❌ processPriceUpdate triggers error:', e);
+    } catch (e: any) {
+        error('❌ processPriceUpdate triggers error:', e.message);
     }
 }
 
