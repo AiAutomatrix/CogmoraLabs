@@ -44,6 +44,7 @@ interface TradeTrigger {
   stopLoss?: number;
   takeProfit?: number;
   details: TradeTriggerDetails;
+  currentPrice?: number; // Added for when trigger is executed
 }
 
 // ========== Firebase Initialization ==========
@@ -113,7 +114,7 @@ class WebSocketManager {
         this.lastTokenTime = Date.now();
         info(`[${this.name}] ✅ fetched token (attempt ${attempt})`);
         return this.cachedToken;
-      } catch (e) {
+      } catch (e: unknown) {
         lastErr = e;
         warn(`[${this.name}] token fetch attempt ${attempt} failed: ${e instanceof Error ? e.message : e}`);
         const backoff = Math.min(5000 * attempt, 20000);
@@ -489,3 +490,5 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+    
