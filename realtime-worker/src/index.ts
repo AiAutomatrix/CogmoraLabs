@@ -116,7 +116,7 @@ class WebSocketManager {
         return this.cachedToken;
       } catch (e: unknown) {
         lastErr = e;
-        warn(`[${this.name}] token fetch attempt ${attempt} failed: ${e instanceof Error ? e.message : e}`);
+        warn(`[${this.name}] token fetch attempt ${attempt} failed: ${e instanceof Error ? e.message : String(e)}`);
         const backoff = Math.min(5000 * attempt, 20000);
         await new Promise(r => setTimeout(r, backoff + Math.random() * 500));
       }
@@ -159,12 +159,12 @@ class WebSocketManager {
         this.onSocketClose();
       });
       this.ws.on('error', (err) => {
-        error(`[${this.name}] socket error:`, err?.message || err);
+        error(`[${this.name}] socket error:`, err?.message || String(err));
         // ensure close flow runs
         try { this.ws?.terminate(); } catch {}
       });
     } catch (e) {
-      error(`[${this.name}] failed to connect:`, e instanceof Error ? e.message : e);
+      error(`[${this.name}] failed to connect:`, e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -246,7 +246,7 @@ class WebSocketManager {
         }
       }
     } else {
-      this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e instanceof Error ? e.message : e));
+      this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected error:`, e instanceof Error ? e.message : String(e)));
     }
   }
 
@@ -320,21 +320,23 @@ async function collectAllSymbols() {
     const spotSymbols = new Set<string>();
     const futuresSymbols = new Set<string>();
 
-    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+    const positionsSnapshot = await db.collectionGroup('openPositions').get();
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
+      if(pos.details?.status !== 'open') return;
       if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
       if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
     });
 
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
+      if(trigger.details?.status !== 'active') return;
       if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
       if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
-    log(`📊 Monitoring: ${positionsSnapshot.size} open positions and ${triggersSnapshot.size} active triggers.`);
+    log(`📊 Monitoring: ${positionsSnapshot.docs.filter(d=>d.data().details?.status === 'open').length} open positions and ${triggersSnapshot.docs.filter(d=>d.data().details?.status === 'active').length} active triggers.`);
     log(`📡 Subscribing to: ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
 
     spotManager.updateDesiredSubscriptions(spotSymbols);
