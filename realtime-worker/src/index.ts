@@ -59,6 +59,7 @@ const KUCOIN_SPOT_TOKEN_ENDPOINT = 'https://api.kucoin.com/api/v1/bullet-public'
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = 'https://api-futures.kucoin.com/api/v1/bullet-public';
 const SESSION_MS = Number(process.env.SESSION_MS) || 480000;
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
+const MAX_RECONNECT_ATTEMPTS = 10;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
 let sessionActive = false;
@@ -91,7 +92,14 @@ class WebSocketManager {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const res = await fetch(this.tokenEndpoint, { method: 'POST' });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000); 
+        
+        const res = await fetch(this.tokenEndpoint, { 
+            method: 'POST', 
+            signal: (controller as any).signal,
+        });
+        clearTimeout(timeout);
         
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as any;
@@ -238,26 +246,27 @@ async function collectAllSymbols() {
   console.log(`[WORKER ${INSTANCE_ID}] 🔍 Collecting symbols to monitor...`);
   const spotSymbols = new Set<string>();
   const futuresSymbols = new Set<string>();
+  let totalPositions = 0;
+  let totalTriggers = 0;
   try {
-    const positionsSnapshot = await db.collectionGroup('openPositions').get();
+    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
+    totalPositions = positionsSnapshot.size;
     positionsSnapshot.forEach(doc => {
       const pos = doc.data() as OpenPosition;
-      if (pos.details?.status === 'open') {
-        if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
-        if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
-      }
+      if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
+      if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
     });
     
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').get();
+    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
+    totalTriggers = triggersSnapshot.size;
     triggersSnapshot.forEach(doc => {
       const trigger = doc.data() as TradeTrigger;
-      if (trigger.details.status === 'active') {
-        if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-        if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-      }
+      if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
+      if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
     });
 
-    console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols.`);
+    console.log(`[WORKER ${INSTANCE_ID}] Monitoring ${totalPositions} open positions and ${totalTriggers} active triggers.`);
+    console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols to watch.`);
     spotManager.updateSubscriptions(spotSymbols);
     futuresManager.updateSubscriptions(futuresSymbols);
   } catch (e) {
@@ -404,3 +413,4 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
