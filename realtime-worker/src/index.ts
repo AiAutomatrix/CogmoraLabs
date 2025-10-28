@@ -1,15 +1,61 @@
+
 import * as admin from "firebase-admin";
 import WebSocket from "ws";
 import http from "http";
 import crypto from "crypto";
 
-// ====== Firebase Init ======
+// ========== Type Definitions ==========
+interface OpenPositionDetails {
+  stopLoss?: number;
+  takeProfit?: number;
+  triggeredBy?: string;
+  status?: "open" | "closing";
+  closePrice?: number;
+}
+interface OpenPosition {
+  id: string;
+  positionType: "spot" | "futures";
+  symbol: string;
+  symbolName: string;
+  size: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  side: "buy" | "long" | "short";
+  leverage?: number | null;
+  unrealizedPnl?: number;
+  priceChgPct?: number;
+  liquidationPrice?: number;
+  details?: OpenPositionDetails;
+}
+interface TradeTriggerDetails {
+  status: "active" | "executed" | "canceled";
+}
+interface TradeTrigger {
+  id: string;
+  symbol: string;
+  symbolName: string;
+  type: "spot" | "futures";
+  condition: "above" | "below";
+  targetPrice: number;
+  action: "buy" | "long" | "short";
+  amount: number;
+  leverage: number;
+  cancelOthers?: boolean;
+  stopLoss?: number;
+  takeProfit?: number;
+  details: TradeTriggerDetails;
+  currentPrice?: number;
+}
+
+// ========== Firebase Initialization ==========
 if (!admin.apps.length) {
-  admin.initializeApp({ credential: admin.credential.applicationDefault() });
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
 }
 const db = admin.firestore();
 
-// ====== Constants ======
+// ========== Constants ==========
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 const KUCOIN_FUTURES_TOKEN_ENDPOINT = "https://api-futures.kucoin.com/api/v1/bullet-public";
 const SESSION_MS = Number(process.env.SESSION_MS) || 480_000;
@@ -47,9 +93,9 @@ class WebSocketManager {
   private async fetchToken() {
     const now = Date.now();
     if (this.cachedToken && now - this.lastTokenTime < 30000) return this.cachedToken;
-    const res = await fetch(this.endpoint, { method: "POST", keepalive: false } as any);
+    const res = await fetch(this.endpoint, { method: "POST", keepalive: false });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json() as any;
+    const data = (await res.json()) as any;
     if (data?.code !== "200000") throw new Error(`Bad response code: ${data?.code}`);
     this.cachedToken = data.data;
     this.lastTokenTime = now;
@@ -262,7 +308,7 @@ async function collectAllSymbols() {
     spot.updateDesired(spotSet);
     futures.updateDesired(futSet);
     log(`Symbols updated: ${spotSet.size} spot, ${futSet.size} fut`);
-    log(`📊 Analyzing ${spotSet.size} open positions & triggers`);
+    log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers`);
   } catch (e: any) {
     error(`collectAllSymbols error: ${e.message || e}`);
   }
@@ -270,34 +316,70 @@ async function collectAllSymbols() {
 
 // ====== Price Update Logic ======
 async function processPriceUpdate(symbol: string, price: number) {
-  try {
-    const positions = await db
-      .collectionGroup("openPositions")
-      .where("symbol", "==", symbol)
-      .where("details.status", "==", "open")
-      .get();
+    if (!symbol || !price) return;
+    
+    try {
+        const positionsQuery = db.collectionGroup("openPositions").where("symbol", "==", symbol).where("details.status", "==", "open");
+        const positionsSnapshot = await positionsQuery.get();
 
-    for (const doc of positions.docs) {
-      const pos = doc.data() as any;
-      const long = pos.side === "long" || pos.side === "buy";
-      const sl = pos.details?.stopLoss && (long ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-      const tp = pos.details?.takeProfit && (long ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+        if (!positionsSnapshot.empty) {
+            positionsSnapshot.forEach(async (doc) => {
+                const pos = doc.data() as OpenPosition;
+                const isLong = pos.side === "long" || pos.side === "buy";
+                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-      if ((sl || tp) && !closingPositions.has(doc.id)) {
-        closingPositions.add(doc.id);
-        await db.runTransaction(async (tx) => {
-          const fresh = await tx.get(doc.ref);
-          if (fresh.data()?.details?.status !== "open") return;
-          tx.update(doc.ref, { "details.status": "closing", "details.closePrice": price });
-        });
-        closingPositions.delete(doc.id);
-        log(`📉 Position trigger fired for ${symbol} at ${price}`);
-      }
+                if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+                    closingPositions.add(doc.id);
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const freshDoc = await tx.get(doc.ref);
+                            if (freshDoc.data()?.details?.status !== "open") return;
+                            log(`📉 Position trigger fired for ${symbol} at ${price}`);
+                            tx.update(doc.ref, { "details.status": "closing", "details.closePrice": price });
+                        });
+                    } catch (e) {
+                        error(`Transaction to close position ${doc.id} failed:`, e);
+                    } finally {
+                        closingPositions.delete(doc.id);
+                    }
+                }
+            });
+        }
+
+        const triggersQuery = db.collectionGroup("tradeTriggers").where("symbol", "==", symbol).where("details.status", "==", "active");
+        const triggersSnapshot = await triggersQuery.get();
+
+        if (!triggersSnapshot.empty) {
+            triggersSnapshot.forEach(async (doc) => {
+                const trigger = doc.data() as TradeTrigger;
+                const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
+
+                if (conditionMet) {
+                    try {
+                        await db.runTransaction(async (tx) => {
+                            const userContextRef = doc.ref.parent.parent;
+                            if (!userContextRef) return;
+                            
+                            const freshDoc = await tx.get(doc.ref);
+                            if (!freshDoc.exists) return;
+                            
+                            log(`🎯 Firing trigger ${doc.id} @ ${price}`);
+                            const executedTriggerRef = userContextRef.collection("executedTriggers").doc(doc.id);
+                            tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
+                            tx.delete(doc.ref);
+                        });
+                    } catch(e) {
+                        error(`Transaction for trigger ${doc.id} failed:`, e);
+                    }
+                }
+            });
+        }
+    } catch (e: any) {
+        error(`processPriceUpdate error for ${symbol}: ${e.message || e}`);
     }
-  } catch (e: any) {
-    error(`processPriceUpdate error: ${e.message || e}`);
-  }
 }
+
 
 // ====== Main Worker ======
 async function startSession() {
@@ -310,8 +392,14 @@ async function startSession() {
     const s = spot.info();
     const f = futures.info();
     log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
-    if (!s.connected && s.desired.length > 0 && s.lastPongAge > 60000) spot.forceReconnect();
-    if (!f.connected && f.desired.length > 0 && f.lastPongAge > 60000) futures.forceReconnect();
+    if (!s.connected && s.desired.length > 0 && s.lastPongAge > 60000) {
+      warn("💀 SPOT websocket dead >60s — full reset");
+      spot.forceReconnect();
+    }
+    if (!f.connected && f.desired.length > 0 && f.lastPongAge > 60000) {
+      warn("💀 FUTURES websocket dead >60s — full reset");
+      futures.forceReconnect();
+    }
   }, 60000);
 
   requeryInterval = setInterval(() => collectAllSymbols(), REQUERY_INTERVAL_MS);
@@ -353,3 +441,5 @@ async function shutdown() {
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000);
 }
+
+    
