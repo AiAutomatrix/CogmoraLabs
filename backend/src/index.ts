@@ -12,7 +12,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // --- TYPE DEFINITIONS ---
-// These are duplicated from the frontend src/types to make the backend self-contained.
+// Duplicated from frontend/src/types to make the backend self-contained.
 interface OpenPositionDetails {
   stopLoss?: number;
   takeProfit?: number;
@@ -31,6 +31,9 @@ interface OpenPosition {
   currentPrice: number;
   side: "buy" | "long" | "short";
   leverage?: number | null;
+  unrealizedPnl?: number;
+  priceChgPct?: number;
+  liquidationPrice?: number;
   details?: OpenPositionDetails;
 }
 
@@ -44,8 +47,8 @@ interface PaperTrade {
   closePrice?: number | null;
   side: "buy" | "sell" | "long" | "short";
   leverage: number | null;
-  openTimestamp: admin.firestore.Timestamp | number | null; // Can be number or Firestore Timestamp
-  closeTimestamp?: admin.firestore.Timestamp | number;
+  openTimestamp: admin.firestore.Timestamp | number | admin.firestore.FieldValue | null;
+  closeTimestamp?: admin.firestore.Timestamp | number | admin.firestore.FieldValue;
   status: "open" | "closed";
   pnl?: number | null;
 }
@@ -67,6 +70,7 @@ interface TradeTrigger {
   stopLoss?: number;
   takeProfit?: number;
   details: TradeTriggerDetails;
+  currentPrice?: number; // Added to match executedTrigger structure
 }
 
 // Define a runtime option for the scheduler functions
@@ -294,6 +298,10 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
       const currentBalance = userContextDoc.data()?.balance ?? 0;
       const {type, action, amount, leverage, symbol, symbolName, id, stopLoss, takeProfit} = executedTrigger;
       const currentPrice = executedTrigger.currentPrice; // Price at execution time
+
+      if (!currentPrice) {
+        throw new Error(`Executed trigger ${triggerId} is missing currentPrice.`);
+      }
 
       if (type === "spot") {
         if (currentBalance < amount) {
