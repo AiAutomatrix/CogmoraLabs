@@ -17,50 +17,56 @@ interface OpenPositionDetails {
   stopLoss?: number;
   takeProfit?: number;
   triggeredBy?: string;
-  status?: 'open' | 'closing';
+  status?: "open" | "closing";
   closePrice?: number;
 }
 
 interface OpenPosition {
   id: string;
-  positionType: 'spot' | 'futures';
+  positionType: "spot" | "futures";
   symbol: string;
   symbolName: string;
   size: number;
   averageEntryPrice: number;
   currentPrice: number;
-  side: 'buy' | 'long' | 'short';
+  side: "buy" | "long" | "short";
   leverage?: number | null;
   details?: OpenPositionDetails;
 }
 
 interface PaperTrade {
   positionId: string;
-  positionType: 'spot' | 'futures';
+  positionType: "spot" | "futures";
   symbol: string;
   symbolName: string;
   size: number;
   entryPrice: number;
   closePrice?: number | null;
-  side: 'buy' | 'sell' | 'long' | 'short';
+  side: "buy" | "sell" | "long" | "short";
   leverage: number | null;
-  openTimestamp: any; // Can be number or Firestore Timestamp
-  closeTimestamp?: any;
-  status: 'open' | 'closed';
+  openTimestamp: admin.firestore.Timestamp | number | null; // Can be number or Firestore Timestamp
+  closeTimestamp?: admin.firestore.Timestamp | number;
+  status: "open" | "closed";
   pnl?: number | null;
+}
+
+interface TradeTriggerDetails {
+    status: "active" | "executed" | "canceled";
 }
 
 interface TradeTrigger {
   id: string;
   symbol: string;
   symbolName: string;
-  type: 'spot' | 'futures';
-  action: 'buy' | 'long' | 'short';
+  type: "spot" | "futures";
+  condition: "above" | "below";
+  targetPrice: number;
+  action: "buy" | "long" | "short";
   amount: number;
   leverage: number;
-  currentPrice: number; // Price at execution
   stopLoss?: number;
   takeProfit?: number;
+  details: TradeTriggerDetails;
 }
 
 // Define a runtime option for the scheduler functions
@@ -316,7 +322,7 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
           transaction.set(newPositionRef, newPosition);
         }
 
-        const newTrade: Omit<PaperTrade, 'id' | 'closeTimestamp' | 'pnl' | 'closePrice'> = {positionId, positionType: "spot", symbol, symbolName, size, entryPrice: currentPrice, side: "buy", leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
+        const newTrade: Omit<PaperTrade, "id" | "closeTimestamp" | "pnl" | "closePrice"> = {positionId, positionType: "spot", symbol, symbolName, size, entryPrice: currentPrice, side: "buy", leverage: null, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
         transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
         transaction.update(userContextRef, {balance: newBalance});
       } else { // Futures
@@ -334,7 +340,7 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         const newPosition: OpenPosition = {id: positionId, positionType: "futures", symbol, symbolName, size, averageEntryPrice: currentPrice, currentPrice, side, leverage, liquidationPrice, details: {triggeredBy: `trigger:${id.slice(0, 8)}`, stopLoss, takeProfit, status: "open"}};
         transaction.set(newPositionRef, newPosition);
 
-        const newTrade: Omit<PaperTrade, 'id' | 'closeTimestamp' | 'pnl' | 'closePrice'> = {positionId, positionType: "futures", symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
+        const newTrade: Omit<PaperTrade, "id" | "closeTimestamp" | "pnl" | "closePrice"> = {positionId, positionType: "futures", symbol, symbolName, size, entryPrice: currentPrice, side, leverage, openTimestamp: admin.firestore.FieldValue.serverTimestamp(), status: "open"};
         transaction.set(userContextRef.collection("tradeHistory").doc(), newTrade);
         transaction.update(userContextRef, {balance: newBalance});
       }
