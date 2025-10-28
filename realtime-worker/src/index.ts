@@ -1,4 +1,3 @@
-
 import * as admin from "firebase-admin";
 import WebSocket from "ws";
 import http from "http";
@@ -66,11 +65,9 @@ class WebSocketManager {
       this.disconnect();
       return;
     }
-
     this.reconnecting = true;
     await this.fullCleanup("pre-connect");
     await new Promise((r) => setTimeout(r, 2000));
-
     try {
       const token = await this.fetchToken();
       const server = token.instanceServers[0];
@@ -90,12 +87,17 @@ class WebSocketManager {
       });
 
       socket.on("pong", () => (this.lastPong = Date.now()));
-
       socket.on("message", (d) => this.onMessage(d));
 
       socket.on("close", (code, reason) => {
         warn(`[${this.name}] closed (${code}) ${reason.toString()}`);
-        this.scheduleReconnect();
+        // Only schedule reconnect for non-normal closures
+        if (code !== 1000) {
+          this.scheduleReconnect();
+        } else {
+          // fullCleanup for normal Bye close
+          this.fullCleanup("closed-1000").catch(() => {});
+        }
       });
 
       socket.on("error", (e) => {
@@ -159,6 +161,7 @@ class WebSocketManager {
     info(`[${this.name}] cleaning up (${context})`);
     if (this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = null;
+
     if (this.ws) {
       try {
         if (this.ws.readyState === WebSocket.OPEN) {
@@ -172,7 +175,9 @@ class WebSocketManager {
       } catch (err: any) {
         warn(`[${this.name}] cleanup error: ${err.message || err}`);
       }
-      this.ws.removeAllListeners();
+      try {
+        this.ws.removeAllListeners();
+      } catch {}
       this.ws = null;
     }
   }
@@ -275,22 +280,15 @@ async function processPriceUpdate(symbol: string, price: number) {
     for (const doc of positions.docs) {
       const pos = doc.data() as any;
       const long = pos.side === "long" || pos.side === "buy";
-      const sl =
-        pos.details?.stopLoss &&
-        (long ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-      const tp =
-        pos.details?.takeProfit &&
-        (long ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+      const sl = pos.details?.stopLoss && (long ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+      const tp = pos.details?.takeProfit && (long ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
       if ((sl || tp) && !closingPositions.has(doc.id)) {
         closingPositions.add(doc.id);
         await db.runTransaction(async (tx) => {
           const fresh = await tx.get(doc.ref);
           if (fresh.data()?.details?.status !== "open") return;
-          tx.update(doc.ref, {
-            "details.status": "closing",
-            "details.closePrice": price,
-          });
+          tx.update(doc.ref, { "details.status": "closing", "details.closePrice": price });
         });
         closingPositions.delete(doc.id);
         log(`📉 Position trigger fired for ${symbol} at ${price}`);
@@ -306,22 +304,14 @@ async function startSession() {
   if (sessionActive) return;
   sessionActive = true;
   log("🚀 Worker started");
-
   await collectAllSymbols();
 
   heartbeatInterval = setInterval(() => {
     const s = spot.info();
     const f = futures.info();
     log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
-
-    if (!s.connected && s.desired.length > 0 && s.lastPongAge > 60000) {
-      warn("💀 SPOT websocket dead >60s — full reset");
-      spot.forceReconnect();
-    }
-    if (!f.connected && f.desired.length > 0 && f.lastPongAge > 60000) {
-      warn("💀 FUTURES websocket dead >60s — full reset");
-      futures.forceReconnect();
-    }
+    if (!s.connected && s.desired.length > 0 && s.lastPongAge > 60000) spot.forceReconnect();
+    if (!f.connected && f.desired.length > 0 && f.lastPongAge > 60000) futures.forceReconnect();
   }, 60000);
 
   requeryInterval = setInterval(() => collectAllSymbols(), REQUERY_INTERVAL_MS);

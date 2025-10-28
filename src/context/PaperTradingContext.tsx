@@ -356,6 +356,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   useEffect(() => {
     const fetchInitialData = async () => {
+        // Guard against running before user is authenticated
+        if (!user) return;
+
         try {
             const futuresResponse = await fetch("/api/kucoin-futures-tickers");
             if (futuresResponse.ok) {
@@ -370,7 +373,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     };
 
     fetchInitialData();
-  }, []);
+  }, [user]); // Add user as a dependency
 
   const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
