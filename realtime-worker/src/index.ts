@@ -191,7 +191,7 @@ class WebSocketManager {
           : parseFloat(msg.data?.markPrice);
 
         if (symbol && !Number.isNaN(price)) {
-          try { processPriceUpdate(symbol, price); } catch (e) { error(`[${this.name}] processPriceUpdate error:`, e); }
+          try { processPriceUpdate(symbol, price); } catch (e) { error(`[${this_name}] processPriceUpdate error:`, e); }
         }
       }
     } catch (e) {
