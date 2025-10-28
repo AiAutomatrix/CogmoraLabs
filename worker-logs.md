@@ -530,3 +530,59 @@
 🔵 [realtime-worker-00098-tx2] [FUTURES] No desired subscriptions — skipping connect.
 2025-10-27 19:42:32.699 CDT
 🔵 [realtime-worker-00098-tx2] [FUTURES] disconnect requested — closing socket (if any) but keeping desiredSubscriptions
+9 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 2 failed: fetch failed
+2025-10-27 19:42:11.800 CDT
+🟢 [realtime-worker-00098-tx2] 🔍 collecting symbols from Firestore...
+2025-10-27 19:42:17.999 CDT
+🟢 [realtime-worker-00098-tx2] 💓 heartbeat — sessionActive=true | SPOT subs=16 ws=null | FUT subs=0 ws=null
+2025-10-27 19:42:24.899 CDT
+🔵 [realtime-worker-00098-tx2] 🔎 Found 1 triggers for SOL-USDT
+2025-10-27 19:42:26.899 CDT
+🔵 [realtime-worker-00098-tx2] 🔎 Found 1 triggers for SOL-USDT
+2025-10-27 19:42:30.499 CDT
+🟢 [realtime-worker-00098-tx2] 📊 Found 1 open positions and 16 active triggers
+2025-10-27 19:42:30.599 CDT
+🟢 [realtime-worker-00098-tx2] 📡 Subscriptions => SPOT: 16, FUTURES: 0
+2025-10-27 19:42:31.299 CDT
+🔵 [realtime-worker-00098-tx2] [FUTURES] No desired subscriptions — skipping connect.
+2025-10-27 19:42:31.600 CDT
+🔵 [realtime-worker-00098-tx2] [FUTURES] disconnect requested — closing socket (if any) but keeping desiredSubscriptions
+2025-10-27 19:42:32.499 CDT
+🔵 [realtime-worker-00098-tx2] [FUTURES] No desired subscriptions — skipping connect.
+2025-10-27 19:42:32.699 CDT
+🔵 [realtime-worker-00098-tx2] [FUTURES] disconnect requested — closing socket (if any) but keeping desiredSubscriptions
+2025-10-27 19:43:18.699 CDT
+🟢 [realtime-worker-00098-tx2] 🔍 collecting symbols from Firestore...
+2025-10-27 19:44:06.099 CDT
+🟢 [realtime-worker-00098-tx2] 💓 heartbeat — sessionActive=true | SPOT subs=16 ws=null | FUT subs=0 ws=null
+2025-10-27 19:44:13.600 CDT
+🟢 [realtime-worker-00098-tx2] 🔍 collecting symbols from Firestore...
+2025-10-27 19:45:18.699 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 3 failed: fetch failed
+2025-10-27 19:45:18.999 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 3 failed: fetch failed
+2025-10-27 19:45:19.000 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 3 failed: fetch failed
+2025-10-27 19:45:24.499 CDT
+🟢 [realtime-worker-00098-tx2] 🔍 collecting symbols from Firestore...
+2025-10-27 19:45:37.299 CDT
+🟢 [realtime-worker-00098-tx2] 💓 heartbeat — sessionActive=true | SPOT subs=16 ws=null | FUT subs=0 ws=null
+2025-10-27 19:45:46.499 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 1 failed: fetch failed
+2025-10-27 19:45:46.499 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 1 failed: fetch failed
+2025-10-27 19:46:31.299 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 3 failed: fetch failed
+2025-10-27 19:46:31.699 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 2 failed: fetch failed
+2025-10-27 19:46:31.799 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 2 failed: fetch failed
+2025-10-27 19:46:32.099 CDT
+🟡 [realtime-worker-00098-tx2] [SPOT] token fetch attempt 4 failed: fetch failed
+2025-10-27 19:46:39.499 CDT
+🟢 [realtime-worker-00098-tx2] 🔍 collecting symbols from Firestore...
+2025-10-27 19:47:41.599 CDT
+🟢 [realtime-worker-00098-tx2] 💓 heartbeat — sessionActive=true | SPOT subs=16 ws=null | FUT subs=0 ws=null
+2025-10-27 19:47:43.999 CDT
+🔴 [realtime-worker-00098-tx2] [SPOT] failed to connect: fetch failed
