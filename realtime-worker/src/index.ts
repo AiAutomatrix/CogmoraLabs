@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
-import fetch, { AbortController } from 'node-fetch';
+import fetch from 'node-fetch';
 
 
 // ========== Type Definitions ==========
@@ -76,7 +76,7 @@ const info = (...args: any[]) => console.info(`🔵 [${INSTANCE_ID}]`, ...args);
 const warn = (...args: any[]) => console.warn(`🟡 [${INSTANCE_ID}]`, ...args);
 const error = (...args: any[]) => console.error(`🔴 [${INSTANCE_ID}]`, ...args);
 
-// ---------- Replace entire WebSocketManager class with this ----------
+// ---------- WebSocketManager class with robust heartbeat and reconnect logic ----------
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
@@ -133,7 +133,14 @@ class WebSocketManager {
     this.stopHeartbeat();
     try {
       await this.fullCleanup("pre-connect");
-      await new Promise(r => setTimeout(r, 1000));
+      
+      if (this.cachedToken) {
+          this.reconnectBackoffMs = 1000;
+      }
+      
+      const wait = this.reconnectBackoffMs + Math.floor(Math.random() * 500);
+      warn(`[${this.name}] reconnect backoff ${wait}ms`);
+      await new Promise(r => setTimeout(r, wait));
 
       const token = await this.getTokenWithRetry();
       const server = token.instanceServers[0];
@@ -174,7 +181,7 @@ class WebSocketManager {
     try {
       const msg = JSON.parse(data.toString());
 
-      // KuCoin JSON ping → reply with pong
+      // KuCoin JSON ping → reply with pong and update timers
       if (msg.type === "ping" && msg.id) {
         this.ws?.send(JSON.stringify({ id: msg.id, type: "pong" }));
         this.lastPong = Date.now();
@@ -191,13 +198,17 @@ class WebSocketManager {
         return;
       }
 
-      // Welcome message
+      // Welcome message, also starts heartbeat
       if (!this.heartbeatStarted && msg.type === "welcome") {
         this.startHeartbeat(this.pingIntervalMs);
         this.heartbeatStarted = true;
       }
 
-      // Topic message
+      // Any topic message is also a sign of life
+      if (msg.topic) {
+        this.lastPong = Date.now();
+      }
+      
       if (msg.topic && msg.data) {
         const sym = this.name === "SPOT" 
           ? msg.topic.split(":")[1] 
@@ -220,13 +231,12 @@ class WebSocketManager {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
       const now = Date.now();
-      if (now - this.lastPong > this.pingIntervalMs * 2.5) {
-        warn(`[${this.name}] No pong in ${(now - this.lastPong) / 1000}s — reconnecting`);
+      if (this.lastPong > 0 && (now - this.lastPong > this.pingIntervalMs * 2.5)) {
+        warn(`[${this.name}] No pong in ~${Math.round((now - this.lastPong) / 1000)}s — reconnecting`);
         this.forceReconnect();
         return;
       }
 
-      // Send a JSON ping to keep connection alive
       try {
         ws.send(JSON.stringify({ id: String(now), type: "ping" }));
       } catch (err: any) {
@@ -246,10 +256,6 @@ class WebSocketManager {
     if (this.reconnecting) return;
     this.reconnecting = true;
     await this.fullCleanup("scheduleReconnect-backoff");
-
-    const wait = this.reconnectBackoffMs + Math.floor(Math.random() * 500);
-    warn(`[${this.name}] reconnect backoff ${wait}ms`);
-    await new Promise(r => setTimeout(r, wait));
     this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
     await this.ensureConnected();
   }
@@ -265,7 +271,9 @@ class WebSocketManager {
     if (oldWs) {
       try {
         oldWs.removeAllListeners();
-        if (oldWs.readyState === WebSocket.OPEN) oldWs.terminate();
+        if (oldWs.readyState === WebSocket.OPEN) {
+            oldWs.terminate();
+        }
       } catch (err: any) {
         warn(`[${this.name}] cleanup error: ${err.message}`);
       }
@@ -444,18 +452,15 @@ async function startSession() {
 
   // Heartbeat to check for zombie connections
   heartbeatInterval = setInterval(async () => {
-    if (spot.reconnecting) {
-      warn(`💓 heartbeat detected SPOT reconnecting...`);
-    }
-     if (futures.reconnecting) {
-      warn(`💓 heartbeat detected FUTURES reconnecting...`);
+    if (spot.reconnecting || futures.reconnecting) {
+        warn(`💓 heartbeat detected reconnecting state, verifying health...`);
     }
 
     const s = spot.info();
     const f = futures.info();
   
-    const spotIsHealthy = s.connected && (s.lastPongAge < 90);
-    const futuresIsHealthy = f.connected && (f.lastPongAge < 90);
+    const spotIsHealthy = s.connected && (s.lastPongAge < 90 && s.lastPongAge !== -1);
+    const futuresIsHealthy = f.connected && (f.lastPongAge < 90 && f.lastPongAge !== -1);
   
     log(`💓 heartbeat — SPOT=${spotIsHealthy} FUT=${futuresIsHealthy}`);
   
@@ -512,5 +517,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
