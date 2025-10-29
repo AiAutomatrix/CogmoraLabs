@@ -500,25 +500,26 @@ async function startSession() {
     const s = spot.info();
     const f = futures.info();
   
+    // Use lastPongAge to determine health. If it's old, the connection is stale.
     let spotPongOk = s.lastPongAge < (s.pingIntervalMs / 1000) * 3;
     let futPongOk = f.lastPongAge < (f.pingIntervalMs / 1000) * 3;
   
-    log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected} | SPOT_PONG_OK=${spotPongOk} FUT_PONG_OK=${futPongOk}`);
+    log(`💓 heartbeat — SPOT=${s.connected && spotPongOk} FUT=${f.connected && futPongOk}`);
   
-    if (s.desired > 0 && s.connected && !spotPongOk) {
+    if (s.desired > 0 && !s.connected) {
+      warn(`💀 SPOT websocket is not connected but should be — ensuring connection.`);
+      await spot.ensureConnected();
+    } else if (s.connected && !spotPongOk) {
       warn(`💀 SPOT websocket dead (no pong) >${(s.pingIntervalMs / 1000) * 3}s — forcing reconnect`);
       await spot.forceReconnect();
-    } else if (s.desired > 0 && !s.connected) {
-      warn(`💀 SPOT websocket should be connected but is not — ensuring connection.`);
-      await spot.ensureConnected();
     }
     
-    if (f.desired > 0 && f.connected && !futPongOk) {
+    if (f.desired > 0 && !f.connected) {
+        warn(`💀 FUTURES websocket is not connected but should be — ensuring connection.`);
+        await futures.ensureConnected();
+    } else if (f.connected && !futPongOk) {
         warn(`💀 FUTURES websocket dead (no pong) >${(f.pingIntervalMs / 1000) * 3}s — forcing reconnect`);
         await futures.forceReconnect();
-    } else if (f.desired > 0 && !f.connected) {
-        warn(`💀 FUTURES websocket should be connected but is not — ensuring connection.`);
-        await futures.ensureConnected();
     }
   }, 30000);
 
@@ -564,5 +565,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
