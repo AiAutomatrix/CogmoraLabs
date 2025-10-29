@@ -159,6 +159,7 @@ class WebSocketManager {
         this.reconnecting = false;
         this.startHeartbeat(this.pingIntervalMs);
         this.resubscribeAll();
+        // Delay next health check slightly to allow initial pongs
         setTimeout(() => {
           this.lastPong = Date.now();
         }, 5000);
@@ -217,7 +218,7 @@ class WebSocketManager {
       }
 
       if (msg.type === "bye") {
-        warn(`[${this.name}] Server sent BYE — will reconnect on next cycle.`);
+        warn(`[${this.name}] Server sent BYE — reconnecting after short delay.`);
         setTimeout(() => this.ensureConnected().catch(() => {}), 3000 + Math.random() * 2000);
         return;
       }
@@ -244,21 +245,22 @@ class WebSocketManager {
     info(`[${this.name}] Starting heartbeat every ${interval / 1000}s`);
 
     this.heartbeatTimer = setInterval(() => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        warn(`[${this.name}] Heartbeat: WS not open. Stopping timer.`);
-        this.stopHeartbeat();
+      const ws = this.ws;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        warn(`[${this.name}] Heartbeat: WS not open, skipping.`);
         return;
       }
 
       const now = Date.now();
-      if (now - this.lastPong > this.pingIntervalMs * 2) {
-          warn(`[${this.name}] No pong received in > ${this.pingIntervalMs*2/1000}s — forcing reconnect`);
+      // Detect missed pongs
+      if (now - this.lastPong > this.pingIntervalMs * 2.5) {
+          warn(`[${this.name}] No pong in ${(now - this.lastPong) / 1000}s — reconnecting`);
           this.forceReconnect();
           return;
       }
 
       try {
-        this.ws.send(JSON.stringify({ id: String(Date.now()), type: "ping" }));
+        ws.send(JSON.stringify({ id: String(now), type: "ping" }));
         this.lastPing = now;
       } catch(err: any) {
         warn(`[${this.name}] Heartbeat send error: ${err.message}`)
@@ -291,17 +293,19 @@ class WebSocketManager {
     this.stopHeartbeat();
     this.lastPing = 0;
     this.lastPong = 0;
-
-    if (this.ws) {
+  
+    const oldWs = this.ws;
+    this.ws = null;
+  
+    if (oldWs) {
       try {
-        this.ws.removeAllListeners();
-        if (this.ws.readyState === WebSocket.OPEN) {
-            this.ws.terminate();
+        oldWs.removeAllListeners();
+        if (oldWs.readyState === WebSocket.OPEN) {
+            oldWs.terminate();
         }
       } catch (err: any) {
         warn(`[${this.name}] cleanup error: ${err.message || err}`);
       }
-      this.ws = null;
     }
   }
 
@@ -311,9 +315,9 @@ class WebSocketManager {
     this.reconnecting = true;
   
     try {
-      await this.fullCleanup("forceReconnect");
-      await new Promise((r) => setTimeout(r, 1000)); 
-      await this.ensureConnected();
+      await this.fullCleanup("forceReconnect"); // terminate WS & stop heartbeat
+      await new Promise((r) => setTimeout(r, 1000)); // small pause
+      await this.ensureConnected(); // re-establish
     } catch (err: any) {
       error(`[${this.name}] forceReconnect failed: ${err.message || err}`);
     } finally {
@@ -503,19 +507,19 @@ async function startSession() {
 
   // Heartbeat to check for zombie connections
   heartbeatInterval = setInterval(async () => {
-    const s = spot.info();
-    const f = futures.info();
-
-    if (s.reconnecting || f.reconnecting) {
+    if (spot.reconnecting || futures.reconnecting) {
         log(`💓 heartbeat paused — manager is reconnecting...`);
         return;
     }
-  
+
+    const s = spot.info();
+    const f = futures.info();
+
     let spotIsHealthy = s.connected && s.lastPongAge >= 0 && s.lastPongAge < (s.pingIntervalMs / 1000) * 2.5;
     let futuresIsHealthy = f.connected && f.lastPongAge >= 0 && f.lastPongAge < (f.pingIntervalMs / 1000) * 2.5;
-  
+
     log(`💓 heartbeat — SPOT=${spotIsHealthy} FUT=${futuresIsHealthy}`);
-  
+
     if (s.desired > 0 && !spotIsHealthy) {
         warn(`💀 SPOT connection is unhealthy — forcing reconnect.`);
         await spot.forceReconnect();
@@ -525,7 +529,7 @@ async function startSession() {
         warn(`💀 FUTURES connection is unhealthy — forcing reconnect.`);
         await futures.forceReconnect();
     }
-  }, 30000);
+}, 30000);
 
   requeryInterval = setInterval(() => collectAllSymbols(), REQUERY_INTERVAL_MS);
 }
