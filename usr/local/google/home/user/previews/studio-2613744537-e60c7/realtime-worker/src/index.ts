@@ -163,10 +163,18 @@ this.resubscribeAll();
 });
 
 socket.on("message", (d) => this.onMessage(d));
-socket.on("ping", () => {
-  socket.pong();
-  this.lastPong = Date.now();
+
+// This handles the server's ping request.
+socket.on("ping", (pingData) => {
+  this.lastPing = Date.now();
+  try {
+    socket.pong(pingData);
+  } catch (e: any) {
+    warn(`[${this.name}] Failed to send pong: ${e.message}`);
+  }
 });
+
+// This handles our client-side initiated pings getting a pong back.
 socket.on("pong", () => {
     this.lastPong = Date.now();
 });
@@ -191,11 +199,6 @@ this.scheduleReconnect();
 
 private onMessage(data: WebSocket.Data) {
 const messageText = data.toString();
-// Handle raw pong string
-if (messageText === 'pong') {
-this.lastPong = Date.now();
-return;
-}
 try {
 const msg = JSON.parse(messageText);
 
@@ -203,6 +206,17 @@ if (msg.type === "pong") {
 this.lastPong = Date.now();
 return;
 }
+// Handle server-sent pings that come as JSON messages
+if (msg.type === "ping" && msg.id) {
+  this.lastPing = Date.now();
+  try {
+    this.ws?.send(JSON.stringify({ id: msg.id, type: "pong" }));
+  } catch (e: any) {
+     warn(`[${this.name}] Failed to send JSON pong: ${e.message}`);
+  }
+  return;
+}
+
 if (msg.type === "bye") {
   warn(`[${this.name}] Server sent BYE — refreshing session`);
   this.scheduleReconnect();
@@ -468,8 +482,6 @@ await collectAllSymbols();
 heartbeatInterval = setInterval(() => {
 const s = spot.info();
 const f = futures.info();
-let spotPongOk = s.connected ? s.lastPongAge < s.pingIntervalMs / 1000 * 3 : true;
-let futPongOk = f.connected ? f.lastPongAge < f.pingIntervalMs / 1000 * 3 : true;
 
 log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
 
@@ -525,5 +537,3 @@ setTimeout(() => process.exit(1), 5000);
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
