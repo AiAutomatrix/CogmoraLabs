@@ -153,8 +153,9 @@ class WebSocketManager {
 
       socket.on("open", () => {
         info(`[${this.name}] ✅ WebSocket open`);
-        this.lastPing = Date.now();
-        this.lastPong = Date.now();
+        const now = Date.now();
+        this.lastPing = now;
+        this.lastPong = now;
         this.reconnecting = false;
         this.startHeartbeat(this.pingIntervalMs);
         this.resubscribeAll();
@@ -216,7 +217,7 @@ class WebSocketManager {
 
       if (msg.type === "bye") {
         warn(`[${this.name}] Server sent BYE — will reconnect on next cycle.`);
-        this.fullCleanup("bye-message").catch(()=>{});
+        setTimeout(() => this.ensureConnected().catch(() => {}), 3000 + Math.random() * 2000);
         return;
       }
 
@@ -287,6 +288,8 @@ class WebSocketManager {
   private async fullCleanup(context: string) {
     info(`[${this.name}] cleaning up (${context})`);
     this.stopHeartbeat();
+    this.lastPing = 0;
+    this.lastPong = 0;
 
     if (this.ws) {
       try {
@@ -559,3 +562,6 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+
+    
