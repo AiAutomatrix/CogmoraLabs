@@ -1009,7 +1009,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
       if (message.type === 'message' && (message.subject === 'snapshot')) {
           const data = message.data as FuturesSnapshotData;
-          const symbol = data.symbol || message.topic.split(':')[1];
+          const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
+          const symbol = topicMatch ? topicMatch[1] : data.symbol;
           if (symbol) {
              processUpdateRef.current(symbol, false, data);
           }
