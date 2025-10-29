@@ -5,7 +5,6 @@ import http from 'http';
 import crypto from 'crypto';
 import fetch from 'node-fetch';
 
-
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
   stopLoss?: number;
@@ -82,6 +81,7 @@ class WebSocketManager {
   private heartbeatTimer: NodeJS.Timeout | null = null;
   public reconnecting = false;
   private desired = new Set<string>();
+  private subscribed = new Set<string>();
   private cachedToken: any = null;
   private lastTokenTime = 0;
   private lastPong = 0;
@@ -134,12 +134,7 @@ class WebSocketManager {
     try {
       await this.fullCleanup("pre-connect");
       
-      if (this.cachedToken) {
-          this.reconnectBackoffMs = 1000;
-      }
-      
-      const wait = this.reconnectBackoffMs + Math.floor(Math.random() * 500);
-      warn(`[${this.name}] reconnect backoff ${wait}ms`);
+      const wait = this.cachedToken ? 250 : 1000;
       await new Promise(r => setTimeout(r, wait));
 
       const token = await this.getTokenWithRetry();
@@ -153,7 +148,7 @@ class WebSocketManager {
 
       socket.once("open", () => {
         info(`[${this.name}] ✅ WebSocket open`);
-        this.reconnecting = false;
+        // We will wait for the 'welcome' message before starting the heartbeat
         setTimeout(() => this.resubscribeAll(), 200);
       });
 
@@ -161,54 +156,41 @@ class WebSocketManager {
 
       socket.once("close", (code, reason) => {
         warn(`[${this.name}] closed (${code}) ${reason.toString()}`);
-        this.reconnecting = false;
         this.scheduleReconnect();
       });
 
       socket.once("error", (e) => {
         error(`[${this.name}] socket error: ${e.message}`);
-        this.reconnecting = false;
         this.scheduleReconnect();
       });
     } catch (e: any) {
       error(`[${this.name}] connection failure: ${e.message || e}`);
-      this.reconnecting = false;
       this.scheduleReconnect();
+    } finally {
+        this.reconnecting = false;
     }
   }
 
   private onMessage(data: WebSocket.Data) {
+    this.lastPong = Date.now(); // Treat any message as a sign of life
     try {
       const msg = JSON.parse(data.toString());
 
-      // KuCoin JSON ping → reply with pong and update timers
-      if (msg.type === "ping" && msg.id) {
-        this.ws?.send(JSON.stringify({ id: msg.id, type: "pong" }));
-        this.lastPong = Date.now();
-        if (!this.heartbeatStarted) {
-          this.startHeartbeat(this.pingIntervalMs);
-          this.heartbeatStarted = true;
-        }
-        return;
-      }
-
-      // Optional JSON pong message from KuCoin
-      if (msg.type === "pong") {
-        this.lastPong = Date.now();
-        return;
-      }
-
-      // Welcome message, also starts heartbeat
       if (!this.heartbeatStarted && msg.type === "welcome") {
+        info(`[${this.name}] Welcome message received. Starting heartbeat.`);
         this.startHeartbeat(this.pingIntervalMs);
         this.heartbeatStarted = true;
       }
-
-      // Any topic message is also a sign of life
-      if (msg.topic) {
-        this.lastPong = Date.now();
-      }
       
+      if (msg.type === "ping" && msg.id) {
+        this.ws?.send(JSON.stringify({ id: msg.id, type: "pong" }));
+        return;
+      }
+
+      if (msg.type === "pong") {
+        return; // Already updated lastPong at the start of the function
+      }
+
       if (msg.topic && msg.data) {
         const sym = this.name === "SPOT" 
           ? msg.topic.split(":")[1] 
@@ -226,19 +208,19 @@ class WebSocketManager {
   private startHeartbeat(interval: number) {
     this.stopHeartbeat();
     info(`[${this.name}] Starting heartbeat every ${interval / 1000}s`);
+    this.lastPong = Date.now(); // Initialize pong time on start
     this.heartbeatTimer = setInterval(() => {
-      const ws = this.ws;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
       const now = Date.now();
-      if (this.lastPong > 0 && (now - this.lastPong > this.pingIntervalMs * 2.5)) {
-        warn(`[${this.name}] No pong in ~${Math.round((now - this.lastPong) / 1000)}s — reconnecting`);
+      if (now - this.lastPong > this.pingIntervalMs * 2.5) {
+        warn(`[${this.name}] No message activity in ${(now - this.lastPong) / 1000}s — reconnecting`);
         this.forceReconnect();
         return;
       }
 
       try {
-        ws.send(JSON.stringify({ id: String(now), type: "ping" }));
+        this.ws.send(JSON.stringify({ id: String(now), type: "ping" }));
       } catch (err: any) {
         warn(`[${this.name}] Heartbeat send error: ${err.message}`);
       }
@@ -255,8 +237,19 @@ class WebSocketManager {
   private async scheduleReconnect() {
     if (this.reconnecting) return;
     this.reconnecting = true;
+
     await this.fullCleanup("scheduleReconnect-backoff");
-    this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
+
+    const wait = this.cachedToken ? 1000 : this.reconnectBackoffMs; // Faster if we have a token
+    warn(`[${this.name}] reconnect backoff ${wait}ms`);
+    await new Promise(r => setTimeout(r, wait));
+    
+    if (!this.cachedToken) {
+       this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
+    }
+    
+    // Ensure the reconnect flag is false before starting a new attempt
+    this.reconnecting = false; 
     await this.ensureConnected();
   }
 
@@ -265,6 +258,7 @@ class WebSocketManager {
     this.stopHeartbeat();
     this.heartbeatStarted = false;
     this.lastPong = 0;
+    this.subscribed.clear();
 
     const oldWs = this.ws;
     this.ws = null;
@@ -292,17 +286,22 @@ class WebSocketManager {
   updateDesired(set: Set<string>) {
     this.desired = set;
     if (this.desired.size === 0) return this.disconnect();
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected failed: ${e.message}`));
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected failed: ${e.message}`));
+    }
     else this.resubscribeAll();
   }
 
   private resubscribeAll() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    
+    this.subscribed.clear(); // Clear old subscriptions before resubscribing
     info(`[${this.name}] Subscribing to ${this.desired.size} topics`);
     for (const sym of this.desired) {
       try {
         const topic = this.topicFn(sym);
         this.ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, privateChannel: false, response: true }));
+        this.subscribed.add(topic);
       } catch (err: any) {
         warn(`[${this.name}] subscribe fail ${sym}: ${err.message}`);
       }
@@ -315,6 +314,7 @@ class WebSocketManager {
       name: this.name,
       connected: !!this.ws && this.ws.readyState === WebSocket.OPEN,
       desired: this.desired.size,
+      subscribed: Array.from(this.subscribed),
       lastPongAge: this.lastPong ? Math.round((now - this.lastPong)/1000) : -1,
       pingIntervalMs: this.pingIntervalMs,
       reconnecting: this.reconnecting,
@@ -452,8 +452,11 @@ async function startSession() {
 
   // Heartbeat to check for zombie connections
   heartbeatInterval = setInterval(async () => {
-    if (spot.reconnecting || futures.reconnecting) {
-        warn(`💓 heartbeat detected reconnecting state, verifying health...`);
+    if (spot.reconnecting) {
+        warn(`💓 heartbeat detected SPOT reconnecting...`);
+    }
+     if (futures.reconnecting) {
+        warn(`💓 heartbeat detected FUTURES reconnecting...`);
     }
 
     const s = spot.info();
@@ -464,12 +467,12 @@ async function startSession() {
   
     log(`💓 heartbeat — SPOT=${spotIsHealthy} FUT=${futuresIsHealthy}`);
   
-    if (s.desired > 0 && !spotIsHealthy) {
+    if (s.desired > 0 && !spotIsHealthy && !spot.reconnecting) {
         warn(`💀 SPOT connection is unhealthy — forcing reconnect.`);
         await spot.forceReconnect();
     }
     
-    if (f.desired > 0 && !futuresIsHealthy) {
+    if (f.desired > 0 && !futuresIsHealthy && !futures.reconnecting) {
         warn(`💀 FUTURES connection is unhealthy — forcing reconnect.`);
         await futures.forceReconnect();
     }
@@ -517,3 +520,5 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+    
