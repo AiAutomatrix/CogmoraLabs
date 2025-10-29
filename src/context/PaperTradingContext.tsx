@@ -1015,38 +1015,50 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           }
       }
   }, []);
-
+  
   useEffect(() => {
     const spotSymbols = symbolsToWatch.spot;
-    setupWebSocket(
-        spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts,
-        getSpotWsToken,
-        (token, s) => `${s.endpoint}?token=${token}`,
-        handleSpotMessage,
-        spotSymbols,
-        (s) => `/market/snapshot:${s}`
-    );
-
-    const futuresSymbols = symbolsToWatch.futures;
-    setupWebSocket(
-        futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts,
-        getFuturesWsToken,
-        (token, s) => `${s.endpoint}?token=${token}`,
-        handleFuturesMessage,
-        futuresSymbols,
-        (s) => `/contractMarket/snapshot:${s}`
-    );
-
+    if (spotSymbols.length > 0) {
+        setupWebSocket(
+            spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts,
+            getSpotWsToken,
+            (token, s) => `${s.endpoint}?token=${token}`,
+            handleSpotMessage,
+            spotSymbols,
+            (s) => `/market/snapshot:${s}`
+        );
+    }
     return () => {
-        if (spotWs.current) spotWs.current.close();
-        if (futuresWs.current) futuresWs.current.close();
+        if (spotWs.current) {
+            spotWs.current.close();
+            spotWs.current = null;
+        }
         if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
-        if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
         if (spotReconnectTimeoutRef.current) clearTimeout(spotReconnectTimeoutRef.current);
+    }
+  }, [symbolsToWatch.spot, setupWebSocket, handleSpotMessage]);
+
+  useEffect(() => {
+    const futuresSymbols = symbolsToWatch.futures;
+    if (futuresSymbols.length > 0) {
+        setupWebSocket(
+            futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts,
+            getFuturesWsToken,
+            (token, s) => `${s.endpoint}?token=${token}`,
+            handleFuturesMessage,
+            futuresSymbols,
+            (s) => `/contractMarket/snapshot:${s}`
+        );
+    }
+    return () => {
+        if (futuresWs.current) {
+            futuresWs.current.close();
+            futuresWs.current = null;
+        }
+        if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
         if (futuresReconnectTimeoutRef.current) clearTimeout(futuresReconnectTimeoutRef.current);
     }
-}, [symbolsToWatch, setupWebSocket, handleSpotMessage, handleFuturesMessage]);
-
+  }, [symbolsToWatch.futures, setupWebSocket, handleFuturesMessage]);
 
   const closeAllPositions = useCallback(async () => {
     if (!firestore || !userContextDocRef || openPositions.length === 0) return;
