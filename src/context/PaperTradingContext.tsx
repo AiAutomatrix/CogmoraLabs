@@ -629,7 +629,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.markPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -1003,9 +1003,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && (message.subject === 'snapshot')) {
+      if (message.type === 'message' && (message.subject === 'trade.snapshot' || message.subject === 'snapshot')) {
           const data = message.data as FuturesSnapshotData;
-          const symbol = data.symbol || message.topic.split(':')[1];
+          const symbol = message.topic.split(':')[1];
           if (symbol) {
              processUpdateRef.current(symbol, false, data);
           }
@@ -1147,5 +1147,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
