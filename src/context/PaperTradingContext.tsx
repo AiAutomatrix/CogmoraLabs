@@ -1003,9 +1003,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && (message.subject === 'trade.snapshot' || message.subject === 'snapshot')) {
+      if (message.type === 'message' && (message.subject === 'snapshot')) {
           const data = message.data as FuturesSnapshotData;
-          const symbol = message.topic.split(':')[1];
+          const symbol = data.symbol || message.topic.split(':')[1];
           if (symbol) {
              processUpdateRef.current(symbol, false, data);
           }
