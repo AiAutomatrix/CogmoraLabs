@@ -1,6 +1,7 @@
 
 "use client";
-import React, {
+import React from "react";
+import {
   createContext,
   useContext,
   useState,
@@ -166,12 +167,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const spotPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const spotReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const spotReconnectAttempts = useRef(0);
+  const spotSubscribedSymbols = useRef(new Set<string>());
+
 
   const [futuresWsStatus, setFuturesWsStatus] = useState<string>("idle");
   const futuresWs = useRef<WebSocket | null>(null);
   const futuresPingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const futuresReconnectAttempts = useRef(0);
+  const futuresSubscribedSymbols = useRef(new Set<string>());
 
   const userContextDocRef = useMemo(() => {
     if (user && firestore) {
@@ -935,61 +939,94 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       pingRef: React.MutableRefObject<NodeJS.Timeout | null>,
       reconnectTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>,
       reconnectAttemptsRef: React.MutableRefObject<number>,
+      subscribedSymbolsRef: React.MutableRefObject<Set<string>>,
       tokenFetcher: () => Promise<any>,
       urlBuilder: (token: string, instance: any) => string,
       onMessageHandler: (event: MessageEvent) => void,
       subscriptions: string[],
       topicBuilder: (symbol: string) => string
   ) => {
-      if (wsRef.current || subscriptions.length === 0) {
-          if (wsRef.current && subscriptions.length === 0) {
-             wsRef.current.close();
-             wsRef.current = null;
+      // If no subscriptions needed, ensure connection is closed.
+      if (subscriptions.length === 0) {
+          if (wsRef.current) {
+              wsRef.current.close();
+              wsRef.current = null;
           }
+          if (pingRef.current) clearInterval(pingRef.current);
+          subscribedSymbolsRef.current.clear();
           return;
       }
+  
+      // If connection exists, manage subscriptions
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          const newSubs = new Set(subscriptions);
+          const toAdd = [...newSubs].filter(s => !subscribedSymbolsRef.current.has(s));
+          const toRemove = [...subscribedSymbolsRef.current].filter(s => !newSubs.has(s));
+  
+          toAdd.forEach(symbol => {
+              wsRef.current?.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: topicBuilder(symbol), response: true }));
+              subscribedSymbolsRef.current.add(symbol);
+          });
+          toRemove.forEach(symbol => {
+              wsRef.current?.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: topicBuilder(symbol), response: true }));
+              subscribedSymbolsRef.current.delete(symbol);
+          });
+          return;
+      }
+      
+      // If connection is in a connecting/closing state, wait.
+      if (wsRef.current) return;
+  
+      // Otherwise, create a new connection
       statusSetter("fetching_token");
       try {
           const tokenData = await tokenFetcher();
           if (tokenData.code !== "200000") throw new Error("Failed to fetch WebSocket token");
-
+  
           reconnectAttemptsRef.current = 0;
           if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-
+  
           const { token, instanceServers } = tokenData.data;
           const wsUrl = urlBuilder(token, instanceServers[0]);
-
+  
           statusSetter("connecting");
           const ws = new WebSocket(wsUrl);
           wsRef.current = ws;
-
+          subscribedSymbolsRef.current.clear();
+  
           ws.onopen = () => {
               statusSetter("connected");
               if (pingRef.current) clearInterval(pingRef.current);
               pingRef.current = setInterval(() => {
                   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ id: Date.now().toString(), type: "ping" }));
               }, instanceServers[0].pingInterval / 2);
+              
               subscriptions.forEach(symbol => {
                   ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: topicBuilder(symbol), response: true }));
+                  subscribedSymbolsRef.current.add(symbol);
               });
           };
-
+  
           ws.onmessage = onMessageHandler;
-
-          const handleCloseOrError = () => {
+  
+          const handleCloseOrError = (isError: boolean) => {
               wsRef.current = null;
               if (pingRef.current) clearInterval(pingRef.current);
-              statusSetter("disconnected");
+              statusSetter(isError ? "error" : "disconnected");
+  
+              // Only reconnect if there are still subscriptions needed
               if (subscriptions.length > 0) {
                   reconnectAttemptsRef.current++;
                   const delay = Math.min(1000 * (2 ** reconnectAttemptsRef.current), 30000);
-                  reconnectTimeoutRef.current = setTimeout(() => setupWebSocket(wsRef, statusSetter, pingRef, reconnectTimeoutRef, reconnectAttemptsRef, tokenFetcher, urlBuilder, onMessageHandler, subscriptions, topicBuilder), delay);
+                  reconnectTimeoutRef.current = setTimeout(() => 
+                    setupWebSocket(wsRef, statusSetter, pingRef, reconnectTimeoutRef, reconnectAttemptsRef, subscribedSymbolsRef, tokenFetcher, urlBuilder, onMessageHandler, subscriptions, topicBuilder), 
+                  delay);
               }
           };
-
-          ws.onclose = handleCloseOrError;
-          ws.onerror = handleCloseOrError;
-
+  
+          ws.onclose = () => handleCloseOrError(false);
+          ws.onerror = () => handleCloseOrError(true);
+  
       } catch (error) {
           statusSetter("error");
           console.error("WebSocket setup error:", error);
@@ -1018,19 +1055,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
   
   useEffect(() => {
-    const spotSymbols = symbolsToWatch.spot;
-    if (spotSymbols.length > 0) {
-        setupWebSocket(
-            spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts,
-            getSpotWsToken,
-            (token, s) => `${s.endpoint}?token=${token}`,
-            handleSpotMessage,
-            spotSymbols,
-            (s) => `/market/snapshot:${s}`
-        );
-    }
+    setupWebSocket(
+        spotWs, setSpotWsStatus, spotPingIntervalRef, spotReconnectTimeoutRef, spotReconnectAttempts, spotSubscribedSymbols,
+        getSpotWsToken,
+        (token, s) => `${s.endpoint}?token=${token}`,
+        handleSpotMessage,
+        symbolsToWatch.spot,
+        (s) => `/market/snapshot:${s}`
+    );
     return () => {
         if (spotWs.current) {
+            spotWs.current.onclose = null; // Prevent reconnect on unmount
             spotWs.current.close();
             spotWs.current = null;
         }
@@ -1040,19 +1075,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [symbolsToWatch.spot, setupWebSocket, handleSpotMessage]);
 
   useEffect(() => {
-    const futuresSymbols = symbolsToWatch.futures;
-    if (futuresSymbols.length > 0) {
-        setupWebSocket(
-            futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts,
-            getFuturesWsToken,
-            (token, s) => `${s.endpoint}?token=${token}`,
-            handleFuturesMessage,
-            futuresSymbols,
-            (s) => `/contractMarket/snapshot:${s}`
-        );
-    }
+    setupWebSocket(
+        futuresWs, setFuturesWsStatus, futuresPingIntervalRef, futuresReconnectTimeoutRef, futuresReconnectAttempts, futuresSubscribedSymbols,
+        getFuturesWsToken,
+        (token, s) => `${s.endpoint}?token=${token}`,
+        handleFuturesMessage,
+        symbolsToWatch.futures,
+        (s) => `/contractMarket/snapshot:${s}`
+    );
     return () => {
         if (futuresWs.current) {
+            futuresWs.current.onclose = null; // Prevent reconnect on unmount
             futuresWs.current.close();
             futuresWs.current = null;
         }
@@ -1174,5 +1207,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     
