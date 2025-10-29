@@ -98,7 +98,8 @@ private topicFn: (s: string) => string
 // --- Token Handling ---
 private async getTokenWithRetry(maxRetries = 3): Promise<any> {
     const now = Date.now();
-    if (this.cachedToken && now - this.lastTokenTime < 60_000) {
+    // Cache token for 50 minutes
+    if (this.cachedToken && now - this.lastTokenTime < 50 * 60 * 1000) {
       return this.cachedToken;
     }
 
@@ -470,14 +471,14 @@ const f = futures.info();
 let spotPongOk = s.connected ? s.lastPongAge < s.pingIntervalMs / 1000 * 3 : true;
 let futPongOk = f.connected ? f.lastPongAge < f.pingIntervalMs / 1000 * 3 : true;
 
-log(`💓 heartbeat — SPOT=${spotPongOk} FUT=${futPongOk}`);
+log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
 
-if (s.connected && s.desired > 0 && !spotPongOk) {
-warn(`💀 SPOT websocket dead >${(s.pingIntervalMs / 1000) * 3}s — full reset`);
+if (s.desired > 0 && !s.connected) {
+warn(`💀 SPOT websocket should be connected but is not — forcing reconnect`);
 spot.forceReconnect();
 }
-if (f.connected && f.desired > 0 && !futPongOk) {
-warn(`💀 FUTURES websocket dead >${(f.pingIntervalMs / 1000) * 3}s — full reset`);
+if (f.desired > 0 && !f.connected) {
+warn(`💀 FUTURES websocket should be connected but is not — forcing reconnect`);
 futures.forceReconnect();
 }
 }, 30000);

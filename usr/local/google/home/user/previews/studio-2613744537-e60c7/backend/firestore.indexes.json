@@ -6,11 +6,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "aiSettings.nextRun",
+          "fieldPath": "aiSettings.scheduleInterval",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "aiSettings.scheduleInterval",
+          "fieldPath": "aiSettings.nextRun",
           "order": "ASCENDING"
         }
       ]
@@ -44,6 +44,20 @@
       ]
     },
     {
+      "collectionGroup": "openPositions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "positionType",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "tradeHistory",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -56,8 +70,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "timestamp",
-          "order": "DESCENDING"
+          "fieldPath": "openTimestamp",
+          "order": "ASCENDING"
         }
       ]
     },
