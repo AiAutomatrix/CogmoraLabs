@@ -97,6 +97,7 @@ class WebSocketManager {
     const now = Date.now();
     // Cache token for 50 minutes
     if (this.cachedToken && now - this.lastTokenTime < 50 * 60 * 1000) {
+      info(`[${this.name}] using cached token`);
       return this.cachedToken;
     }
 
@@ -176,7 +177,7 @@ class WebSocketManager {
 
       socket.on("close", (code, reason) => {
         warn(`[${this.name}] closed (${code}) ${reason.toString()}`);
-        this.fullCleanup("closed").catch(() => {});
+        this.fullCleanup(`closed-${code}`).catch(() => {});
         // Always attempt to reconnect after a short delay for unexpected closes.
         if (code !== 1000) {
           this.scheduleReconnect();
@@ -249,7 +250,7 @@ class WebSocketManager {
 
       const now = Date.now();
       if (now - this.lastPong > this.pingIntervalMs * 2) {
-          warn(`[${this.name}] No pong received > ${this.pingIntervalMs*2/1000}s — forcing reconnect`);
+          warn(`[${this.name}] No pong received in > ${this.pingIntervalMs*2/1000}s — forcing reconnect`);
           this.forceReconnect();
           return;
       }
@@ -558,5 +559,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
