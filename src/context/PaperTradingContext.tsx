@@ -1,7 +1,6 @@
 
 "use client";
-import React from "react";
-import {
+import React, {
   createContext,
   useContext,
   useState,
@@ -949,11 +948,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       // If no subscriptions needed, ensure connection is closed.
       if (subscriptions.length === 0) {
           if (wsRef.current) {
+              wsRef.current.onclose = null; // Prevent reconnect on deliberate close
               wsRef.current.close();
               wsRef.current = null;
           }
           if (pingRef.current) clearInterval(pingRef.current);
           subscribedSymbolsRef.current.clear();
+          statusSetter('disconnected');
           return;
       }
   
@@ -1063,15 +1064,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         symbolsToWatch.spot,
         (s) => `/market/snapshot:${s}`
     );
+    // Cleanup function
     return () => {
         if (spotWs.current) {
-            spotWs.current.onclose = null; // Prevent reconnect on unmount
+            spotWs.current.onclose = null; // Prevent reconnect on component unmount
             spotWs.current.close();
             spotWs.current = null;
         }
         if (spotPingIntervalRef.current) clearInterval(spotPingIntervalRef.current);
         if (spotReconnectTimeoutRef.current) clearTimeout(spotReconnectTimeoutRef.current);
-    }
+    };
   }, [symbolsToWatch.spot, setupWebSocket, handleSpotMessage]);
 
   useEffect(() => {
@@ -1083,15 +1085,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         symbolsToWatch.futures,
         (s) => `/contractMarket/snapshot:${s}`
     );
+     // Cleanup function
     return () => {
         if (futuresWs.current) {
-            futuresWs.current.onclose = null; // Prevent reconnect on unmount
+            futuresWs.current.onclose = null; // Prevent reconnect on component unmount
             futuresWs.current.close();
             futuresWs.current = null;
         }
         if (futuresPingIntervalRef.current) clearInterval(futuresPingIntervalRef.current);
         if (futuresReconnectTimeoutRef.current) clearTimeout(futuresReconnectTimeoutRef.current);
-    }
+    };
   }, [symbolsToWatch.futures, setupWebSocket, handleFuturesMessage]);
 
   const closeAllPositions = useCallback(async () => {
@@ -1207,6 +1210,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-
-    
