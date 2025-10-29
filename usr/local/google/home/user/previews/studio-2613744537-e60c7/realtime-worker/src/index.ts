@@ -4,6 +4,9 @@ import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
 
+// Use dynamic import for node-fetch as it's a CommonJS module
+const fetch = (...args: any[]) => import('node-fetch').then(({default: fetch}) => (fetch as any)(...args));
+
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
   stopLoss?: number;
@@ -44,6 +47,7 @@ interface TradeTrigger {
   stopLoss?: number;
   takeProfit?: number;
   details: TradeTriggerDetails;
+  currentPrice?: number;
 }
 
 // ========== Firebase Initialization ==========
@@ -55,53 +59,60 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // ========== Constants ==========
-const KUCOIN_SPOT_TOKEN_ENDPOINT = 'https://api.kucoin.com/api/v1/bullet-public';
-const KUCOIN_FUTURES_TOKEN_ENDPOINT = 'https://api-futures.kucoin.com/api/v1/bullet-public';
-const SESSION_MS = Number(process.env.SESSION_MS) || 480000;
+const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
+const KUCOIN_FUTURES_TOKEN_ENDPOINT =
+"https://api-futures.kucoin.com/api/v1/bullet-public";
+const SESSION_MS = Number(process.env.SESSION_MS) || 480_000;
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
-const MAX_RECONNECT_ATTEMPTS = 10;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
-let sessionActive = false;
-let sessionTimeout: NodeJS.Timeout | null = null;
-let requeryInterval: NodeJS.Timeout | null = null;
 const closingPositions = new Set<string>();
+let sessionActive = false;
+let requeryInterval: NodeJS.Timeout | null = null;
+let heartbeatInterval: NodeJS.Timeout | null = null;
 
-// ========== WebSocket Manager ==========
+// ====== Logging ======
+const log = (...args: any[]) => console.log(`🟢 [${INSTANCE_ID}]`, ...args);
+const info = (...args: any[]) => console.info(`🔵 [${INSTANCE_ID}]`, ...args);
+const warn = (...args: any[]) => console.warn(`🟡 [${INSTANCE_ID}]`, ...args);
+const error = (...args: any[]) => console.error(`🔴 [${INSTANCE_ID}]`, ...args);
+
+// ====== WebSocket Manager ======
 class WebSocketManager {
-  private ws: WebSocket | null = null;
-  private pingInterval: NodeJS.Timeout | null = null;
-  private reconnectTimeout: NodeJS.Timeout | null = null;
-  private reconnectAttempts = 0;
-  private desiredSubscriptions = new Set<string>();
-  private actualSubscriptions = new Set<string>();
-  
-  // Token Caching
-  private lastTokenTime = 0;
-  private cachedToken: any = null;
+private ws: WebSocket | null = null;
+private heartbeatTimer: NodeJS.Timeout | null = null;
+private reconnecting = false;
+private desired = new Set<string>();
+private cachedToken: any = null;
+private lastTokenTime = 0;
+private lastPing = 0;
+private lastPong = 0;
+private pingIntervalMs = 20000; // Default
 
-  constructor(
-    private name: string,
-    private tokenEndpoint: string,
-    private getTopic: (symbol: string) => string,
-  ) {}
+constructor(
+private name: "SPOT" | "FUTURES",
+private endpoint: string,
+private topicFn: (s: string) => string
+) {}
 
-  private async getTokenWithRetry(maxRetries = 3): Promise<any> {
+// --- Token Handling ---
+private async getTokenWithRetry(maxRetries = 3): Promise<any> {
     const now = Date.now();
-    if (this.cachedToken && now - this.lastTokenTime < 60_000) {
+    // Cache token for 50 minutes
+    if (this.cachedToken && now - this.lastTokenTime < 50 * 60 * 1000) {
       return this.cachedToken;
     }
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30000); 
-        
-        const res = await fetch(this.tokenEndpoint, { 
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
+
+        const res = await fetch(this.endpoint, { 
             method: 'POST', 
             signal: (controller as any).signal,
         });
-        clearTimeout(timeout);
+        clearTimeout(timeoutId);
         
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json() as any;
@@ -109,311 +120,410 @@ class WebSocketManager {
 
         this.cachedToken = data.data;
         this.lastTokenTime = now;
+        info(`[${this.name}] ✅ token fetched (attempt ${attempt})`);
         return data.data;
 
-      } catch (e) {
-        console.error(`[${this.name}] Token fetch attempt ${attempt} failed:`, e);
-        if (attempt === maxRetries) throw e;
+      } catch (e: any) {
+        warn(`[${this.name}] token fetch attempt ${attempt} failed: ${e.message || e}`);
+        if (attempt === maxRetries) throw new Error(`Failed to fetch token after ${maxRetries} attempts.`);
         const delay = 2000 * attempt;
         await new Promise(r => setTimeout(r, delay));
       }
     }
   }
 
-  public async connect() {
-    if (this.desiredSubscriptions.size === 0) {
-      this.disconnect();
-      return;
-    }
+// --- Core Connect Logic ---
+public async ensureConnected() {
+if (this.reconnecting) return;
+if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+if (this.desired.size === 0) {
+this.disconnect();
+return;
+}
+this.reconnecting = true;
+await this.fullCleanup("pre-connect");
+await new Promise((r) => setTimeout(r, 2000));
+try {
+const token = await this.getTokenWithRetry();
+const server = token.instanceServers[0];
+const wsUrl = `${server.endpoint}?token=${token.token}`;
+this.pingIntervalMs = server.pingInterval || 20000;
 
-    console.log(`[${this.name}] Attempting to fetch KuCoin token and connect...`);
-    try {
-      const { token, instanceServers } = await this.getTokenWithRetry();
-      const wsUrl = `${instanceServers[0].endpoint}?token=${token}`;
-      const pingMs = instanceServers[0].pingInterval || 20000;
+info(`[${this.name}] connecting to ${wsUrl}`);
+const socket = new WebSocket(wsUrl);
+this.ws = socket;
 
-      console.log(`[${this.name}] Connecting WebSocket -> ${wsUrl}`);
-      this.ws = new WebSocket(wsUrl);
+socket.on("open", () => {
+info(`[${this.name}] ✅ WebSocket open`);
+this.lastPing = Date.now();
+this.lastPong = Date.now();
+this.reconnecting = false;
+this.startHeartbeat(this.pingIntervalMs);
+this.resubscribeAll();
+});
 
-      this.ws.on('open', () => {
-        console.log(`[${this.name}] ✅ WebSocket connection established.`);
-        this.reconnectAttempts = 0;
-        this.setupPing(pingMs);
-        this.resubscribe();
-      });
+socket.on("message", (d) => this.onMessage(d));
+socket.on("ping", () => {
+  socket.pong();
+  this.lastPong = Date.now();
+});
+socket.on("pong", () => {
+    this.lastPong = Date.now();
+});
 
-      this.ws.on('message', this.handleMessage);
-      this.ws.on('close', () => this.handleClose('closed'));
-      this.ws.on('error', (err) => this.handleClose(`error: ${err.message}`));
-    } catch (err) {
-      console.error(`[${this.name}] ❌ Connection setup failed:`, err);
-    }
-  }
 
-  private setupPing(interval: number) {
-    if (this.pingInterval) clearInterval(this.pingInterval);
-    this.pingInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ id: Date.now(), type: 'ping' }));
-      }
-    }, Math.max(5000, interval / 2));
-  }
+socket.on("close", (code, reason) => {
+  warn(`[${this.name}] closed (${code}) ${reason.toString()}`);
+  this.fullCleanup("closed").catch(() => {});
+  // Always reconnect after short delay, even on normal closes
+  setTimeout(() => this.ensureConnected().catch(() => {}), 2000);
+});
 
-  private handleMessage = (data: WebSocket.Data) => {
-    try {
-      const msg = JSON.parse(data.toString());
-
-      if (msg.type === 'pong') {
-        console.log(`[${this.name}] Received pong.`);
-        return;
-      }
-
-      if (msg.type === 'message' && msg.topic) {
-        const symbol = this.name === 'SPOT' ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
-        const price = this.name === 'SPOT' ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
-
-        if (symbol && !isNaN(price)) {
-          processPriceUpdate(symbol, price);
-        }
-      }
-    } catch (err) {
-      console.error(`[${this.name}] Error parsing WS message:`, err);
-    }
-  };
-
-  private handleClose(reason: string) {
-    console.warn(`[${this.name}] ⚠️ WebSocket closed due to ${reason}. It will be re-established on the next session cycle.`);
-    if (this.pingInterval) clearInterval(this.pingInterval);
-    this.pingInterval = null;
-    this.actualSubscriptions.clear();
-  }
-
-  private resubscribe() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.actualSubscriptions.clear();
-    console.log(`[${this.name}] Subscribing to ${this.desiredSubscriptions.size} symbols...`);
-    for (const symbol of this.desiredSubscriptions) {
-      const topic = this.getTopic(symbol);
-      this.ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, response: true }));
-      this.actualSubscriptions.add(symbol);
-    }
-  }
-
-  public updateSubscriptions(symbols: Set<string>) {
-    this.desiredSubscriptions = symbols;
-    if (symbols.size === 0) {
-      this.disconnect();
-      return;
-    }
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.log(`[${this.name}] WS not open. Attempting to connect now.`);
-      this.connect();
-    } else {
-        const toAdd = new Set([...this.desiredSubscriptions].filter(s => !this.actualSubscriptions.has(s)));
-        const toRemove = new Set([...this.actualSubscriptions].filter(s => !this.desiredSubscriptions.has(s)));
-
-        toAdd.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic: this.getTopic(symbol), response: true }));
-            this.actualSubscriptions.add(symbol);
-        });
-        toRemove.forEach(symbol => {
-            this.ws?.send(JSON.stringify({ id: Date.now(), type: 'unsubscribe', topic: this.getTopic(symbol), response: true }));
-            this.actualSubscriptions.delete(symbol);
-        });
-
-        if (toAdd.size > 0 || toRemove.size > 0) {
-            console.log(`[${this.name}] Subscription change: +${toAdd.size} / -${toRemove.size}`);
-        }
-    }
-  }
-
-  public disconnect() {
-    console.log(`[${this.name}] Disconnecting WebSocket...`);
-    if(this.pingInterval) clearInterval(this.pingInterval);
-    this.pingInterval = null;
-    if (this.ws) {
-      try { this.ws.close(1000, 'Session ended by worker'); } catch(e) {/* ignore */}
-      this.ws.removeAllListeners();
-      this.ws = null;
-    }
-    this.actualSubscriptions.clear();
-  }
+socket.on("error", (e) => {
+error(`[${this.name}] socket error: ${e.message}`);
+this.scheduleReconnect();
+});
+} catch (e: any) {
+error(`[${this.name}] connection failure: ${e.message || e}`);
+this.scheduleReconnect();
+}
 }
 
-// ========== Managers ==========
-const spotManager = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
-const futuresManager = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
+private onMessage(data: WebSocket.Data) {
+const messageText = data.toString();
+// Handle raw pong string
+if (messageText === 'pong') {
+this.lastPong = Date.now();
+return;
+}
+try {
+const msg = JSON.parse(messageText);
 
-// ========== Symbol Collector ==========
+if (msg.type === "pong") {
+this.lastPong = Date.now();
+return;
+}
+if (msg.type === "bye") {
+  warn(`[${this.name}] Server sent BYE — refreshing session`);
+  this.scheduleReconnect();
+  return;
+}
+if (msg.topic && msg.data) {
+const sym =
+this.name === "SPOT"
+? msg.topic.split(":")[1]
+: msg.topic.replace("/contractMarket/snapshot:", "");
+const price =
+this.name === "SPOT"
+? parseFloat(msg.data?.data?.lastTradedPrice)
+: parseFloat(msg.data?.markPrice);
+if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
+}
+} catch (err: any) {
+warn(`[${this.name}] JSON parse error: ${err.message || err}. Raw message: "${messageText}"`);
+}
+}
+
+// --- Ping & Reconnect ---
+private startHeartbeat(interval: number) {
+this.stopHeartbeat();
+info(`[${this.name}] Starting heartbeat every ${interval / 1000}s`);
+
+this.heartbeatTimer = setInterval(() => {
+if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+warn(`[${this.name}] Heartbeat: WS not open. Stopping timer.`);
+this.stopHeartbeat();
+return;
+}
+
+try {
+this.ws.send(JSON.stringify({ id: String(Date.now()), type: "ping" }));
+this.lastPing = Date.now();
+} catch(err: any) {
+warn(`[${this.name}] Heartbeat send error: ${err.message}`)
+}
+}, interval);
+}
+
+private stopHeartbeat() {
+if (this.heartbeatTimer) {
+info(`[${this.name}] Stopping heartbeat.`);
+clearInterval(this.heartbeatTimer);
+this.heartbeatTimer = null;
+}
+}
+
+private async scheduleReconnect() {
+if (this.reconnecting) return;
+this.reconnecting = true;
+try {
+await this.fullCleanup("scheduleReconnect");
+await new Promise((r) => setTimeout(r, 3000));
+await this.ensureConnected();
+} finally {
+this.reconnecting = false;
+}
+}
+
+private async fullCleanup(context: string) {
+info(`[${this.name}] cleaning up (${context})`);
+this.stopHeartbeat();
+
+if (this.ws) {
+try {
+this.ws.removeAllListeners();
+this.ws.terminate();
+} catch (err: any) {
+warn(`[${this.name}] cleanup error: ${err.message || err}`);
+}
+this.ws = null;
+}
+}
+
+public forceReconnect() {
+warn(`[${this.name}] Forcing reconnect...`);
+this.scheduleReconnect();
+}
+
+public disconnect() {
+this.fullCleanup("manual-disconnect");
+}
+
+// --- Subscription Management ---
+updateDesired(set: Set<string>) {
+this.desired = set;
+if (this.desired.size === 0) {
+this.disconnect();
+return;
+}
+if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+this.ensureConnected().catch(() => {});
+} else {
+this.resubscribeAll();
+}
+}
+
+private resubscribeAll() {
+if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+info(`[${this.name}] Subscribing to ${this.desired.size} topics`);
+for (const sym of this.desired) {
+try {
+const topic = this.topicFn(sym);
+this.ws.send(
+JSON.stringify({
+id: Date.now(),
+type: "subscribe",
+topic,
+privateChannel: false,
+response: true,
+})
+);
+} catch (err: any) {
+warn(`[${this.name}] subscribe fail ${sym}: ${err.message || err}`);
+}
+}
+}
+
+public info() {
+const now = Date.now();
+return {
+name: this.name,
+connected: !!this.ws && this.ws.readyState === WebSocket.OPEN,
+desired: this.desired.size,
+lastPingAge: this.lastPing ? Math.round((now - this.lastPing) / 1000) : -1,
+lastPongAge: this.lastPong ? Math.round((now - this.lastPong) / 1000) : -1,
+pingIntervalMs: this.pingIntervalMs,
+};
+}
+}
+
+// ====== Instances ======
+const spot = new WebSocketManager("SPOT", KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
+const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
+
+// ====== Firestore Collection Management ======
 async function collectAllSymbols() {
-  console.log(`[WORKER ${INSTANCE_ID}] 🔍 Collecting symbols to monitor...`);
-  const spotSymbols = new Set<string>();
-  const futuresSymbols = new Set<string>();
-  let totalPositions = 0;
-  let totalTriggers = 0;
-  try {
-    const positionsSnapshot = await db.collectionGroup('openPositions').where('details.status', '==', 'open').get();
-    totalPositions = positionsSnapshot.size;
-    positionsSnapshot.forEach(doc => {
-      const pos = doc.data() as OpenPosition;
-      if (pos.positionType === 'spot') spotSymbols.add(pos.symbol);
-      if (pos.positionType === 'futures') futuresSymbols.add(pos.symbol);
-    });
-    
-    const triggersSnapshot = await db.collectionGroup('tradeTriggers').where('details.status', '==', 'active').get();
-    totalTriggers = triggersSnapshot.size;
-    triggersSnapshot.forEach(doc => {
-      const trigger = doc.data() as TradeTrigger;
-      if (trigger.type === 'spot') spotSymbols.add(trigger.symbol);
-      if (trigger.type === 'futures') futuresSymbols.add(trigger.symbol);
-    });
+try {
+const spotSet = new Set<string>();
+const futSet = new Set<string>();
 
-    console.log(`[WORKER ${INSTANCE_ID}] Monitoring ${totalPositions} open positions and ${totalTriggers} active triggers.`);
-    console.log(`[WORKER ${INSTANCE_ID}] Found ${spotSymbols.size} SPOT and ${futuresSymbols.size} FUTURES symbols to watch.`);
-    spotManager.updateSubscriptions(spotSymbols);
-    futuresManager.updateSubscriptions(futuresSymbols);
-  } catch (e) {
-    console.error(`[WORKER ${INSTANCE_ID}] ❌ Failed to collect symbols:`, e);
-  }
+const posSnap = await db.collectionGroup("openPositions").get();
+posSnap.forEach((d) => {
+const p = d.data() as OpenPosition;
+if (p.details?.status === 'open') {
+if (p.positionType === "spot") spotSet.add(p.symbol);
+else futSet.add(p.symbol);
+}
+});
+
+const trigSnap = await db.collectionGroup("tradeTriggers").get();
+trigSnap.forEach((d) => {
+const t = d.data() as TradeTrigger;
+if (t.details.status === 'active') {
+if (t.type === "spot") spotSet.add(t.symbol);
+else futSet.add(t.symbol);
+}
+});
+
+spot.updateDesired(spotSet);
+futures.updateDesired(futSet);
+log(`Symbols updated: ${spotSet.size} spot, ${futSet.size} fut`);
+log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers`);
+} catch (e: any) {
+error(`collectAllSymbols error: ${e.message || e}`);
+}
 }
 
-// ========== Price Processing ==========
+// ====== Price Update Logic ======
 async function processPriceUpdate(symbol: string, price: number) {
-    if (!symbol || !price) return;
-    
-    try {
-        const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
-        const positionsSnapshot = await positionsQuery.get();
+if (!symbol || !price) return;
+// --- Block 1: Handle SL/TP on Open Positions ---
+try {
+const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
+const positionsSnapshot = await positionsQuery.get();
+if (!positionsSnapshot.empty) {
+for (const doc of positionsSnapshot.docs) {
+const pos = doc.data() as OpenPosition;
 
-        if (!positionsSnapshot.empty) {
-            positionsSnapshot.forEach(async (doc) => {
-                const pos = doc.data() as OpenPosition;
-                const isLong = pos.side === 'long' || pos.side === 'buy';
-                const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-                const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+if (!pos.details?.stopLoss && !pos.details?.takeProfit) continue;
 
-                if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-                    closingPositions.add(doc.id);
-                    try {
-                        await db.runTransaction(async (tx) => {
-                            const freshDoc = await tx.get(doc.ref);
-                            if (freshDoc.data()?.details?.status !== 'open') return;
-                            console.log(`[EXECUTION] Closing position ${doc.id} for ${slHit ? 'SL' : 'TP'}`);
-                            tx.update(doc.ref, { 'details.status': 'closing', 'details.closePrice': price });
-                        });
-                    } catch (e) {
-                        console.error(`[EXECUTION_FAILURE] Transaction to close position ${doc.id} failed:`, e);
-                    } finally {
-                        closingPositions.delete(doc.id);
-                    }
-                }
-            });
-        }
-    } catch (err) {
-        // This can get noisy, so we are commenting it out. The main error is in collectAllSymbols.
-        // console.error(`[WORKER_ERROR] Failed to process open positions for ${symbol}:`, err);
-    }
+const isLong = pos.side === 'long' || pos.side === 'buy';
+const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-    try {
-        const triggersQuery = db.collectionGroup('tradeTriggers').where('symbol', '==', symbol).where('details.status', '==', 'active');
-        const triggersSnapshot = await triggersQuery.get();
-
-        if (!triggersSnapshot.empty) {
-            triggersSnapshot.forEach(async (doc) => {
-                const trigger = doc.data() as TradeTrigger;
-                const conditionMet = (trigger.condition === 'above' && price >= trigger.targetPrice) || (trigger.condition === 'below' && price <= trigger.targetPrice);
-
-                if (conditionMet) {
-                    try {
-                        await db.runTransaction(async (tx) => {
-                            const userContextRef = doc.ref.parent.parent;
-                            if (!userContextRef) return;
-                            
-                            const freshDoc = await tx.get(doc.ref);
-                            if (!freshDoc.exists) return;
-                            
-                            console.log(`[EXECUTION] Firing trigger ${doc.id}`);
-                            const executedTriggerRef = userContextRef.collection('executedTriggers').doc(doc.id);
-                            tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
-                            tx.delete(doc.ref);
-                        });
-                    } catch(e) {
-                        console.error(`[EXECUTION_FAILURE] Transaction for trigger ${doc.id} failed:`, e);
-                    }
-                }
-            });
-        }
-    } catch (err) {
-       // This can get noisy, so we are commenting it out. The main error is in collectAllSymbols.
-       // console.error(`[WORKER_ERROR] Failed to process triggers for ${symbol}:`, err);
-    }
+if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
+closingPositions.add(doc.id);
+try {
+await db.runTransaction(async (tx) => {
+const freshDoc = await tx.get(doc.ref);
+if (freshDoc.data()?.details?.status !== 'open') return;
+log(`📉 Position trigger fired for ${symbol} at ${price}`);
+tx.update(doc.ref, {
+'details.status': 'closing',
+'details.closePrice': price,
+});
+});
+} catch (e) {
+error(`Transaction to close position ${doc.id} failed:`, e);
+} finally {
+closingPositions.delete(doc.id);
+}
+}
+}
+}
+} catch (e: any) {
+error(`processPriceUpdate openPositions error for ${symbol}:`, e);
 }
 
+// --- Block 2: Handle Trade Trigger Executions ---
+try {
+const triggersQuery = db
+.collectionGroup("tradeTriggers")
+.where("symbol", "==", symbol)
+.where("details.status", "==", "active");
+const triggersSnapshot = await triggersQuery.get();
 
-// ========== Session Loop ==========
-async function startSession(ms = SESSION_MS) {
-  if (sessionActive) return;
-  sessionActive = true;
-  console.log(`[WORKER ${INSTANCE_ID}] 🚀 Starting session (${ms}ms)`);
-  
-  await collectAllSymbols();
+if (!triggersSnapshot.empty) {
+for (const doc of triggersSnapshot.docs) {
+const trigger = doc.data() as TradeTrigger;
+const conditionMet =
+(trigger.condition === "above" && price >= trigger.targetPrice) ||
+(trigger.condition === "below" && price <= trigger.targetPrice);
 
-  if (sessionTimeout) clearTimeout(sessionTimeout);
-  sessionTimeout = setTimeout(() => {
-    console.log(`[WORKER ${INSTANCE_ID}] Session complete. Disconnecting.`);
-    spotManager.disconnect();
-    futuresManager.disconnect();
-    sessionActive = false;
-  }, ms);
+if (conditionMet) {
+try {
+await db.runTransaction(async (tx) => {
+const userContextRef = doc.ref.parent.parent;
+if (!userContextRef) return;
+
+const freshDoc = await tx.get(doc.ref);
+if (!freshDoc.exists) return;
+
+log(`🎯 Firing trigger ${doc.id} @ ${price}`);
+const executedTriggerRef = userContextRef
+.collection("executedTriggers")
+.doc(doc.id);
+tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
+tx.delete(doc.ref);
+});
+} catch (e: any) {
+error(`Transaction for trigger ${doc.id} failed:`, e);
+}
+}
+}
+}
+} catch (e: any) {
+error(`processPriceUpdate triggers error for ${symbol}:`, e);
+}
 }
 
-// ========== HTTP Server ==========
+// ====== Main Worker ======
+async function startSession() {
+if (sessionActive) return;
+sessionActive = true;
+log("🚀 Worker started");
+await collectAllSymbols();
+
+// Heartbeat to check for zombie connections
+heartbeatInterval = setInterval(() => {
+const s = spot.info();
+const f = futures.info();
+let spotPongOk = s.connected ? s.lastPongAge < s.pingIntervalMs / 1000 * 3 : true;
+let futPongOk = f.connected ? f.lastPongAge < f.pingIntervalMs / 1000 * 3 : true;
+
+log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
+
+if (s.desired > 0 && !s.connected) {
+warn(`💀 SPOT websocket should be connected but is not — forcing reconnect`);
+spot.forceReconnect();
+}
+if (f.desired > 0 && !f.connected) {
+warn(`💀 FUTURES websocket should be connected but is not — forcing reconnect`);
+futures.forceReconnect();
+}
+}, 30000);
+
+requeryInterval = setInterval(() => collectAllSymbols(), REQUERY_INTERVAL_MS);
+}
+
+// ====== HTTP Server ======
 const server = http.createServer((req, res) => {
-  if (req.url === '/healthz') {
-    res.writeHead(200);
-    res.end('ok');
-  } else {
-    res.writeHead(200);
-    res.end(`Worker ${INSTANCE_ID} running`);
-  }
+if (req.url === "/healthz") {
+res.writeHead(200, { "Content-Type": "text/plain" });
+res.end("ok");
+return;
+}
+if (req.url === "/debug") {
+res.writeHead(200, { "Content-Type": "application/json" });
+res.end(JSON.stringify({ spot: spot.info(), futures: futures.info() }, null, 2));
+return;
+}
+res.writeHead(200);
+res.end("paper trading worker\n");
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT) || 8080;
 server.listen(PORT, () => {
-  console.log(`[WORKER ${INSTANCE_ID}] Listening on ${PORT}`);
-  startSession();
-  requeryInterval = setInterval(() => {
-      if (!sessionActive) {
-          startSession();
-      }
-  }, REQUERY_INTERVAL_MS);
-  setInterval(() => {
-    console.log(`[WORKER ${INSTANCE_ID}] Heartbeat — sessionActive=${sessionActive}`);
-  }, 60_000);
+log(`Listening on ${PORT}`);
+startSession().catch((e) => error(`startSession: ${e.message || e}`));
 });
 
-// ========== Graceful Shutdown ==========
+// ====== Graceful Shutdown ======
 let shuttingDown = false;
 async function shutdown() {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`[WORKER ${INSTANCE_ID}] Shutdown signal received.`);
-  if(requeryInterval) clearInterval(requeryInterval);
-  if(sessionTimeout) clearTimeout(sessionTimeout);
-  sessionActive = false;
-  spotManager.disconnect();
-  futuresManager.disconnect();
-  try { await admin.app().delete(); } catch(e) { /* Ignore */ }
-  server.close(() => {
-      console.log("HTTP server closed.");
-      process.exit(0);
-  });
-   setTimeout(() => {
-      console.error(`[WORKER ${INSTANCE_ID}] Could not close connections in time, forcing exit.`);
-      process.exit(1);
-  }, 5000);
+if (shuttingDown) return;
+shuttingDown = true;
+warn("🛑 shutdown");
+sessionActive = false;
+if (requeryInterval) clearInterval(requeryInterval);
+if (heartbeatInterval) clearInterval(heartbeatInterval);
+spot.disconnect();
+futures.disconnect();
+server.close(() => process.exit(0));
+setTimeout(() => process.exit(1), 5000);
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
+    
