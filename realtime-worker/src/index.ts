@@ -4,58 +4,57 @@ import WebSocket from 'ws';
 import http from 'http';
 import crypto from 'crypto';
 
-// Use dynamic import for node-fetch
+// Use dynamic import for node-fetch as it's a CommonJS module
 const fetch = (...args: any[]) => import('node-fetch').then(({default: fetch}) => (fetch as any)(...args));
-
 
 // ========== Type Definitions ==========
 interface OpenPositionDetails {
-stopLoss?: number;
-takeProfit?: number;
-triggeredBy?: string;
-status?: 'open' | 'closing';
-closePrice?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  triggeredBy?: string;
+  status?: 'open' | 'closing';
+  closePrice?: number;
 }
 interface OpenPosition {
-id: string;
-positionType: 'spot' | 'futures';
-symbol: string;
-symbolName: string;
-size: number;
-averageEntryPrice: number;
-currentPrice: number;
-side: 'buy' | 'long' | 'short';
-leverage?: number | null;
-unrealizedPnl?: number;
-priceChgPct?: number;
-liquidationPrice?: number;
-details?: OpenPositionDetails;
+  id: string;
+  positionType: 'spot' | 'futures';
+  symbol: string;
+  symbolName: string;
+  size: number;
+  averageEntryPrice: number;
+  currentPrice: number;
+  side: 'buy' | 'long' | 'short';
+  leverage?: number | null;
+  unrealizedPnl?: number;
+  priceChgPct?: number;
+  liquidationPrice?: number;
+  details?: OpenPositionDetails;
 }
 interface TradeTriggerDetails {
-status: 'active' | 'executed' | 'canceled';
+  status: 'active' | 'executed' | 'canceled';
 }
 interface TradeTrigger {
-id: string;
-symbol: string;
-symbolName: string;
-type: 'spot' | 'futures';
-condition: 'above' | 'below';
-targetPrice: number;
-action: 'buy' | 'long' | 'short';
-amount: number;
-leverage: number;
-cancelOthers?: boolean;
-stopLoss?: number;
-takeProfit?: number;
-details: TradeTriggerDetails;
-currentPrice?: number;
+  id: string;
+  symbol: string;
+  symbolName: string;
+  type: 'spot' | 'futures';
+  condition: 'above' | 'below';
+  targetPrice: number;
+  action: 'buy' | 'long' | 'short';
+  amount: number;
+  leverage: number;
+  cancelOthers?: boolean;
+  stopLoss?: number;
+  takeProfit?: number;
+  details: TradeTriggerDetails;
+  currentPrice?: number;
 }
 
 // ========== Firebase Initialization ==========
 if (!admin.apps.length) {
-admin.initializeApp({
-credential: admin.credential.applicationDefault(),
-});
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
 }
 const db = admin.firestore();
 
@@ -97,20 +96,40 @@ private topicFn: (s: string) => string
 ) {}
 
 // --- Token Handling ---
-private async fetchToken() {
-const now = Date.now();
-if (this.cachedToken && now - this.lastTokenTime < 60000)
-return this.cachedToken;
-const res = await fetch(this.endpoint, { method: "POST" });
-if (!res.ok) throw new Error(`HTTP ${res.status}`);
-const data = (await res.json()) as any;
-if (data?.code !== "200000")
-throw new Error(`Bad response code: ${data?.code}`);
-this.cachedToken = data.data;
-this.lastTokenTime = now;
-info(`[${this.name}] ✅ token fetched`);
-return this.cachedToken;
-}
+private async getTokenWithRetry(maxRetries = 3): Promise<any> {
+    const now = Date.now();
+    if (this.cachedToken && now - this.lastTokenTime < 60_000) {
+      return this.cachedToken;
+    }
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
+
+        const res = await fetch(this.endpoint, { 
+            method: 'POST', 
+            signal: (controller as any).signal,
+        });
+        clearTimeout(timeoutId);
+        
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as any;
+        if (data.code !== '200000') throw new Error(`Invalid response code: ${data.code}`);
+
+        this.cachedToken = data.data;
+        this.lastTokenTime = now;
+        info(`[${this.name}] ✅ token fetched (attempt ${attempt})`);
+        return data.data;
+
+      } catch (e: any) {
+        warn(`[${this.name}] token fetch attempt ${attempt} failed: ${e.message || e}`);
+        if (attempt === maxRetries) throw new Error(`Failed to fetch token after ${maxRetries} attempts.`);
+        const delay = 2000 * attempt;
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+  }
 
 // --- Core Connect Logic ---
 public async ensureConnected() {
@@ -124,7 +143,7 @@ this.reconnecting = true;
 await this.fullCleanup("pre-connect");
 await new Promise((r) => setTimeout(r, 2000));
 try {
-const token = await this.fetchToken();
+const token = await this.getTokenWithRetry();
 const server = token.instanceServers[0];
 const wsUrl = `${server.endpoint}?token=${token.token}`;
 this.pingIntervalMs = server.pingInterval || 20000;
@@ -505,3 +524,5 @@ setTimeout(() => process.exit(1), 5000);
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+    
