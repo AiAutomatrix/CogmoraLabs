@@ -134,7 +134,7 @@ class WebSocketManager {
     try {
       await this.fullCleanup("pre-connect");
       
-      const wait = this.cachedToken ? 250 : 1000;
+      const wait = this.cachedToken ? 100 : 1000;
       await new Promise(r => setTimeout(r, wait));
 
       const token = await this.getTokenWithRetry();
@@ -148,7 +148,8 @@ class WebSocketManager {
 
       socket.once("open", () => {
         info(`[${this.name}] ✅ WebSocket open`);
-        // We will wait for the 'welcome' message before starting the heartbeat
+        this.reconnecting = false;
+        // Don't start heartbeat yet, wait for 'welcome'
         setTimeout(() => this.resubscribeAll(), 200);
       });
 
@@ -156,23 +157,24 @@ class WebSocketManager {
 
       socket.once("close", (code, reason) => {
         warn(`[${this.name}] closed (${code}) ${reason.toString()}`);
+        this.reconnecting = false;
         this.scheduleReconnect();
       });
 
       socket.once("error", (e) => {
         error(`[${this.name}] socket error: ${e.message}`);
+        this.reconnecting = false;
         this.scheduleReconnect();
       });
     } catch (e: any) {
       error(`[${this.name}] connection failure: ${e.message || e}`);
+      this.reconnecting = false;
       this.scheduleReconnect();
-    } finally {
-        this.reconnecting = false;
     }
   }
 
   private onMessage(data: WebSocket.Data) {
-    this.lastPong = Date.now(); // Treat any message as a sign of life
+    this.lastPong = Date.now(); // Any message is a sign of life
     try {
       const msg = JSON.parse(data.toString());
 
@@ -186,19 +188,20 @@ class WebSocketManager {
         this.ws?.send(JSON.stringify({ id: msg.id, type: "pong" }));
         return;
       }
-
       if (msg.type === "pong") {
-        return; // Already updated lastPong at the start of the function
+        return; // lastPong is already updated
       }
 
       if (msg.topic && msg.data) {
-        const sym = this.name === "SPOT" 
-          ? msg.topic.split(":")[1] 
-          : msg.topic.replace("/contractMarket/snapshot:", "");
-        const price = this.name === "SPOT" 
-          ? parseFloat(msg.data?.data?.lastTradedPrice) 
-          : parseFloat(msg.data?.markPrice);
-        if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
+        if (msg.subject === 'trade.ticker') {
+           const sym = this.name === "SPOT" ? msg.topic.split(":")[1] : "UNKNOWN";
+           const price = parseFloat(msg.data?.price);
+            if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
+        } else if(msg.subject === 'tickerV2') { // Futures
+            const sym = this.name === "FUTURES" ? msg.topic.replace('/contractMarket/tickerV2:', '') : "UNKNOWN";
+            const price = parseFloat(msg.data?.markPrice);
+            if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
+        }
       }
     } catch (err: any) {
       warn(`[${this.name}] JSON parse error: ${err.message}`);
@@ -208,19 +211,21 @@ class WebSocketManager {
   private startHeartbeat(interval: number) {
     this.stopHeartbeat();
     info(`[${this.name}] Starting heartbeat every ${interval / 1000}s`);
-    this.lastPong = Date.now(); // Initialize pong time on start
+    this.lastPong = Date.now(); // Initialize on start
+
     this.heartbeatTimer = setInterval(() => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+      const ws = this.ws;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
       const now = Date.now();
       if (now - this.lastPong > this.pingIntervalMs * 2.5) {
-        warn(`[${this.name}] No message activity in ${(now - this.lastPong) / 1000}s — reconnecting`);
+        warn(`[${this.name}] No pong/message in ${(now - this.lastPong) / 1000}s — reconnecting`);
         this.forceReconnect();
         return;
       }
 
       try {
-        this.ws.send(JSON.stringify({ id: String(now), type: "ping" }));
+        ws.send(JSON.stringify({ id: String(now), type: "ping" }));
       } catch (err: any) {
         warn(`[${this.name}] Heartbeat send error: ${err.message}`);
       }
@@ -237,19 +242,18 @@ class WebSocketManager {
   private async scheduleReconnect() {
     if (this.reconnecting) return;
     this.reconnecting = true;
+    
+    if (this.cachedToken) {
+        this.reconnectBackoffMs = 1000; // Reset backoff if we have a token
+    }
 
     await this.fullCleanup("scheduleReconnect-backoff");
 
-    const wait = this.cachedToken ? 1000 : this.reconnectBackoffMs; // Faster if we have a token
+    const wait = this.reconnectBackoffMs + Math.floor(Math.random() * 500);
     warn(`[${this.name}] reconnect backoff ${wait}ms`);
     await new Promise(r => setTimeout(r, wait));
     
-    if (!this.cachedToken) {
-       this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
-    }
-    
-    // Ensure the reconnect flag is false before starting a new attempt
-    this.reconnecting = false; 
+    this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
     await this.ensureConnected();
   }
 
@@ -266,7 +270,7 @@ class WebSocketManager {
       try {
         oldWs.removeAllListeners();
         if (oldWs.readyState === WebSocket.OPEN) {
-            oldWs.terminate();
+          oldWs.terminate();
         }
       } catch (err: any) {
         warn(`[${this.name}] cleanup error: ${err.message}`);
@@ -286,24 +290,35 @@ class WebSocketManager {
   updateDesired(set: Set<string>) {
     this.desired = set;
     if (this.desired.size === 0) return this.disconnect();
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected failed: ${e.message}`));
-    }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected failed: ${e.message}`));
     else this.resubscribeAll();
   }
 
   private resubscribeAll() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     
-    this.subscribed.clear(); // Clear old subscriptions before resubscribing
+    // Unsubscribe from topics that are no longer desired
+    this.subscribed.forEach(topicSymbol => {
+        if (!this.desired.has(topicSymbol)) {
+            try {
+                this.ws?.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: this.topicFn(topicSymbol), privateChannel: false, response: true }));
+                this.subscribed.delete(topicSymbol);
+            } catch (err: any) {
+                warn(`[${this.name}] unsubscribe fail ${topicSymbol}: ${err.message}`);
+            }
+        }
+    });
+
     info(`[${this.name}] Subscribing to ${this.desired.size} topics`);
     for (const sym of this.desired) {
-      try {
-        const topic = this.topicFn(sym);
-        this.ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, privateChannel: false, response: true }));
-        this.subscribed.add(topic);
-      } catch (err: any) {
-        warn(`[${this.name}] subscribe fail ${sym}: ${err.message}`);
+      if (!this.subscribed.has(sym)) {
+        try {
+          const topic = this.topicFn(sym);
+          this.ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, privateChannel: false, response: true }));
+          this.subscribed.add(sym);
+        } catch (err: any) {
+          warn(`[${this.name}] subscribe fail ${sym}: ${err.message}`);
+        }
       }
     }
   }
@@ -323,9 +338,10 @@ class WebSocketManager {
   }
 }
 
+
 // ====== Instances ======
-const spot = new WebSocketManager("SPOT", KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
-const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
+const spot = new WebSocketManager("SPOT", KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/ticker:${s}`);
+const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/tickerV2:${s}`);
 
 // ====== Firestore Collection Management ======
 async function collectAllSymbols() {
@@ -452,27 +468,24 @@ async function startSession() {
 
   // Heartbeat to check for zombie connections
   heartbeatInterval = setInterval(async () => {
-    if (spot.reconnecting) {
-        warn(`💓 heartbeat detected SPOT reconnecting...`);
-    }
-     if (futures.reconnecting) {
-        warn(`💓 heartbeat detected FUTURES reconnecting...`);
-    }
-
     const s = spot.info();
     const f = futures.info();
-  
+    
+    if (s.reconnecting || f.reconnecting) {
+        warn(`💓 heartbeat detected reconnecting state, verifying health...`);
+    }
+
     const spotIsHealthy = s.connected && (s.lastPongAge < 90 && s.lastPongAge !== -1);
     const futuresIsHealthy = f.connected && (f.lastPongAge < 90 && f.lastPongAge !== -1);
   
     log(`💓 heartbeat — SPOT=${spotIsHealthy} FUT=${futuresIsHealthy}`);
   
-    if (s.desired > 0 && !spotIsHealthy && !spot.reconnecting) {
+    if (s.desired > 0 && !spotIsHealthy) {
         warn(`💀 SPOT connection is unhealthy — forcing reconnect.`);
         await spot.forceReconnect();
     }
     
-    if (f.desired > 0 && !futuresIsHealthy && !futures.reconnecting) {
+    if (f.desired > 0 && !futuresIsHealthy) {
         warn(`💀 FUTURES connection is unhealthy — forcing reconnect.`);
         await futures.forceReconnect();
     }
@@ -520,5 +533,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
