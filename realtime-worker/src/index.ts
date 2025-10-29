@@ -84,6 +84,7 @@ class WebSocketManager {
   private subscribed = new Set<string>();
   private cachedToken: any = null;
   private lastTokenTime = 0;
+  private lastPing = 0;
   private lastPong = 0;
   private heartbeatStarted = false;
   private pingIntervalMs = 20000;
@@ -133,9 +134,7 @@ class WebSocketManager {
     this.stopHeartbeat();
     try {
       await this.fullCleanup("pre-connect");
-      
-      const wait = this.cachedToken ? 100 : 1000;
-      await new Promise(r => setTimeout(r, wait));
+      await new Promise(r => setTimeout(r, 100));
 
       const token = await this.getTokenWithRetry();
       const server = token.instanceServers[0];
@@ -148,8 +147,8 @@ class WebSocketManager {
 
       socket.once("open", () => {
         info(`[${this.name}] ✅ WebSocket open`);
+        this.lastPong = Date.now();
         this.reconnecting = false;
-        // Don't start heartbeat yet, wait for 'welcome'
         setTimeout(() => this.resubscribeAll(), 200);
       });
 
@@ -178,7 +177,7 @@ class WebSocketManager {
     try {
       const msg = JSON.parse(data.toString());
 
-      if (!this.heartbeatStarted && msg.type === "welcome") {
+      if (msg.type === "welcome" && !this.heartbeatStarted) {
         info(`[${this.name}] Welcome message received. Starting heartbeat.`);
         this.startHeartbeat(this.pingIntervalMs);
         this.heartbeatStarted = true;
@@ -188,20 +187,19 @@ class WebSocketManager {
         this.ws?.send(JSON.stringify({ id: msg.id, type: "pong" }));
         return;
       }
+      
       if (msg.type === "pong") {
         return; // lastPong is already updated
       }
 
       if (msg.topic && msg.data) {
-        if (msg.subject === 'trade.ticker') {
-           const sym = this.name === "SPOT" ? msg.topic.split(":")[1] : "UNKNOWN";
-           const price = parseFloat(msg.data?.price);
-            if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
-        } else if(msg.subject === 'tickerV2') { // Futures
-            const sym = this.name === "FUTURES" ? msg.topic.replace('/contractMarket/tickerV2:', '') : "UNKNOWN";
-            const price = parseFloat(msg.data?.markPrice);
-            if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
-        }
+        const sym = this.name === "SPOT" 
+          ? msg.topic.split(":")[1] 
+          : msg.topic.replace("/contractMarket/snapshot:", "");
+        const price = this.name === "SPOT" 
+          ? parseFloat(msg.data?.data?.lastTradedPrice) 
+          : parseFloat(msg.data?.markPrice);
+        if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
       }
     } catch (err: any) {
       warn(`[${this.name}] JSON parse error: ${err.message}`);
@@ -211,16 +209,14 @@ class WebSocketManager {
   private startHeartbeat(interval: number) {
     this.stopHeartbeat();
     info(`[${this.name}] Starting heartbeat every ${interval / 1000}s`);
-    this.lastPong = Date.now(); // Initialize on start
-
     this.heartbeatTimer = setInterval(() => {
       const ws = this.ws;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
       const now = Date.now();
       if (now - this.lastPong > this.pingIntervalMs * 2.5) {
-        warn(`[${this.name}] No pong/message in ${(now - this.lastPong) / 1000}s — reconnecting`);
-        this.forceReconnect();
+        warn(`[${this.name}] No activity in ${(now - this.lastPong) / 1000}s — reconnecting`);
+        this.forceReconnect().catch(e => warn(`[${this.name}] Heartbeat reconnect error: ${e.message}`));
         return;
       }
 
@@ -242,19 +238,18 @@ class WebSocketManager {
   private async scheduleReconnect() {
     if (this.reconnecting) return;
     this.reconnecting = true;
-    
-    if (this.cachedToken) {
-        this.reconnectBackoffMs = 1000; // Reset backoff if we have a token
+
+    try {
+        await this.fullCleanup("scheduleReconnect-backoff");
+        if (this.cachedToken) this.reconnectBackoffMs = 1000;
+        const wait = this.reconnectBackoffMs + Math.floor(Math.random() * 500);
+        warn(`[${this.name}] reconnect backoff ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
+        this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
+        await this.ensureConnected();
+    } finally {
+        this.reconnecting = false;
     }
-
-    await this.fullCleanup("scheduleReconnect-backoff");
-
-    const wait = this.reconnectBackoffMs + Math.floor(Math.random() * 500);
-    warn(`[${this.name}] reconnect backoff ${wait}ms`);
-    await new Promise(r => setTimeout(r, wait));
-    
-    this.reconnectBackoffMs = Math.min(30000, this.reconnectBackoffMs * 1.5);
-    await this.ensureConnected();
   }
 
   private async fullCleanup(context: string) {
@@ -262,19 +257,23 @@ class WebSocketManager {
     this.stopHeartbeat();
     this.heartbeatStarted = false;
     this.lastPong = 0;
-    this.subscribed.clear();
+    this.lastPing = 0;
 
     const oldWs = this.ws;
     this.ws = null;
     if (oldWs) {
-      try {
-        oldWs.removeAllListeners();
         if (oldWs.readyState === WebSocket.OPEN) {
-          oldWs.terminate();
+            this.subscribed.forEach(topic => {
+                try {
+                    oldWs.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic }));
+                } catch {}
+            });
         }
-      } catch (err: any) {
-        warn(`[${this.name}] cleanup error: ${err.message}`);
-      }
+        this.subscribed.clear();
+        try {
+            oldWs.removeAllListeners();
+            if (oldWs.readyState !== WebSocket.CLOSED) oldWs.terminate();
+        } catch {}
     }
   }
 
@@ -296,29 +295,15 @@ class WebSocketManager {
 
   private resubscribeAll() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    
-    // Unsubscribe from topics that are no longer desired
-    this.subscribed.forEach(topicSymbol => {
-        if (!this.desired.has(topicSymbol)) {
-            try {
-                this.ws?.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: this.topicFn(topicSymbol), privateChannel: false, response: true }));
-                this.subscribed.delete(topicSymbol);
-            } catch (err: any) {
-                warn(`[${this.name}] unsubscribe fail ${topicSymbol}: ${err.message}`);
-            }
-        }
-    });
-
     info(`[${this.name}] Subscribing to ${this.desired.size} topics`);
+    this.subscribed.clear();
     for (const sym of this.desired) {
-      if (!this.subscribed.has(sym)) {
-        try {
-          const topic = this.topicFn(sym);
-          this.ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, privateChannel: false, response: true }));
-          this.subscribed.add(sym);
-        } catch (err: any) {
-          warn(`[${this.name}] subscribe fail ${sym}: ${err.message}`);
-        }
+      try {
+        const topic = this.topicFn(sym);
+        this.ws.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic, privateChannel: false, response: true }));
+        this.subscribed.add(topic);
+      } catch (err: any) {
+        warn(`[${this.name}] subscribe fail ${sym}: ${err.message}`);
       }
     }
   }
@@ -341,7 +326,7 @@ class WebSocketManager {
 
 // ====== Instances ======
 const spot = new WebSocketManager("SPOT", KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/ticker:${s}`);
-const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/tickerV2:${s}`);
+const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
 
 // ====== Firestore Collection Management ======
 async function collectAllSymbols() {
@@ -466,12 +451,11 @@ async function startSession() {
   log("🚀 Worker started");
   await collectAllSymbols();
 
-  // Heartbeat to check for zombie connections
-  heartbeatInterval = setInterval(async () => {
+  heartbeatInterval = setInterval(() => {
     const s = spot.info();
     const f = futures.info();
     
-    if (s.reconnecting || f.reconnecting) {
+    if (spot.reconnecting || futures.reconnecting) {
         warn(`💓 heartbeat detected reconnecting state, verifying health...`);
     }
 
@@ -482,12 +466,12 @@ async function startSession() {
   
     if (s.desired > 0 && !spotIsHealthy) {
         warn(`💀 SPOT connection is unhealthy — forcing reconnect.`);
-        await spot.forceReconnect();
+        spot.forceReconnect().catch(e => warn(`[SPOT] Heartbeat reconnect error: ${e.message}`));
     }
     
     if (f.desired > 0 && !futuresIsHealthy) {
         warn(`💀 FUTURES connection is unhealthy — forcing reconnect.`);
-        await futures.forceReconnect();
+        futures.forceReconnect().catch(e => warn(`[FUTURES] Heartbeat reconnect error: ${e.message}`));
     }
   }, 30000);
 
@@ -533,3 +517,5 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+    
