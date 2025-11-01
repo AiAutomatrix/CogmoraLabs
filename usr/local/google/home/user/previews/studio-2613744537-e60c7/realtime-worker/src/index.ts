@@ -342,9 +342,12 @@ async function collectAllSymbols() {
     const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
     posSnap.forEach((d) => {
       const p = d.data() as Omit<OpenPosition, 'userId'>;
+      // The parent of a subcollection doc is the doc containing it.
+      // The parent of that is the collection containing that doc.
+      // The parent of THAT is the user doc.
       const userId = d.ref.parent.parent?.parent.id;
       if (userId) {
-        const positionWithUser = { ...p, userId };
+        const positionWithUser = { ...p, id: d.id, userId };
         if (!openPositionsBySymbol.has(p.symbol)) {
           openPositionsBySymbol.set(p.symbol, []);
         }
@@ -359,7 +362,7 @@ async function collectAllSymbols() {
       const t = d.data() as Omit<TradeTrigger, 'userId'>;
       const userId = d.ref.parent.parent?.parent.id;
       if(userId) {
-        const triggerWithUser = { ...t, userId };
+        const triggerWithUser = { ...t, id: d.id, userId };
         if (!tradeTriggersBySymbol.has(t.symbol)) {
           tradeTriggersBySymbol.set(t.symbol, []);
         }
@@ -501,5 +504,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
