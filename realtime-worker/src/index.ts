@@ -89,7 +89,6 @@ class WebSocketManager {
   private subscribed = new Set<string>();
   private cachedToken: any = null;
   private lastTokenTime = 0;
-  private lastPing = 0;
   private lastPong = 0;
   private heartbeatStarted = false;
   private pingIntervalMs = 20000;
@@ -262,7 +261,6 @@ class WebSocketManager {
     this.stopHeartbeat();
     this.heartbeatStarted = false;
     this.lastPong = 0;
-    this.lastPing = 0;
 
     const oldWs = this.ws;
     this.ws = null;
@@ -336,51 +334,71 @@ const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (
 // ====== Firestore Collection Management ======
 async function collectAllSymbols() {
   try {
+    const usersSnap = await db.collection('users').get();
+    
+    // Use a temporary map to build the new state
+    const newOpenPositions = new Map<string, OpenPosition[]>();
+    const newTradeTriggers = new Map<string, TradeTrigger[]>();
     const spotSymbolsToWatch = new Set<string>();
     const futuresSymbolsToWatch = new Set<string>();
 
-    openPositionsBySymbol.clear();
-    tradeTriggersBySymbol.clear();
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const baseRef = db
+        .collection('users')
+        .doc(userId)
+        .collection('paperTradingContext')
+        .doc('main');
 
-    const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
-    posSnap.forEach((d) => {
-      const p = d.data() as Omit<OpenPosition, 'userId'>;
-      const userId = d.ref.parent.parent?.parent.id;
-      if (userId) {
+      // open positions
+      const posSnap = await baseRef.collection('openPositions')
+        .where('details.status', '==', 'open')
+        .get();
+
+      posSnap.forEach((d) => {
+        const p = d.data() as Omit<OpenPosition, 'userId'>;
         const positionWithUser = { ...p, id: d.id, userId };
-        if (!openPositionsBySymbol.has(p.symbol)) {
-          openPositionsBySymbol.set(p.symbol, []);
-        }
-        openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
-        if (p.positionType === "spot") spotSymbolsToWatch.add(p.symbol);
+        if (!newOpenPositions.has(p.symbol)) newOpenPositions.set(p.symbol, []);
+        newOpenPositions.get(p.symbol)!.push(positionWithUser);
+
+        if (p.positionType === 'spot') spotSymbolsToWatch.add(p.symbol);
         else futuresSymbolsToWatch.add(p.symbol);
-      }
-    });
+      });
 
-    const trigSnap = await db.collectionGroup("tradeTriggers").where("details.status", "==", "active").get();
-    trigSnap.forEach((d) => {
-      const t = d.data() as Omit<TradeTrigger, 'userId'>;
-      const userId = d.ref.parent.parent?.parent.id;
-      if(userId) {
+      // trade triggers
+      const trigSnap = await baseRef.collection('tradeTriggers')
+        .where('details.status', '==', 'active')
+        .get();
+
+      trigSnap.forEach((d) => {
+        const t = d.data() as Omit<TradeTrigger, 'userId'>;
         const triggerWithUser = { ...t, id: d.id, userId };
-        if (!tradeTriggersBySymbol.has(t.symbol)) {
-          tradeTriggersBySymbol.set(t.symbol, []);
-        }
-        tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
-        if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
+        if (!newTradeTriggers.has(t.symbol)) newTradeTriggers.set(t.symbol, []);
+        newTradeTriggers.get(t.symbol)!.push(triggerWithUser);
+        
+        if (t.type === 'spot') spotSymbolsToWatch.add(t.symbol);
         else futuresSymbolsToWatch.add(t.symbol);
-      }
-    });
+      });
+    }
 
+    // Atomically update the in-memory state
+    openPositionsBySymbol.clear();
+    newOpenPositions.forEach((val, key) => openPositionsBySymbol.set(key, val));
+
+    tradeTriggersBySymbol.clear();
+    newTradeTriggers.forEach((val, key) => tradeTriggersBySymbol.set(key, val));
+
+    // update websockets
     spot.updateDesired(spotSymbolsToWatch);
     futures.updateDesired(futuresSymbolsToWatch);
-
+    
     let totalPositions = 0;
     openPositionsBySymbol.forEach(arr => totalPositions += arr.length);
     let totalTriggers = 0;
     tradeTriggersBySymbol.forEach(arr => totalTriggers += arr.length);
 
     log(`📊 Analyzing ${totalPositions} open positions & ${totalTriggers} triggers across ${spotSymbolsToWatch.size} spot and ${futuresSymbolsToWatch.size} futures symbols.`);
+
   } catch (e: any) {
     error(`collectAllSymbols error: ${e.message || e}`);
   }
@@ -529,5 +547,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
-    
