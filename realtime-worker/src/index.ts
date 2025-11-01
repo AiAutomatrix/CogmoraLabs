@@ -379,6 +379,7 @@ async function collectAllSymbols() {
   }
 }
 
+
 // ====== Price Update Logic ======
 async function processPriceUpdate(symbol: string, price: number) {
   if (!symbol || !price) return;
