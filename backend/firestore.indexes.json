@@ -34,10 +34,6 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "symbol",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "details.status",
           "order": "ASCENDING"
         }
@@ -66,10 +62,6 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "symbol",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "details.status",
           "order": "ASCENDING"
         }
@@ -78,5 +70,3 @@
   ],
   "fieldOverrides": []
 }
-
-    
