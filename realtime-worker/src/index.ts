@@ -344,7 +344,7 @@ async function collectAllSymbols() {
       const p = d.data() as Omit<OpenPosition, 'userId' | 'id'>;
       const userId = d.ref.parent.parent?.parent.id;
       if (userId) {
-        const positionWithUser = { ...p, id: d.id, userId };
+        const positionWithUser: OpenPosition = { ...p, id: d.id, userId };
         if (!openPositionsBySymbol.has(p.symbol)) {
           openPositionsBySymbol.set(p.symbol, []);
         }
@@ -359,7 +359,7 @@ async function collectAllSymbols() {
       const t = d.data() as Omit<TradeTrigger, 'userId' | 'id'>;
       const userId = d.ref.parent.parent?.parent.id;
       if(userId) {
-        const triggerWithUser = { ...t, id: d.id, userId };
+        const triggerWithUser: TradeTrigger = { ...t, id: d.id, userId };
         if (!tradeTriggersBySymbol.has(t.symbol)) {
           tradeTriggersBySymbol.set(t.symbol, []);
         }
@@ -396,12 +396,6 @@ async function processPriceUpdate(symbol: string, price: number) {
           if (freshDoc.exists && freshDoc.data()?.details?.status === 'open') {
             log(`📉 Position trigger fired for ${symbol} for user ${pos.userId}`);
             tx.update(posRef, { 'details.status': 'closing', 'details.closePrice': price });
-            
-            // Remove from in-memory map to prevent re-triggering
-            const positionsForSymbol = openPositionsBySymbol.get(symbol);
-            if (positionsForSymbol) {
-                openPositionsBySymbol.set(symbol, positionsForSymbol.filter(p => p.id !== pos.id));
-            }
           }
         });
       } catch(e: any) {
@@ -426,12 +420,6 @@ async function processPriceUpdate(symbol: string, price: number) {
           const executedTriggerRef = userContextRef.collection("executedTriggers").doc(trigger.id);
           tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
           tx.delete(triggerRef);
-
-          // Remove from in-memory map
-          const triggersForSymbol = tradeTriggersBySymbol.get(symbol);
-          if (triggersForSymbol) {
-              tradeTriggersBySymbol.set(symbol, triggersForSymbol.filter(t => t.id !== trigger.id));
-          }
         });
       } catch(e: any) {
         error(`Failed trigger transaction for ${trigger.id}: ${e.message}`);
