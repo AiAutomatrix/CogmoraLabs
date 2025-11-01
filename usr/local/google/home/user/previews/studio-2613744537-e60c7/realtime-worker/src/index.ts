@@ -339,42 +339,49 @@ async function collectAllSymbols() {
     openPositionsBySymbol.clear();
     tradeTriggersBySymbol.clear();
 
-    const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
-    posSnap.forEach((d) => {
-      const p = d.data() as Omit<OpenPosition, 'userId'>;
-      // The parent of a subcollection doc is the doc containing it.
-      // The parent of that is the collection containing that doc.
-      // The parent of THAT is the user doc.
-      const userId = d.ref.parent.parent?.parent.id;
-      if (userId) {
-        const positionWithUser = { ...p, id: d.id, userId };
-        if (!openPositionsBySymbol.has(p.symbol)) {
-          openPositionsBySymbol.set(p.symbol, []);
-        }
-        openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
-        if (p.positionType === "spot") spotSymbolsToWatch.add(p.symbol);
-        else futuresSymbolsToWatch.add(p.symbol);
-      }
-    });
+    const usersSnap = await db.collection('users').get();
+    let totalPositions = 0;
+    let totalTriggers = 0;
 
-    const trigSnap = await db.collectionGroup("tradeTriggers").where("details.status", "==", "active").get();
-    trigSnap.forEach((d) => {
-      const t = d.data() as Omit<TradeTrigger, 'userId'>;
-      const userId = d.ref.parent.parent?.parent.id;
-      if(userId) {
-        const triggerWithUser = { ...t, id: d.id, userId };
-        if (!tradeTriggersBySymbol.has(t.symbol)) {
-          tradeTriggersBySymbol.set(t.symbol, []);
-        }
-        tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
-        if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
-        else futuresSymbolsToWatch.add(t.symbol);
-      }
-    });
+    for (const userDoc of usersSnap.docs) {
+        const userId = userDoc.id;
+        const contextRef = userDoc.ref.collection('paperTradingContext').doc('main');
+
+        const posSnap = await contextRef.collection('openPositions').get();
+        posSnap.forEach(doc => {
+            const p = doc.data() as Omit<OpenPosition, 'userId'>;
+            if (p.details?.status === 'open') {
+                totalPositions++;
+                const positionWithUser: OpenPosition = { ...p, id: doc.id, userId };
+                if (!openPositionsBySymbol.has(p.symbol)) {
+                    openPositionsBySymbol.set(p.symbol, []);
+                }
+                openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
+
+                if (p.positionType === 'spot') spotSymbolsToWatch.add(p.symbol);
+                else futuresSymbolsToWatch.add(p.symbol);
+            }
+        });
+
+        const trigSnap = await contextRef.collection('tradeTriggers').get();
+        trigSnap.forEach(doc => {
+            const t = doc.data() as Omit<TradeTrigger, 'userId'>;
+             if (t.details?.status === 'active') {
+                totalTriggers++;
+                const triggerWithUser: TradeTrigger = { ...t, id: doc.id, userId };
+                if (!tradeTriggersBySymbol.has(t.symbol)) {
+                    tradeTriggersBySymbol.set(t.symbol, []);
+                }
+                tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
+                if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
+                else futuresSymbolsToWatch.add(t.symbol);
+            }
+        });
+    }
 
     spot.updateDesired(spotSymbolsToWatch);
     futures.updateDesired(futuresSymbolsToWatch);
-    log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers`);
+    log(`📊 Analyzing ${totalPositions} open positions & ${totalTriggers} triggers across ${usersSnap.size} users.`);
 
   } catch (e: any) {
     error(`collectAllSymbols error: ${e.message || e}`);
@@ -390,6 +397,11 @@ async function processPriceUpdate(symbol: string, price: number) {
     const isLong = pos.side === 'long' || pos.side === 'buy';
     const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
     const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
+    
+    // Log that we are watching this position if it has SL/TP
+    if (pos.details?.stopLoss || pos.details?.takeProfit) {
+        info(`[WATCHING_POS] ${pos.id} (${symbol}): SL=${pos.details.stopLoss ?? 'N/A'}, TP=${pos.details.takeProfit ?? 'N/A'}, Current=${price}`);
+    }
 
     if (slHit || tpHit) {
       try {
@@ -409,6 +421,9 @@ async function processPriceUpdate(symbol: string, price: number) {
 
   const triggers = tradeTriggersBySymbol.get(symbol) || [];
   for (const trigger of triggers) {
+    // Log that we are watching this trigger
+    info(`[WATCHING_TRIG] ${trigger.id} (${symbol}): Condition=${trigger.condition}, Target=${trigger.targetPrice}, Current=${price}`);
+
     const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
     if (conditionMet) {
       try {
@@ -504,3 +519,4 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
