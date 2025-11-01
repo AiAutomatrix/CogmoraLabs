@@ -398,7 +398,6 @@ async function processPriceUpdate(symbol: string, price: number) {
     const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
     const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
     
-    // Log that we are watching this position if it has SL/TP
     if (pos.details?.stopLoss || pos.details?.takeProfit) {
         info(`[WATCHING_POS] ${pos.id} (${symbol}): SL=${pos.details.stopLoss ?? 'N/A'}, TP=${pos.details.takeProfit ?? 'N/A'}, Current=${price}`);
     }
@@ -421,7 +420,6 @@ async function processPriceUpdate(symbol: string, price: number) {
 
   const triggers = tradeTriggersBySymbol.get(symbol) || [];
   for (const trigger of triggers) {
-    // Log that we are watching this trigger
     info(`[WATCHING_TRIG] ${trigger.id} (${symbol}): Condition=${trigger.condition}, Target=${trigger.targetPrice}, Current=${price}`);
 
     const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
@@ -519,4 +517,3 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
