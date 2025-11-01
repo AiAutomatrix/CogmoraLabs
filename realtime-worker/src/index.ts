@@ -336,6 +336,7 @@ async function collectAllSymbols() {
     const spotSymbolsToWatch = new Set<string>();
     const futuresSymbolsToWatch = new Set<string>();
 
+    // Clear in-memory caches before repopulating
     openPositionsBySymbol.clear();
     tradeTriggersBySymbol.clear();
 
@@ -381,6 +382,7 @@ async function collectAllSymbols() {
 
     spot.updateDesired(spotSymbolsToWatch);
     futures.updateDesired(futuresSymbolsToWatch);
+    log(`Symbols updated: ${spotSymbolsToWatch.size} spot, ${futuresSymbolsToWatch.size} fut`);
     log(`📊 Analyzing ${totalPositions} open positions & ${totalTriggers} triggers across ${usersSnap.size} users.`);
 
   } catch (e: any) {
