@@ -264,6 +264,13 @@ class WebSocketManager {
     const oldWs = this.ws;
     this.ws = null;
     if (oldWs) {
+        if (oldWs.readyState === WebSocket.OPEN) {
+            this.subscribed.forEach(topic => {
+                try {
+                    oldWs.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic }));
+                } catch {}
+            });
+        }
         this.subscribed.clear();
         try {
             oldWs.removeAllListeners();
@@ -334,10 +341,10 @@ async function collectAllSymbols() {
 
     const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
     posSnap.forEach((d) => {
-      const p = d.data() as Omit<OpenPosition, 'userId'>;
+      const p = d.data() as Omit<OpenPosition, 'userId' | 'id'>;
       const userId = d.ref.parent.parent?.parent.id;
       if (userId) {
-        const positionWithUser = { ...p, userId };
+        const positionWithUser = { ...p, id: d.id, userId };
         if (!openPositionsBySymbol.has(p.symbol)) {
           openPositionsBySymbol.set(p.symbol, []);
         }
@@ -349,10 +356,10 @@ async function collectAllSymbols() {
 
     const trigSnap = await db.collectionGroup("tradeTriggers").where("details.status", "==", "active").get();
     trigSnap.forEach((d) => {
-      const t = d.data() as Omit<TradeTrigger, 'userId'>;
+      const t = d.data() as Omit<TradeTrigger, 'userId' | 'id'>;
       const userId = d.ref.parent.parent?.parent.id;
       if(userId) {
-        const triggerWithUser = { ...t, userId };
+        const triggerWithUser = { ...t, id: d.id, userId };
         if (!tradeTriggersBySymbol.has(t.symbol)) {
           tradeTriggersBySymbol.set(t.symbol, []);
         }
@@ -389,6 +396,12 @@ async function processPriceUpdate(symbol: string, price: number) {
           if (freshDoc.exists && freshDoc.data()?.details?.status === 'open') {
             log(`📉 Position trigger fired for ${symbol} for user ${pos.userId}`);
             tx.update(posRef, { 'details.status': 'closing', 'details.closePrice': price });
+            
+            // Remove from in-memory map to prevent re-triggering
+            const positionsForSymbol = openPositionsBySymbol.get(symbol);
+            if (positionsForSymbol) {
+                openPositionsBySymbol.set(symbol, positionsForSymbol.filter(p => p.id !== pos.id));
+            }
           }
         });
       } catch(e: any) {
@@ -413,6 +426,12 @@ async function processPriceUpdate(symbol: string, price: number) {
           const executedTriggerRef = userContextRef.collection("executedTriggers").doc(trigger.id);
           tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
           tx.delete(triggerRef);
+
+          // Remove from in-memory map
+          const triggersForSymbol = tradeTriggersBySymbol.get(symbol);
+          if (triggersForSymbol) {
+              tradeTriggersBySymbol.set(symbol, triggersForSymbol.filter(t => t.id !== trigger.id));
+          }
         });
       } catch(e: any) {
         error(`Failed trigger transaction for ${trigger.id}: ${e.message}`);
