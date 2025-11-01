@@ -44,20 +44,6 @@
       ]
     },
     {
-      "collectionGroup": "openPositions",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        {
-          "fieldPath": "positionType",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "details.status",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "tradeHistory",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -92,3 +78,5 @@
   ],
   "fieldOverrides": []
 }
+
+    
