@@ -431,7 +431,25 @@ async function startSession() {
   heartbeatInterval = setInterval(() => {
     const s = spot.info();
     const f = futures.info();
-    log(`💓 heartbeat — SPOT=${s.connected} FUT=${f.connected}`);
+    
+    if (spot.reconnecting || futures.reconnecting) {
+        warn(`💓 heartbeat detected reconnecting state, verifying health...`);
+    }
+
+    const spotIsHealthy = s.connected && (s.lastPongAge < 90 && s.lastPongAge !== -1);
+    const futuresIsHealthy = f.connected && (f.lastPongAge < 90 && f.lastPongAge !== -1);
+  
+    log(`💓 heartbeat — SPOT=${spotIsHealthy} FUT=${futuresIsHealthy}`);
+  
+    if (s.desired > 0 && !spotIsHealthy) {
+        warn(`💀 SPOT connection is unhealthy — forcing reconnect.`);
+        spot.forceReconnect().catch(e => warn(`[SPOT] Heartbeat reconnect error: ${e.message}`));
+    }
+    
+    if (f.desired > 0 && !futuresIsHealthy) {
+        warn(`💀 FUTURES connection is unhealthy — forcing reconnect.`);
+        futures.forceReconnect().catch(e => warn(`[FUTURES] Heartbeat reconnect error: ${e.message}`));
+    }
   }, 30000);
 
   requeryInterval = setInterval(() => collectAllSymbols(), REQUERY_INTERVAL_MS);
