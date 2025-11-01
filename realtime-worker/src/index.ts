@@ -197,12 +197,14 @@ class WebSocketManager {
 
       if (msg.topic && msg.data) {
         const sym = this.name === "SPOT" 
-          ? msg.topic.split(":")[1] 
-          : msg.topic.replace("/contractMarket/snapshot:", "");
+          ? msg.topic.replace('/market/snapshot:', '') 
+          : msg.topic.replace("/contractMarket/tickerV2:", "");
         const price = this.name === "SPOT" 
           ? parseFloat(msg.data?.data?.lastTradedPrice) 
           : parseFloat(msg.data?.markPrice);
-        if (sym && !Number.isNaN(price)) processPriceUpdate(sym, price);
+        if (sym && !Number.isNaN(price)) {
+            processPriceUpdate(sym, price).catch(e => error(`Error processing price update for ${sym}`, e));
+        }
       }
     } catch (err: any) {
       warn(`[${this.name}] JSON parse error: ${err.message}`);
@@ -327,8 +329,8 @@ class WebSocketManager {
 
 
 // ====== Instances ======
-const spot = new WebSocketManager("SPOT", KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/ticker:${s}`);
-const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
+const spot = new WebSocketManager("SPOT", KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
+const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/tickerV2:${s}`);
 
 // ====== Firestore Collection Management ======
 async function collectAllSymbols() {
@@ -339,52 +341,39 @@ async function collectAllSymbols() {
     openPositionsBySymbol.clear();
     tradeTriggersBySymbol.clear();
 
-    const usersSnap = await db.collection('users').get();
-    let positionCount = 0;
-    let triggerCount = 0;
-
-    for (const userDoc of usersSnap.docs) {
-      const userId = userDoc.id;
-      const baseRef = db
-        .collection('users')
-        .doc(userId)
-        .collection('paperTradingContext')
-        .doc('main');
-
-      // open positions
-      const posSnap = await baseRef.collection('openPositions')
-        .where('details.status', '==', 'open')
-        .get();
-
-      posSnap.forEach((d) => {
-        const p = d.data() as Omit<OpenPosition, 'userId'>;
-        const positionWithUser: OpenPosition = { ...p, id: d.id, userId };
-        if (!openPositionsBySymbol.has(p.symbol)) openPositionsBySymbol.set(p.symbol, []);
+    const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
+    posSnap.forEach((d) => {
+      const p = d.data() as Omit<OpenPosition, 'userId'>;
+      const userId = d.ref.parent.parent?.parent.id;
+      if (userId) {
+        const positionWithUser = { ...p, id: d.id, userId };
+        if (!openPositionsBySymbol.has(p.symbol)) {
+          openPositionsBySymbol.set(p.symbol, []);
+        }
         openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
-        if (p.positionType === 'spot') spotSymbolsToWatch.add(p.symbol);
+        if (p.positionType === "spot") spotSymbolsToWatch.add(p.symbol);
         else futuresSymbolsToWatch.add(p.symbol);
-        positionCount++;
-      });
+      }
+    });
 
-      // trade triggers
-      const trigSnap = await baseRef.collection('tradeTriggers')
-        .where('details.status', '==', 'active')
-        .get();
-
-      trigSnap.forEach((d) => {
-        const t = d.data() as Omit<TradeTrigger, 'userId'>;
-        const triggerWithUser: TradeTrigger = { ...t, id: d.id, userId };
-        if (!tradeTriggersBySymbol.has(t.symbol)) tradeTriggersBySymbol.set(t.symbol, []);
+    const trigSnap = await db.collectionGroup("tradeTriggers").where("details.status", "==", "active").get();
+    trigSnap.forEach((d) => {
+      const t = d.data() as Omit<TradeTrigger, 'userId'>;
+      const userId = d.ref.parent.parent?.parent.id;
+      if(userId) {
+        const triggerWithUser = { ...t, id: d.id, userId };
+        if (!tradeTriggersBySymbol.has(t.symbol)) {
+          tradeTriggersBySymbol.set(t.symbol, []);
+        }
         tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
-        if (t.type === 'spot') spotSymbolsToWatch.add(t.symbol);
+        if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
         else futuresSymbolsToWatch.add(t.symbol);
-        triggerCount++;
-      });
-    }
+      }
+    });
 
     spot.updateDesired(spotSymbolsToWatch);
     futures.updateDesired(futuresSymbolsToWatch);
-    log(`📊 Analyzing ${positionCount} open positions & ${triggerCount} triggers across ${usersSnap.size} users.`);
+    log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers across ${spotSymbolsToWatch.size} spot and ${futuresSymbolsToWatch.size} futures symbols.`);
 
   } catch (e: any) {
     error(`collectAllSymbols error: ${e.message || e}`);
@@ -514,3 +503,5 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+    
