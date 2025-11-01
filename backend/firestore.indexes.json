@@ -48,11 +48,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "symbol",
+          "fieldPath": "positionType",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "positionType",
+          "fieldPath": "details.status",
           "order": "ASCENDING"
         }
       ]
