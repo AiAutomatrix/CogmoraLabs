@@ -345,9 +345,9 @@ async function collectAllSymbols() {
 
     for (const userDoc of usersSnap.docs) {
         const userId = userDoc.id;
-        const contextRef = userDoc.ref.collection('paperTradingContext').doc('main');
+        const userRef = db.collection('users').doc(userId);
 
-        const posSnap = await contextRef.collection('openPositions').get();
+        const posSnap = await userRef.collection('openPositions').get();
         posSnap.forEach(doc => {
             const p = doc.data() as Omit<OpenPosition, 'id' | 'userId'>;
             if (p.details?.status === 'open') {
@@ -363,7 +363,7 @@ async function collectAllSymbols() {
             }
         });
 
-        const trigSnap = await contextRef.collection('tradeTriggers').get();
+        const trigSnap = await userRef.collection('tradeTriggers').get();
         trigSnap.forEach(doc => {
             const t = doc.data() as Omit<TradeTrigger, 'id' | 'userId'>;
              if (t.details?.status === 'active') {
@@ -394,7 +394,6 @@ async function processPriceUpdate(symbol: string, price: number) {
 
   const positions = openPositionsBySymbol.get(symbol) || [];
   for (const pos of positions) {
-    // ADDED LOGGING FOR EVERY OPEN POSITION
     info(`[WATCHING_POS] ${pos.id} (${symbol}): SL=${pos.details?.stopLoss ?? 'N/A'}, TP=${pos.details?.takeProfit ?? 'N/A'}, Current=${price}`);
     const isLong = pos.side === 'long' || pos.side === 'buy';
     const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
@@ -402,7 +401,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     if (slHit || tpHit) {
       try {
-        const posRef = db.collection('users').doc(pos.userId).collection('paperTradingContext').doc('main').collection('openPositions').doc(pos.id);
+        const posRef = db.collection('users').doc(pos.userId).collection('openPositions').doc(pos.id);
         await db.runTransaction(async (tx) => {
           const freshDoc = await tx.get(posRef);
           if (freshDoc.exists && freshDoc.data()?.details?.status === 'open') {
@@ -423,15 +422,15 @@ async function processPriceUpdate(symbol: string, price: number) {
     const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
     if (conditionMet) {
       try {
-        const userContextRef = db.collection('users').doc(trigger.userId).collection('paperTradingContext').doc('main');
-        const triggerRef = userContextRef.collection('tradeTriggers').doc(trigger.id);
+        const userRef = db.collection('users').doc(trigger.userId);
+        const triggerRef = userRef.collection('tradeTriggers').doc(trigger.id);
         
         await db.runTransaction(async (tx) => {
           const freshTrigger = await tx.get(triggerRef);
           if (!freshTrigger.exists) return; // Already processed
 
           log(`🎯 Firing trigger ${trigger.id} @ ${price} for user ${trigger.userId}`);
-          const executedTriggerRef = userContextRef.collection("executedTriggers").doc(trigger.id);
+          const executedTriggerRef = userRef.collection("executedTriggers").doc(trigger.id);
           tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
           tx.delete(triggerRef);
         });
