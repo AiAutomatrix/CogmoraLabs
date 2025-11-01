@@ -34,7 +34,25 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "details.status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "openPositions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "positionType",
           "order": "ASCENDING"
         }
       ]
@@ -61,6 +79,10 @@
       "collectionGroup": "tradeTriggers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
+        {
+          "fieldPath": "symbol",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "details.status",
           "order": "ASCENDING"

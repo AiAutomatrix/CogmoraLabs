@@ -15,7 +15,7 @@ interface OpenPositionDetails {
 }
 interface OpenPosition {
   id: string;
-  userId: string; // Added for context
+  userId: string; 
   positionType: 'spot' | 'futures';
   symbol: string;
   symbolName: string;
@@ -34,7 +34,7 @@ interface TradeTriggerDetails {
 }
 interface TradeTrigger {
   id: string;
-  userId: string; // Added for context
+  userId: string; 
   symbol: string;
   symbolName: string;
   type: 'spot' | 'futures';
@@ -336,6 +336,7 @@ async function collectAllSymbols() {
     const spotSymbolsToWatch = new Set<string>();
     const futuresSymbolsToWatch = new Set<string>();
 
+    // Clear previous in-memory state
     openPositionsBySymbol.clear();
     tradeTriggersBySymbol.clear();
 
@@ -378,7 +379,7 @@ async function collectAllSymbols() {
   }
 }
 
-// ====== Price Update Logic ======
+// ====== Price Update Logic (Now In-Memory) ======
 async function processPriceUpdate(symbol: string, price: number) {
   if (!symbol || !price) return;
 
