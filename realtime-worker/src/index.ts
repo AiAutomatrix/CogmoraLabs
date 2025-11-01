@@ -15,7 +15,7 @@ interface OpenPositionDetails {
 }
 interface OpenPosition {
   id: string;
-  userId: string; // Added for context
+  userId: string;
   positionType: 'spot' | 'futures';
   symbol: string;
   symbolName: string;
@@ -34,7 +34,7 @@ interface TradeTriggerDetails {
 }
 interface TradeTrigger {
   id: string;
-  userId: string; // Added for context
+  userId: string;
   symbol: string;
   symbolName: string;
   type: 'spot' | 'futures';
@@ -350,7 +350,7 @@ async function collectAllSymbols() {
 
     posSnap.forEach((doc) => {
         const p = doc.data() as Omit<OpenPosition, 'id' | 'userId'>;
-        const userId = doc.ref.parent.parent?.id; // Correctly get the userId
+        const userId = doc.ref.parent.parent?.id; 
         if (p.details?.status === 'open' && userId) {
             totalPositions++;
             const positionWithUser: OpenPosition = { ...p, id: doc.id, userId };
@@ -366,7 +366,7 @@ async function collectAllSymbols() {
 
     trigSnap.forEach((doc) => {
         const t = doc.data() as Omit<TradeTrigger, 'id' | 'userId'>;
-        const userId = doc.ref.parent.parent?.id; // Correctly get the userId
+        const userId = doc.ref.parent.parent?.id;
         if (t.details?.status === 'active' && userId) {
             totalTriggers++;
             const triggerWithUser: TradeTrigger = { ...t, id: doc.id, userId };
@@ -402,7 +402,7 @@ async function processPriceUpdate(symbol: string, price: number) {
 
     if (slHit || tpHit) {
       try {
-        const posRef = db.collection('users').doc(pos.userId).collection('openPositions').doc(pos.id);
+        const posRef = db.collection('users').doc(pos.userId).collection('paperTradingContext').doc('main').collection('openPositions').doc(pos.id);
         await db.runTransaction(async (tx) => {
           const freshDoc = await tx.get(posRef);
           if (freshDoc.exists && freshDoc.data()?.details?.status === 'open') {
@@ -423,7 +423,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
     if (conditionMet) {
       try {
-        const userRef = db.collection('users').doc(trigger.userId);
+        const userRef = db.collection('users').doc(trigger.userId).collection('paperTradingContext').doc('main');
         const triggerRef = userRef.collection('tradeTriggers').doc(trigger.id);
         
         await db.runTransaction(async (tx) => {
@@ -515,6 +515,5 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
-
 
     
