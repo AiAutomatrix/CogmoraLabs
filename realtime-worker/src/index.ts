@@ -15,6 +15,7 @@ interface OpenPositionDetails {
 }
 interface OpenPosition {
   id: string;
+  userId: string;
   positionType: 'spot' | 'futures';
   symbol: string;
   symbolName: string;
@@ -33,6 +34,7 @@ interface TradeTriggerDetails {
 }
 interface TradeTrigger {
   id: string;
+  userId: string;
   symbol: string;
   symbolName: string;
   type: 'spot' | 'futures';
@@ -60,11 +62,14 @@ const db = admin.firestore();
 const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public";
 const KUCOIN_FUTURES_TOKEN_ENDPOINT =
   "https://api-futures.kucoin.com/api/v1/bullet-public";
-const SESSION_MS = Number(process.env.SESSION_MS) || 480_000;
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
+// In-memory state for fast lookups
+const openPositionsBySymbol = new Map<string, OpenPosition[]>();
+const tradeTriggersBySymbol = new Map<string, TradeTrigger[]>();
 const closingPositions = new Set<string>();
+
 let sessionActive = false;
 let requeryInterval: NodeJS.Timeout | null = null;
 let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -331,31 +336,52 @@ const futures = new WebSocketManager("FUTURES", KUCOIN_FUTURES_TOKEN_ENDPOINT, (
 // ====== Firestore Collection Management ======
 async function collectAllSymbols() {
   try {
-    const spotSet = new Set<string>();
-    const futSet = new Set<string>();
+    const spotSymbolsToWatch = new Set<string>();
+    const futuresSymbolsToWatch = new Set<string>();
 
-    const posSnap = await db.collectionGroup("openPositions").get();
+    // Clear previous in-memory state
+    openPositionsBySymbol.clear();
+    tradeTriggersBySymbol.clear();
+
+    // Query for all open positions
+    const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
     posSnap.forEach((d) => {
-      const p = d.data() as OpenPosition;
-      if (p.details?.status === 'open') {
-        if (p.positionType === "spot") spotSet.add(p.symbol);
-        else futSet.add(p.symbol);
+      const p = d.data() as Omit<OpenPosition, 'userId'>;
+      const userId = d.ref.parent.parent?.parent.id; // users/{uid}/paperTradingContext/main/openPositions/{posId}
+      if (userId) {
+        const positionWithUser: OpenPosition = { ...p, id: d.id, userId };
+        if (!openPositionsBySymbol.has(p.symbol)) {
+          openPositionsBySymbol.set(p.symbol, []);
+        }
+        openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
+
+        if (p.positionType === "spot") spotSymbolsToWatch.add(p.symbol);
+        else futuresSymbolsToWatch.add(p.symbol);
       }
     });
 
-    const trigSnap = await db.collectionGroup("tradeTriggers").get();
+    // Query for all active trade triggers
+    const trigSnap = await db.collectionGroup("tradeTriggers").where("details.status", "==", "active").get();
     trigSnap.forEach((d) => {
-        const t = d.data() as TradeTrigger;
-        if (t.details.status === 'active') {
-          if (t.type === "spot") spotSet.add(t.symbol);
-          else futSet.add(t.symbol);
+        const t = d.data() as Omit<TradeTrigger, 'userId'>;
+        const userId = d.ref.parent.parent?.parent.id; // users/{uid}/paperTradingContext/main/tradeTriggers/{triggerId}
+        if(userId) {
+          const triggerWithUser: TradeTrigger = { ...t, id: d.id, userId };
+          if (!tradeTriggersBySymbol.has(t.symbol)) {
+            tradeTriggersBySymbol.set(t.symbol, []);
+          }
+          tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
+
+          if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
+          else futuresSymbolsToWatch.add(t.symbol);
         }
     });
 
-    spot.updateDesired(spotSet);
-    futures.updateDesired(futSet);
-    log(`Symbols updated: ${spotSet.size} spot, ${futSet.size} fut`);
-    log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers`);
+    // Update WebSocket subscriptions
+    spot.updateDesired(spotSymbolsToWatch);
+    futures.updateDesired(futuresSymbolsToWatch);
+    log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers across ${spotSymbolsToWatch.size} spot and ${futuresSymbolsToWatch.size} futures symbols.`);
+
   } catch (e: any) {
     error(`collectAllSymbols error: ${e.message || e}`);
   }
@@ -364,83 +390,65 @@ async function collectAllSymbols() {
 // ====== Price Update Logic ======
 async function processPriceUpdate(symbol: string, price: number) {
   if (!symbol || !price) return;
-  // --- Block 1: Handle SL/TP on Open Positions ---
-  try {
-    const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
-    const positionsSnapshot = await positionsQuery.get();
-    if (!positionsSnapshot.empty) {
-      for (const doc of positionsSnapshot.docs) {
-        const pos = doc.data() as OpenPosition;
+  
+  // --- Block 1: Handle SL/TP on Open Positions (from in-memory cache) ---
+  const positions = openPositionsBySymbol.get(symbol) || [];
+  for (const pos of positions) {
+    const isLong = pos.side === 'long' || pos.side === 'buy';
+    const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
+    const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
-        if (!pos.details?.stopLoss && !pos.details?.takeProfit) continue;
-
-        const isLong = pos.side === 'long' || pos.side === 'buy';
-        const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
-        const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
-
-        if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-          closingPositions.add(doc.id);
-          try {
-            await db.runTransaction(async (tx) => {
-              const freshDoc = await tx.get(doc.ref);
-              if (freshDoc.data()?.details?.status !== 'open') return;
-              log(`📉 Position trigger fired for ${symbol} at ${price}`);
-              tx.update(doc.ref, {
-                'details.status': 'closing',
-                'details.closePrice': price,
-              });
-            });
-          } catch (e) {
-            error(`Transaction to close position ${doc.id} failed:`, e);
-          } finally {
-            closingPositions.delete(doc.id);
+    if ((slHit || tpHit) && !closingPositions.has(pos.id)) {
+      closingPositions.add(pos.id); // Prevent duplicate processing
+      try {
+        const posRef = db.collection('users').doc(pos.userId).collection('paperTradingContext').doc('main').collection('openPositions').doc(pos.id);
+        await db.runTransaction(async (tx) => {
+          const freshDoc = await tx.get(posRef);
+          if (freshDoc.exists && freshDoc.data()?.details?.status === 'open') {
+            log(`📉 Position trigger fired for ${symbol} for user ${pos.userId}`);
+            tx.update(posRef, { 'details.status': 'closing', 'details.closePrice': price });
           }
+        });
+        // Remove from in-memory map after successful close to prevent re-triggering
+        const symbolPositions = openPositionsBySymbol.get(symbol);
+        if(symbolPositions) {
+            openPositionsBySymbol.set(symbol, symbolPositions.filter(p => p.id !== pos.id));
         }
+      } catch(e: any) {
+        error(`Failed SL/TP transaction for pos ${pos.id}: ${e.message}`);
+      } finally {
+        closingPositions.delete(pos.id); // Allow re-processing if tx failed
       }
     }
-  } catch (e: any) {
-    error(`processPriceUpdate openPositions error for ${symbol}:`, e);
   }
 
-  // --- Block 2: Handle Trade Trigger Executions ---
-  try {
-    const triggersQuery = db
-      .collectionGroup("tradeTriggers")
-      .where("symbol", "==", symbol)
-      .where("details.status", "==", "active");
-    const triggersSnapshot = await triggersQuery.get();
+  // --- Block 2: Handle Trade Trigger Executions (from in-memory cache) ---
+  const triggers = tradeTriggersBySymbol.get(symbol) || [];
+  for (const trigger of triggers) {
+    const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
+    if (conditionMet) {
+      try {
+        const userContextRef = db.collection('users').doc(trigger.userId).collection('paperTradingContext').doc('main');
+        const triggerRef = userContextRef.collection('tradeTriggers').doc(trigger.id);
+        
+        await db.runTransaction(async (tx) => {
+          const freshTrigger = await tx.get(triggerRef);
+          if (!freshTrigger.exists) return; // Already processed
 
-    if (!triggersSnapshot.empty) {
-      for (const doc of triggersSnapshot.docs) {
-        const trigger = doc.data() as TradeTrigger;
-        const conditionMet =
-          (trigger.condition === "above" && price >= trigger.targetPrice) ||
-          (trigger.condition === "below" && price <= trigger.targetPrice);
-
-        if (conditionMet) {
-          try {
-            await db.runTransaction(async (tx) => {
-              const userContextRef = doc.ref.parent.parent;
-              if (!userContextRef) return;
-
-              const freshDoc = await tx.get(doc.ref);
-              if (!freshDoc.exists) return;
-
-              log(`🎯 Firing trigger ${doc.id} @ ${price}`);
-              const executedTriggerRef = userContextRef
-                .collection("executedTriggers")
-                .doc(doc.id);
-              tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
-              tx.delete(doc.ref);
-            });
-          } catch (e: any) {
-            error(`Transaction for trigger ${doc.id} failed:`, e);
-          }
+          log(`🎯 Firing trigger ${trigger.id} @ ${price} for user ${trigger.userId}`);
+          const executedTriggerRef = userContextRef.collection("executedTriggers").doc(trigger.id);
+          tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
+          tx.delete(triggerRef);
+        });
+        // Remove from in-memory map after successful execution
+        const symbolTriggers = tradeTriggersBySymbol.get(symbol);
+        if(symbolTriggers) {
+            tradeTriggersBySymbol.set(symbol, symbolTriggers.filter(t => t.id !== trigger.id));
         }
+      } catch(e: any) {
+        error(`Failed trigger transaction for ${trigger.id}: ${e.message}`);
       }
     }
-  } catch (e: any) {
-    error(`processPriceUpdate triggers error for ${symbol}:`, e);
   }
 }
 
@@ -487,7 +495,12 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === "/debug") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ spot: spot.info(), futures: futures.info() }, null, 2));
+    res.end(JSON.stringify({ 
+      spot: spot.info(), 
+      futures: futures.info(),
+      positions: Array.from(openPositionsBySymbol.entries()),
+      triggers: Array.from(tradeTriggersBySymbol.entries()),
+    }, null, 2));
     return;
   }
   res.writeHead(200);
