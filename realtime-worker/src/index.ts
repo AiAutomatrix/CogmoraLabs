@@ -341,10 +341,10 @@ async function collectAllSymbols() {
 
     const posSnap = await db.collectionGroup("openPositions").where('details.status', '==', 'open').get();
     posSnap.forEach((d) => {
-      const p = d.data() as Omit<OpenPosition, 'userId' | 'id'>;
-      const userId = d.ref.parent.parent?.parent.id;
+      const p = d.data() as Omit<OpenPosition, 'userId'>;
+      const userId = d.ref.parent.parent?.parent?.id; // users/{uid}/paperTradingContext/main/openPositions/{posId}
       if (userId) {
-        const positionWithUser: OpenPosition = { ...p, id: d.id, userId };
+        const positionWithUser = { ...p, id: d.id, userId };
         if (!openPositionsBySymbol.has(p.symbol)) {
           openPositionsBySymbol.set(p.symbol, []);
         }
@@ -356,10 +356,10 @@ async function collectAllSymbols() {
 
     const trigSnap = await db.collectionGroup("tradeTriggers").where("details.status", "==", "active").get();
     trigSnap.forEach((d) => {
-      const t = d.data() as Omit<TradeTrigger, 'userId' | 'id'>;
-      const userId = d.ref.parent.parent?.parent.id;
+      const t = d.data() as Omit<TradeTrigger, 'userId'>;
+      const userId = d.ref.parent.parent?.parent?.id; // users/{uid}/paperTradingContext/main/tradeTriggers/{triggerId}
       if(userId) {
-        const triggerWithUser: TradeTrigger = { ...t, id: d.id, userId };
+        const triggerWithUser = { ...t, id: d.id, userId };
         if (!tradeTriggersBySymbol.has(t.symbol)) {
           tradeTriggersBySymbol.set(t.symbol, []);
         }
@@ -371,6 +371,7 @@ async function collectAllSymbols() {
 
     spot.updateDesired(spotSymbolsToWatch);
     futures.updateDesired(futuresSymbolsToWatch);
+    log(`Symbols updated: ${spotSymbolsToWatch.size} spot, ${futuresSymbolsToWatch.size} fut`);
     log(`📊 Analyzing ${posSnap.size} open positions & ${trigSnap.size} triggers`);
 
   } catch (e: any) {
@@ -382,6 +383,7 @@ async function collectAllSymbols() {
 async function processPriceUpdate(symbol: string, price: number) {
   if (!symbol || !price) return;
 
+  // --- Block 1: Handle SL/TP on Open Positions (from in-memory map) ---
   const positions = openPositionsBySymbol.get(symbol) || [];
   for (const pos of positions) {
     const isLong = pos.side === 'long' || pos.side === 'buy';
@@ -404,6 +406,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     }
   }
 
+  // --- Block 2: Handle Trade Trigger Executions (from in-memory map) ---
   const triggers = tradeTriggersBySymbol.get(symbol) || [];
   for (const trigger of triggers) {
     const conditionMet = (trigger.condition === "above" && price >= trigger.targetPrice) || (trigger.condition === "below" && price <= trigger.targetPrice);
@@ -427,6 +430,7 @@ async function processPriceUpdate(symbol: string, price: number) {
     }
   }
 }
+
 
 // ====== Main Worker ======
 async function startSession() {
@@ -471,7 +475,12 @@ const server = http.createServer((req, res) => {
   }
   if (req.url === "/debug") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ spot: spot.info(), futures: futures.info() }, null, 2));
+    res.end(JSON.stringify({ 
+        spot: spot.info(), 
+        futures: futures.info(),
+        openPositionsCount: Array.from(openPositionsBySymbol.values()).reduce((acc, val) => acc + val.length, 0),
+        tradeTriggersCount: Array.from(tradeTriggersBySymbol.values()).reduce((acc, val) => acc + val.length, 0),
+    }, null, 2));
     return;
   }
   res.writeHead(200);
