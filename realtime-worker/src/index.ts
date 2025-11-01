@@ -340,50 +340,49 @@ async function collectAllSymbols() {
     openPositionsBySymbol.clear();
     tradeTriggersBySymbol.clear();
 
-    const usersSnap = await db.collection('users').get();
+    const [posSnap, trigSnap] = await Promise.all([
+        db.collectionGroup("openPositions").get(),
+        db.collectionGroup("tradeTriggers").get(),
+    ]);
+
     let totalPositions = 0;
     let totalTriggers = 0;
 
-    for (const userDoc of usersSnap.docs) {
-        const userId = userDoc.id;
-        const userRef = db.collection('users').doc(userId);
-
-        const posSnap = await userRef.collection('openPositions').get();
-        posSnap.forEach(doc => {
-            const p = doc.data() as Omit<OpenPosition, 'id' | 'userId'>;
-            if (p.details?.status === 'open') {
-                totalPositions++;
-                const positionWithUser: OpenPosition = { ...p, id: doc.id, userId };
-                if (!openPositionsBySymbol.has(p.symbol)) {
-                    openPositionsBySymbol.set(p.symbol, []);
-                }
-                openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
-
-                if (p.positionType === 'spot') spotSymbolsToWatch.add(p.symbol);
-                else futuresSymbolsToWatch.add(p.symbol);
+    posSnap.forEach((doc) => {
+        const p = doc.data() as Omit<OpenPosition, 'id' | 'userId'>;
+        const userId = doc.ref.parent.parent?.id; // Correctly get the userId
+        if (p.details?.status === 'open' && userId) {
+            totalPositions++;
+            const positionWithUser: OpenPosition = { ...p, id: doc.id, userId };
+            if (!openPositionsBySymbol.has(p.symbol)) {
+                openPositionsBySymbol.set(p.symbol, []);
             }
-        });
+            openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
 
-        const trigSnap = await userRef.collection('tradeTriggers').get();
-        trigSnap.forEach(doc => {
-            const t = doc.data() as Omit<TradeTrigger, 'id' | 'userId'>;
-             if (t.details?.status === 'active') {
-                totalTriggers++;
-                const triggerWithUser: TradeTrigger = { ...t, id: doc.id, userId };
-                if (!tradeTriggersBySymbol.has(t.symbol)) {
-                    tradeTriggersBySymbol.set(t.symbol, []);
-                }
-                tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
-                if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
-                else futuresSymbolsToWatch.add(t.symbol);
+            if (p.positionType === 'spot') spotSymbolsToWatch.add(p.symbol);
+            else futuresSymbolsToWatch.add(p.symbol);
+        }
+    });
+
+    trigSnap.forEach((doc) => {
+        const t = doc.data() as Omit<TradeTrigger, 'id' | 'userId'>;
+        const userId = doc.ref.parent.parent?.id; // Correctly get the userId
+        if (t.details?.status === 'active' && userId) {
+            totalTriggers++;
+            const triggerWithUser: TradeTrigger = { ...t, id: doc.id, userId };
+            if (!tradeTriggersBySymbol.has(t.symbol)) {
+                tradeTriggersBySymbol.set(t.symbol, []);
             }
-        });
-    }
+            tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
+            if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
+            else futuresSymbolsToWatch.add(t.symbol);
+        }
+    });
 
     spot.updateDesired(spotSymbolsToWatch);
     futures.updateDesired(futuresSymbolsToWatch);
     log(`Symbols updated: ${spotSymbolsToWatch.size} spot, ${futuresSymbolsToWatch.size} fut`);
-    log(`📊 Analyzing ${totalPositions} open positions & ${totalTriggers} triggers across ${usersSnap.size} users.`);
+    log(`📊 Analyzing ${totalPositions} open positions & ${totalTriggers} triggers.`);
 
   } catch (e: any) {
     error(`collectAllSymbols error: ${e.message || e}`);
@@ -516,5 +515,6 @@ async function shutdown() {
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
 
     
