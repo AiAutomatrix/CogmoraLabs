@@ -369,33 +369,33 @@ async function processPriceUpdate(symbol: string, price: number) {
     const positionsQuery = db.collectionGroup('openPositions').where('symbol', '==', symbol).where('details.status', '==', 'open');
     const positionsSnapshot = await positionsQuery.get();
     if (!positionsSnapshot.empty) {
-      const batch = db.batch();
-      let hasUpdates = false;
-      positionsSnapshot.forEach((doc) => {
+      for (const doc of positionsSnapshot.docs) {
         const pos = doc.data() as OpenPosition;
 
-        if (!pos.details?.stopLoss && !pos.details?.takeProfit) return;
+        if (!pos.details?.stopLoss && !pos.details?.takeProfit) continue;
 
         const isLong = pos.side === 'long' || pos.side === 'buy';
         const slHit = pos.details?.stopLoss && (isLong ? price <= pos.details.stopLoss : price >= pos.details.stopLoss);
         const tpHit = pos.details?.takeProfit && (isLong ? price >= pos.details.takeProfit : price <= pos.details.takeProfit);
 
         if ((slHit || tpHit) && !closingPositions.has(doc.id)) {
-          closingPositions.add(doc.id); // Prevent re-triggering while processing
-          log(`📉 Position trigger fired for ${symbol} at ${price}`);
-          batch.update(doc.ref, {
-            'details.status': 'closing',
-            'details.closePrice': price,
-          });
-          hasUpdates = true;
+          closingPositions.add(doc.id);
+          try {
+            await db.runTransaction(async (tx) => {
+              const freshDoc = await tx.get(doc.ref);
+              if (freshDoc.data()?.details?.status !== 'open') return;
+              log(`📉 Position trigger fired for ${symbol} at ${price}`);
+              tx.update(doc.ref, {
+                'details.status': 'closing',
+                'details.closePrice': price,
+              });
+            });
+          } catch (e) {
+            error(`Transaction to close position ${doc.id} failed:`, e);
+          } finally {
+            closingPositions.delete(doc.id);
+          }
         }
-      });
-      if (hasUpdates) {
-        await batch.commit();
-        // Remove from the set after commit
-        positionsSnapshot.forEach(doc => {
-            if (closingPositions.has(doc.id)) closingPositions.delete(doc.id);
-        });
       }
     }
   } catch (e: any) {
@@ -420,23 +420,14 @@ async function processPriceUpdate(symbol: string, price: number) {
         if (conditionMet) {
           try {
             await db.runTransaction(async (tx) => {
-              const userContextRef = doc.ref.parent.parent;
-              if (!userContextRef) {
-                error(`Could not derive userContextRef for trigger ${doc.id}`);
-                return;
-              };
-
-              // Correct path to the `main` document for paperTradingContext
-              const mainContextRef = userContextRef.collection('main').doc(userContextRef.id);
-
-
               const freshDoc = await tx.get(doc.ref);
               if (!freshDoc.exists) return; // Already processed
+              const userContextRef = freshDoc.ref.parent.parent;
+              if (!userContextRef) throw new Error("Could not derive userContextRef");
 
               log(`🎯 Firing trigger ${doc.id} @ ${price}`);
               
-              // The `executedTriggers` collection should be under the `main` document
-              const executedTriggerRef = mainContextRef
+              const executedTriggerRef = userContextRef
                 .collection("executedTriggers")
                 .doc(doc.id);
 
