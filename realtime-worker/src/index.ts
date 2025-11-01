@@ -350,31 +350,35 @@ async function collectAllSymbols() {
         const baseRef = userDoc.ref.collection('paperTradingContext').doc('main');
         
         // Fetch and cache open positions
-        const posSnap = await baseRef.collection('openPositions').where('details.status', '==', 'open').get();
+        const posSnap = await baseRef.collection('openPositions').get();
         posSnap.forEach((d) => {
             const p = d.data() as Omit<OpenPosition, 'userId'>;
-            const positionWithUser = { ...p, id: d.id, userId };
-            if (!openPositionsBySymbol.has(p.symbol)) {
-                openPositionsBySymbol.set(p.symbol, []);
+            if (p.details?.status === 'open') {
+                const positionWithUser = { ...p, id: d.id, userId };
+                if (!openPositionsBySymbol.has(p.symbol)) {
+                    openPositionsBySymbol.set(p.symbol, []);
+                }
+                openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
+                if (p.positionType === "spot") spotSymbolsToWatch.add(p.symbol);
+                else futuresSymbolsToWatch.add(p.symbol);
+                positionCount++;
             }
-            openPositionsBySymbol.get(p.symbol)!.push(positionWithUser);
-            if (p.positionType === "spot") spotSymbolsToWatch.add(p.symbol);
-            else futuresSymbolsToWatch.add(p.symbol);
-            positionCount++;
         });
 
         // Fetch and cache trade triggers
-        const trigSnap = await baseRef.collection('tradeTriggers').where("details.status", "==", "active").get();
+        const trigSnap = await baseRef.collection('tradeTriggers').get();
         trigSnap.forEach((d) => {
             const t = d.data() as Omit<TradeTrigger, 'userId'>;
-            const triggerWithUser = { ...t, id: d.id, userId };
-            if (!tradeTriggersBySymbol.has(t.symbol)) {
-                tradeTriggersBySymbol.set(t.symbol, []);
+            if (t.details.status === 'active') {
+                const triggerWithUser = { ...t, id: d.id, userId };
+                if (!tradeTriggersBySymbol.has(t.symbol)) {
+                    tradeTriggersBySymbol.set(t.symbol, []);
+                }
+                tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
+                if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
+                else futuresSymbolsToWatch.add(t.symbol);
+                triggerCount++;
             }
-            tradeTriggersBySymbol.get(t.symbol)!.push(triggerWithUser);
-            if (t.type === "spot") spotSymbolsToWatch.add(t.symbol);
-            else futuresSymbolsToWatch.add(t.symbol);
-            triggerCount++;
         });
     }
 
