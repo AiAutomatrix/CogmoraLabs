@@ -421,15 +421,25 @@ async function processPriceUpdate(symbol: string, price: number) {
           try {
             await db.runTransaction(async (tx) => {
               const userContextRef = doc.ref.parent.parent;
-              if (!userContextRef) return;
+              if (!userContextRef) {
+                error(`Could not derive userContextRef for trigger ${doc.id}`);
+                return;
+              };
+
+              // Correct path to the `main` document for paperTradingContext
+              const mainContextRef = userContextRef.collection('main').doc(userContextRef.id);
+
 
               const freshDoc = await tx.get(doc.ref);
-              if (!freshDoc.exists) return;
+              if (!freshDoc.exists) return; // Already processed
 
               log(`🎯 Firing trigger ${doc.id} @ ${price}`);
-              const executedTriggerRef = userContextRef
+              
+              // The `executedTriggers` collection should be under the `main` document
+              const executedTriggerRef = mainContextRef
                 .collection("executedTriggers")
                 .doc(doc.id);
+
               tx.set(executedTriggerRef, { ...trigger, currentPrice: price });
               tx.delete(doc.ref);
             });
