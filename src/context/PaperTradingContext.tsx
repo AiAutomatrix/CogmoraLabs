@@ -638,7 +638,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
         
-        setIsWsConnected(true);
+        if (!isWsConnected) {
+            setIsWsConnected(true);
+        }
 
         setOpenPositions(prev =>
           prev.map(p => {
@@ -668,7 +670,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
     };
-  }, [priceAlerts]);
+  }, [priceAlerts, isWsConnected]);
 
   useEffect(() => {
     if (triggeredAlerts.current.size > 0) {
