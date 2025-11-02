@@ -174,6 +174,7 @@ const MainViews: FC<MainViewsProps> = ({
                 className="w-full h-full"
                 style={{ border: 'none' }}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                allow="clipboard-write"
               />
             </div>
           ))}
@@ -197,6 +198,7 @@ const MainViews: FC<MainViewsProps> = ({
                 className="w-full h-full"
                 style={{ border: 'none' }}
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                allow="clipboard-write"
               />
             </div>
           ))}
@@ -220,7 +222,7 @@ const MainViews: FC<MainViewsProps> = ({
 
       <TabsContent value="options_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
-          <iframe srcDoc={optionsSrc} title="Options Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
+          <iframe srcDoc={optionsSrc} title="Options Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="clipboard-write"/>
         </div>
       </TabsContent>
 
@@ -236,7 +238,7 @@ const MainViews: FC<MainViewsProps> = ({
           ) : selectedCryptoScreener === 'kucoin_futures' ? (
             <AllFuturesScreener onSymbolSelect={onSymbolSelect} />
           ) : (
-            <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups"/>
+            <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="clipboard-write"/>
           )}
         </div>
       </TabsContent>
