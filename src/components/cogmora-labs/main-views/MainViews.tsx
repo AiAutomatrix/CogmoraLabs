@@ -112,7 +112,7 @@ const MainViews: FC<MainViewsProps> = ({
   const chartSrcDocs = useMemo(() =>
     Array.from({ length: numCharts }, (_, i) =>
       createChartSrcDoc(multiChartSymbols[i], `tv-chart-${i}`)
-    ), [numCharts, multiChartSymbols, createChartSrcDoc]
+    ), [numCharts, multiChartSymbols, tvWidgetBaseStyle]
   );
   
   const contentClassName = "flex-grow overflow-y-auto p-2 m-0 h-full";
@@ -173,7 +173,7 @@ const MainViews: FC<MainViewsProps> = ({
                 title={`Chart ${i + 1}`}
                 className="w-full h-full"
                 style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                 allow="clipboard-write"
               />
             </div>
@@ -197,7 +197,7 @@ const MainViews: FC<MainViewsProps> = ({
                 title={`Chart ${i + 1}`}
                 className="w-full h-full"
                 style={{ border: 'none' }}
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                 allow="clipboard-write"
               />
             </div>
@@ -222,7 +222,14 @@ const MainViews: FC<MainViewsProps> = ({
 
       <TabsContent value="options_screener" className={`flex-grow overflow-y-auto p-0 m-0 ${mobileContentClassName}`}>
         <div className={`${BASE_CLASS} h-full`}>
-          <iframe srcDoc={optionsSrc} title="Options Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="clipboard-write"/>
+          <iframe 
+            srcDoc={optionsSrc} 
+            title="Options Screener" 
+            className="w-full h-full" 
+            style={{border:'none'}} 
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox" 
+            allow="clipboard-write"
+          />
         </div>
       </TabsContent>
 
@@ -238,7 +245,14 @@ const MainViews: FC<MainViewsProps> = ({
           ) : selectedCryptoScreener === 'kucoin_futures' ? (
             <AllFuturesScreener onSymbolSelect={onSymbolSelect} />
           ) : (
-            <iframe srcDoc={cryptoSrc} title="Crypto Screener" className="w-full h-full" style={{border:'none'}} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" allow="clipboard-write"/>
+            <iframe 
+              srcDoc={cryptoSrc} 
+              title="Crypto Screener" 
+              className="w-full h-full" 
+              style={{border:'none'}} 
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox" 
+              allow="clipboard-write"
+            />
           )}
         </div>
       </TabsContent>
