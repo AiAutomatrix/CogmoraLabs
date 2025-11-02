@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -161,17 +162,55 @@ const DexScreenerContent: React.FC = () => {
   };
 
   const handleCopyAddress = (address: string) => {
+    // Fallback for browsers that don't support navigator.clipboard or when it's blocked
+    const fallbackCopyTextToClipboard = (text: string) => {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      
+      // Make the textarea non-editable and invisible
+      textArea.style.position = 'fixed';
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.width = '2em';
+      textArea.style.height = '2em';
+      textArea.style.padding = '0';
+      textArea.style.border = 'none';
+      textArea.style.outline = 'none';
+      textArea.style.boxShadow = 'none';
+      textArea.style.background = 'transparent';
+
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          toast({ title: "Copied!", description: "Address copied to clipboard." });
+        } else {
+           throw new Error('Fallback copy command failed');
+        }
+      } catch (err) {
+        console.error('Fallback copy error:', err);
+        toast({ title: "Copy Failed", description: "Could not copy address using fallback.", variant: "destructive"});
+      }
+      document.body.removeChild(textArea);
+    };
+
     if (!navigator.clipboard) {
-      toast({ title: "Copy Failed", description: "Clipboard API not available in this browser.", variant: "destructive" });
+      fallbackCopyTextToClipboard(address);
       return;
     }
+    
     navigator.clipboard.writeText(address).then(() => {
       toast({ title: "Copied!", description: "Address copied to clipboard." });
     }).catch(err => {
-      console.error("Failed to copy address: ", err);
-      toast({ title: "Copy Failed", description: "Could not copy address.", variant: "destructive"});
+      console.error("Failed to copy address:", err);
+      // If the modern API fails (e.g., due to permissions), use the fallback
+      fallbackCopyTextToClipboard(address);
     });
   };
+
 
   const renderDescriptionInteraction = (description?: string | null) => {
     if (!description) return <span className="text-muted-foreground">-</span>;
