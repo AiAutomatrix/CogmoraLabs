@@ -178,6 +178,12 @@ class WebSocketManager {
   private onMessage(data: WebSocket.Data) {
     this.lastPong = Date.now();
     try {
+      // --- DEBUG LOG ---
+      if (this.name.startsWith('FUTURES')) {
+          console.log(`[FUTURES_RAW_MSG]: ${data.toString()}`);
+      }
+      // --- END DEBUG LOG ---
+
       const msg = JSON.parse(data.toString());
       if (msg.type === 'welcome' && !this.heartbeatStarted) {
         info(`[${this.name}] Welcome message received. Starting heartbeat.`);
@@ -202,8 +208,10 @@ class WebSocketManager {
             sym = msg.topic.split(':')[1];
             price = parseFloat(msg.data?.data?.lastTradedPrice);
         } else if (this.name.startsWith('FUTURES')) {
-            sym = msg.topic.replace('/contractMarket/tickerV2:', '');
-            price = parseFloat(msg.data?.price);
+            if (msg.subject === 'snapshot') {
+                sym = msg.topic.replace('/contractMarket/snapshot:', '');
+                price = parseFloat(msg.data?.data?.markPrice);
+            }
         }
         
         if (sym && price !== undefined && !Number.isNaN(price)) {
@@ -424,7 +432,7 @@ async function collectAllSymbols() {
 
     // Update the manager pools
     spotManagers = updateSubscriptionManagers(spotManagers, Array.from(spotSymbols), 'SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
-    futuresManagers = updateSubscriptionManagers(futuresManagers, Array.from(futSymbols), 'FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/tickerV2:${s}`);
+    futuresManagers = updateSubscriptionManagers(futuresManagers, Array.from(futSymbols), 'FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
 
     let totalPositions = 0;
     openPositionsBySymbol.forEach(arr => totalPositions += arr.length);
@@ -577,3 +585,5 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+    
