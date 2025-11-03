@@ -199,15 +199,18 @@ class WebSocketManager {
         let price: number | undefined;
 
         if (this.name.startsWith('SPOT')) {
-            sym = msg.topic.split(':')[1];
-            price = parseFloat(msg.data?.data?.lastTradedPrice);
+            if (msg.subject === 'trade.snapshot') {
+                sym = msg.topic.split(':')[1];
+                price = parseFloat(msg.data?.data?.lastTradedPrice);
+            }
         } else if (this.name.startsWith('FUTURES')) {
-            sym = msg.topic.replace('/contractMarket/tickerV2:', '');
-            price = parseFloat(msg.data?.price); // Correct path for tickerV2
+            if (msg.subject === 'snapshot') {
+                sym = msg.topic.replace('/contractMarket/snapshot:', '');
+                price = parseFloat(msg.data?.markPrice);
+            }
         }
         
         if (sym && price !== undefined && !Number.isNaN(price)) {
-          // Keep price tick handling lightweight — do not query firestore here
           processPriceUpdate(sym, price).catch(err => error(`processPriceUpdate err: ${err}`));
         }
       }
@@ -425,7 +428,7 @@ async function collectAllSymbols() {
 
     // Update the manager pools
     spotManagers = updateSubscriptionManagers(spotManagers, Array.from(spotSymbols), 'SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
-    futuresManagers = updateSubscriptionManagers(futuresManagers, Array.from(futSymbols), 'FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/tickerV2:${s}`);
+    futuresManagers = updateSubscriptionManagers(futuresManagers, Array.from(futSymbols), 'FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
 
     let totalPositions = 0;
     openPositionsBySymbol.forEach(arr => totalPositions += arr.length);
@@ -578,3 +581,5 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+    
