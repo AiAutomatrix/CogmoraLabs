@@ -206,7 +206,8 @@ class WebSocketManager {
             price = parseFloat(msg.data?.price); // Correct path for tickerV2
         }
         
-        if (sym && !Number.isNaN(price)) {
+        if (sym && price !== undefined && !Number.isNaN(price)) {
+          // Keep price tick handling lightweight — do not query firestore here
           processPriceUpdate(sym, price).catch(err => error(`processPriceUpdate err: ${err}`));
         }
       }
