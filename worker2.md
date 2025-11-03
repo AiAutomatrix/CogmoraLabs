@@ -346,7 +346,7 @@ class WebSocketManager {
 }
 
 // ====== Instances ======
-const spot = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/ticker:${s}`);
+const spot = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
 const futures = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
 
 // Helper: extract userId from document path (robust to path layout)
@@ -416,7 +416,6 @@ async function collectAllSymbols() {
 async function processPriceUpdate(symbol: string, price: number) {
   if (!symbol || !price) return;
 
-  // Quick log for visibility when symbol ticks in
   // info(`🔔 tick ${symbol} @ ${price}`);
 
   // Handle SL/TP from in-memory cache
@@ -562,5 +561,3 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-    
