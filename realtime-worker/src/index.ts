@@ -63,6 +63,7 @@ const KUCOIN_SPOT_TOKEN_ENDPOINT = "https://api.kucoin.com/api/v1/bullet-public"
 const KUCOIN_FUTURES_TOKEN_ENDPOINT =
   "https://api-futures.kucoin.com/api/v1/bullet-public";
 const REQUERY_INTERVAL_MS = Number(process.env.REQUERY_INTERVAL_MS) || 30_000;
+const MAX_SYMBOLS_PER_SOCKET = 250;
 const INSTANCE_ID = process.env.K_REVISION || crypto.randomUUID();
 
 // In-memory state (single source-of-truth for fast tick handling)
@@ -96,7 +97,7 @@ class WebSocketManager {
   private reconnectBackoffMs = 1000;
 
   constructor(
-    private name: 'SPOT' | 'FUTURES',
+    private name: string, // Changed to string to allow names like 'SPOT_0'
     private endpoint: string,
     private topicFn: (s: string) => string
   ) {}
@@ -132,7 +133,7 @@ class WebSocketManager {
   public async ensureConnected() {
     if (this.reconnecting) return;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-    if (this.desired.size === 0) return this.disconnect();
+    if (this.desired.size === 0) return this.disconnect('no desired symbols');
     this.reconnecting = true;
     this.stopHeartbeat();
     try {
@@ -194,8 +195,8 @@ class WebSocketManager {
       }
 
       if (msg.topic && msg.data) {
-        const sym = this.name === 'SPOT' ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
-        const price = this.name === 'SPOT' ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
+        const sym = this.name.startsWith('SPOT') ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
+        const price = this.name.startsWith('SPOT') ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
         if (sym && !Number.isNaN(price)) {
           // Keep price tick handling lightweight — do not query firestore here
           processPriceUpdate(sym, price).catch(err => error(`processPriceUpdate err: ${err}`));
@@ -274,32 +275,28 @@ class WebSocketManager {
     await this.scheduleReconnect();
   }
 
-  public disconnect() {
-    this.fullCleanup('manual-disconnect').catch(e => warn(`[${this.name}] manual cleanup err ${e}`));
+  public disconnect(reason: string) {
+    this.fullCleanup(`manual-disconnect: ${reason}`).catch(e => warn(`[${this.name}] manual cleanup err ${e}`));
   }
 
   updateDesired(set: Set<string>) {
     this.desired = set;
-    if (this.desired.size === 0) return this.disconnect();
+    if (this.desired.size === 0) return this.disconnect('no desired symbols');
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) this.ensureConnected().catch(e => warn(`[${this.name}] ensureConnected failed: ${e.message}`));
     else this.resubscribeDiff();
   }
 
-  // Send only the diff: subscribe new topics, unsubscribe removed topics
   private resubscribeDiff() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const toSubscribe = new Set<string>();
     const toUnsubscribe = new Set<string>();
 
-    // compute topic strings for desired set
     const desiredTopics = new Set<string>();
     for (const sym of this.desired) desiredTopics.add(this.topicFn(sym));
 
-    // what to unsubscribe
     for (const topic of this.subscribed) {
       if (!desiredTopics.has(topic)) toUnsubscribe.add(topic);
     }
-    // what to subscribe
     for (const topic of desiredTopics) {
       if (!this.subscribed.has(topic)) toSubscribe.add(topic);
     }
@@ -315,43 +312,66 @@ class WebSocketManager {
     }
   }
 
-  private resubscribeAll() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    info(`[${this.name}] Subscribing to ${this.desired.size} topics (full)`);
-    this.subscribed.clear();
-    for (const sym of this.desired) {
-      try {
-        const topic = this.topicFn(sym);
-        this.ws.send(JSON.stringify({ id: Date.now(), type: 'subscribe', topic, privateChannel: false, response: true }));
-        this.subscribed.add(topic);
-      } catch (err: any) {
-        warn(`[${this.name}] subscribe fail ${sym}: ${err.message}`);
-      }
-    }
-  }
-
   public info() {
     const now = Date.now();
     return {
       name: this.name,
       connected: !!this.ws && this.ws.readyState === WebSocket.OPEN,
       desired: this.desired.size,
-      subscribed: Array.from(this.subscribed),
+      subscribed: this.subscribed.size,
       lastPongAge: this.lastPong ? Math.round((now - this.lastPong) / 1000) : -1,
-      pingIntervalMs: this.pingIntervalMs,
       reconnecting: this.reconnecting,
-      heartbeatStarted: this.heartbeatStarted,
     };
   }
 }
 
-// ====== Instances ======
-const spot = new WebSocketManager('SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
-const futures = new WebSocketManager('FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
+// ====== Multi-Socket Scaling Logic ======
+let spotManagers: WebSocketManager[] = [];
+let futuresManagers: WebSocketManager[] = [];
+
+const chunkArray = <T>(array: T[], size: number): T[][] => {
+  const result: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+  return result;
+};
+
+function updateSubscriptionManagers<T extends WebSocketManager>(
+  managers: T[],
+  symbols: string[],
+  type: 'SPOT' | 'FUTURES',
+  endpoint: string,
+  topicFn: (s: string) => string
+): T[] {
+  const groups = chunkArray(symbols, MAX_SYMBOLS_PER_SOCKET);
+
+  // Add or remove managers as needed
+  while (managers.length < groups.length) {
+    const index = managers.length;
+    const manager = new WebSocketManager(`${type}_${index}`, endpoint, topicFn) as T;
+    managers.push(manager);
+    info(`[MANAGER_POOL] Created manager ${type}_${index}`);
+  }
+  while (managers.length > groups.length) {
+    const manager = managers.pop();
+    if (manager) {
+      manager.disconnect('shrinking pool');
+      info(`[MANAGER_POOL] Destroyed manager ${manager.info().name}`);
+    }
+  }
+
+  // Assign symbol groups to each manager
+  groups.forEach((group, i) => {
+    managers[i].updateDesired(new Set(group));
+  });
+
+  return managers;
+}
+
 
 // Helper: extract userId from document path (robust to path layout)
 function extractUserIdFromPath(path: string): string | null {
-  // expect path like: users/{uid}/paperTradingContext/main/openPositions/{posId}
   const parts = path.split('/');
   const usersIdx = parts.indexOf('users');
   if (usersIdx >= 0 && parts.length > usersIdx + 1) return parts[usersIdx + 1];
@@ -366,12 +386,10 @@ async function collectAllSymbols() {
     const spotSymbols = new Set<string>();
     const futSymbols = new Set<string>();
 
-    // Use collectionGroup queries (requires proper composite indexes) to fetch documents once
     const posSnap = await db.collectionGroup('openPositions').get();
     posSnap.forEach(d => {
       const p = d.data() as OpenPosition;
-      if (p.details?.status !== 'open') return; // Filter in memory
-      
+      if (p.details?.status !== 'open') return;
       const userId = extractUserIdFromPath(d.ref.path);
       if (!userId) return;
       
@@ -385,8 +403,7 @@ async function collectAllSymbols() {
     const trigSnap = await db.collectionGroup('tradeTriggers').get();
     trigSnap.forEach(d => {
       const t = d.data() as TradeTrigger;
-      if (t.details.status !== 'active') return; // Filter in memory
-
+      if (t.details.status !== 'active') return;
       const userId = extractUserIdFromPath(d.ref.path);
       if (!userId) return;
 
@@ -397,9 +414,9 @@ async function collectAllSymbols() {
       if (t.type === 'spot') spotSymbols.add(t.symbol); else futSymbols.add(t.symbol);
     });
 
-    // Update websocket subscriptions (diffing handled in manager)
-    spot.updateDesired(spotSymbols);
-    futures.updateDesired(futSymbols);
+    // Update the manager pools
+    spotManagers = updateSubscriptionManagers(spotManagers, Array.from(spotSymbols), 'SPOT', KUCOIN_SPOT_TOKEN_ENDPOINT, (s) => `/market/snapshot:${s}`);
+    futuresManagers = updateSubscriptionManagers(futuresManagers, Array.from(futSymbols), 'FUTURES', KUCOIN_FUTURES_TOKEN_ENDPOINT, (s) => `/contractMarket/snapshot:${s}`);
 
     let totalPositions = 0;
     openPositionsBySymbol.forEach(arr => totalPositions += arr.length);
@@ -416,9 +433,6 @@ async function collectAllSymbols() {
 async function processPriceUpdate(symbol: string, price: number) {
   if (!symbol || !price) return;
 
-  // info(`🔔 tick ${symbol} @ ${price}`);
-
-  // Handle SL/TP from in-memory cache
   const positions = openPositionsBySymbol.get(symbol) || [];
   if (positions.length) info(`🧠 analyzing ${positions.length} open position(s) for ${symbol}`);
   for (const pos of positions) {
@@ -439,7 +453,6 @@ async function processPriceUpdate(symbol: string, price: number) {
             log(`📉 Position trigger fired for ${symbol} (user=${pos.userId}, pos=${pos.id}) @ ${price}`);
             tx.update(posRef, { 'details.status': 'closing', 'details.closePrice': price });
           });
-          // remove from cache to avoid reprocessing until next collectAllSymbols
           const list = openPositionsBySymbol.get(symbol) || [];
           openPositionsBySymbol.set(symbol, list.filter(p => p.id !== pos.id));
         } catch (txErr: any) {
@@ -453,7 +466,6 @@ async function processPriceUpdate(symbol: string, price: number) {
     }
   }
 
-  // Handle trade triggers from in-memory cache
   const triggers = tradeTriggersBySymbol.get(symbol) || [];
   if (triggers.length) info(`🧠 analyzing ${triggers.length} trigger(s) for ${symbol}`);
   for (const trig of triggers) {
@@ -474,7 +486,6 @@ async function processPriceUpdate(symbol: string, price: number) {
         tx.delete(triggerRef);
       });
 
-      // remove from in-memory cache to avoid immediate re-fire
       const arr = tradeTriggersBySymbol.get(symbol) || [];
       tradeTriggersBySymbol.set(symbol, arr.filter(t => t.id !== trig.id));
 
@@ -489,33 +500,21 @@ async function startSession() {
   if (sessionActive) return;
   sessionActive = true;
   log('🚀 Worker started');
-
-  // Initial load
   await collectAllSymbols();
 
-  // Heartbeat & health checks
   heartbeatInterval = setInterval(() => {
-    const s = spot.info();
-    const f = futures.info();
-
-    if (s.reconnecting || f.reconnecting) warn('💓 heartbeat detected reconnecting state, verifying health...');
-
-    const spotHealthy = s.connected && s.lastPongAge < 90 && s.lastPongAge !== -1;
-    const futHealthy = f.connected && f.lastPongAge < 90 && f.lastPongAge !== -1;
-
-    log(`💓 heartbeat — SPOT=${spotHealthy} FUT=${futHealthy}`);
-
-    if (s.desired > 0 && !spotHealthy) {
-      warn('💀 SPOT connection is unhealthy — forcing reconnect.');
-      spot.forceReconnect().catch(e => warn(`[SPOT] reconnect error: ${e.message}`));
+    let allHealthy = true;
+    for (const manager of [...spotManagers, ...futuresManagers]) {
+        const { connected, lastPongAge, desired } = manager.info();
+        if (desired > 0 && (!connected || lastPongAge > 90)) {
+            allHealthy = false;
+            warn(`💀 Manager ${manager.info().name} connection is unhealthy — forcing reconnect.`);
+            manager.forceReconnect().catch(e => warn(`[${manager.info().name}] Heartbeat reconnect error: ${e.message}`));
+        }
     }
-    if (f.desired > 0 && !futHealthy) {
-      warn('💀 FUTURES connection is unhealthy — forcing reconnect.');
-      futures.forceReconnect().catch(e => warn(`[FUTURES] reconnect error: ${e.message}`));
-    }
+    log(`💓 heartbeat — all managers healthy: ${allHealthy}`);
   }, 30_000);
 
-  // Periodically refresh symbol lists and in-memory caches
   requeryInterval = setInterval(() => collectAllSymbols(), REQUERY_INTERVAL_MS);
 }
 
@@ -532,7 +531,13 @@ const server = http.createServer((req, res) => {
     openPositionsBySymbol.forEach((v, k) => positionsObj[k] = v.length);
     const triggersObj: Record<string, any> = {};
     tradeTriggersBySymbol.forEach((v, k) => triggersObj[k] = v.length);
-    res.end(JSON.stringify({ spot: spot.info(), futures: futures.info(), positions: positionsObj, triggers: triggersObj }, null, 2));
+    const debugInfo = {
+        spotManagers: spotManagers.map(m => m.info()),
+        futuresManagers: futuresManagers.map(m => m.info()),
+        positions: positionsObj,
+        triggers: triggersObj,
+    };
+    res.end(JSON.stringify(debugInfo, null, 2));
     return;
   }
   res.writeHead(200);
@@ -554,8 +559,11 @@ async function shutdown() {
   sessionActive = false;
   if (requeryInterval) clearInterval(requeryInterval);
   if (heartbeatInterval) clearInterval(heartbeatInterval);
-  spot.disconnect();
-  futures.disconnect();
+  
+  [...spotManagers, ...futuresManagers].forEach(manager => {
+      manager.disconnect('shutdown');
+  });
+
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000);
 }
