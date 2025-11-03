@@ -201,7 +201,7 @@ class WebSocketManager {
         if (this.name.startsWith('SPOT')) {
             sym = msg.topic.split(':')[1];
             price = parseFloat(msg.data?.data?.lastTradedPrice);
-        } else { // FUTURES
+        } else if (this.name.startsWith('FUTURES')) {
             sym = msg.topic.replace('/contractMarket/tickerV2:', '');
             price = parseFloat(msg.data?.price); // Correct path for tickerV2
         }
