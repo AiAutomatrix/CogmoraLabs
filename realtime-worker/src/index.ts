@@ -198,16 +198,12 @@ class WebSocketManager {
         let sym: string | undefined;
         let price: number | undefined;
         
-        if (this.name.startsWith('SPOT')) {
-            if (msg.subject === 'trade.snapshot') {
-                sym = msg.topic.split(':')[1];
-                price = parseFloat(msg.data?.data?.lastTradedPrice);
-            }
-        } else if (this.name.startsWith('FUTURES')) {
-            if (msg.subject === 'snapshot') {
-                sym = msg.topic.replace('/contractMarket/snapshot:', '');
-                price = parseFloat(msg.data?.data?.markPrice);
-            }
+        if (this.name.startsWith('SPOT') && msg.subject === 'trade.snapshot') {
+            sym = msg.topic.split(':')[1];
+            price = parseFloat(msg.data?.data?.lastTradedPrice);
+        } else if (this.name.startsWith('FUTURES') && msg.subject === 'snapshot') {
+            sym = msg.topic.replace('/contractMarket/snapshot:', '');
+            price = parseFloat(msg.data?.data?.markPrice);
         }
         
         if (sym && price !== undefined && !Number.isNaN(price)) {
