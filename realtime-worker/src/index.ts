@@ -197,7 +197,7 @@ class WebSocketManager {
       if (msg.topic && msg.data) {
         let sym: string | undefined;
         let price: number | undefined;
-
+        
         if (this.name.startsWith('SPOT')) {
             if (msg.subject === 'trade.snapshot') {
                 sym = msg.topic.split(':')[1];
@@ -206,7 +206,7 @@ class WebSocketManager {
         } else if (this.name.startsWith('FUTURES')) {
             if (msg.subject === 'snapshot') {
                 sym = msg.topic.replace('/contractMarket/snapshot:', '');
-                price = parseFloat(msg.data?.markPrice);
+                price = parseFloat(msg.data?.data?.markPrice);
             }
         }
         
