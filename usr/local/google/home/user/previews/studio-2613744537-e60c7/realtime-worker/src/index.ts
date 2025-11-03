@@ -203,10 +203,10 @@ class WebSocketManager {
             price = parseFloat(msg.data?.data?.lastTradedPrice);
         } else if (this.name.startsWith('FUTURES')) {
             sym = msg.topic.replace('/contractMarket/tickerV2:', '');
-            price = parseFloat(msg.data?.price); // Correct path for tickerV2
+            price = parseFloat(msg.data?.price);
         }
         
-        if (sym && !Number.isNaN(price)) {
+        if (sym && price !== undefined && !Number.isNaN(price)) {
           processPriceUpdate(sym, price).catch(err => error(`processPriceUpdate err: ${err}`));
         }
       }
