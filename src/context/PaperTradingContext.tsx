@@ -730,7 +730,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
     };
-  }, [priceAlerts, isWsConnected]);
+  }, [priceAlerts]);
 
   useEffect(() => {
     if (triggeredAlerts.current.size > 0) {
@@ -1256,3 +1256,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
