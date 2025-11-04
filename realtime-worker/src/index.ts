@@ -178,6 +178,12 @@ class WebSocketManager {
   private onMessage(data: WebSocket.Data) {
     this.lastPong = Date.now();
     try {
+      // --- TEMPORARY DEBUG LOG ---
+      if (this.name.startsWith('FUTURES')) {
+          console.log(`[FUTURES_RAW_MSG]: ${data.toString()}`);
+      }
+      // --- END TEMPORARY DEBUG LOG ---
+
       const msg = JSON.parse(data.toString());
       if (msg.type === 'welcome' && !this.heartbeatStarted) {
         info(`[${this.name}] Welcome message received. Starting heartbeat.`);
