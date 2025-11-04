@@ -13,7 +13,7 @@ import {
   type KucoinFuturesContract,
 } from "@/hooks/useKucoinFuturesTickers";
 import { useKucoinFuturesSocket } from "@/hooks/useKucoinFuturesSocket";
-import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye, Info } from "lucide-react";
+import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -187,8 +187,8 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="flex flex-grow items-center justify-start lg:hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-col w-24 text-left mr-2">
+                    <div className="grid grid-cols-5 flex-grow items-center gap-2 lg:hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col col-span-1 text-left">
                            <Button
                               variant="link"
                               className="p-0 h-auto text-xs font-medium text-left justify-start truncate"
@@ -198,27 +198,25 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                             </Button>
                             <span className="font-mono text-foreground">${formatPrice(contract.markPrice)}</span>
                         </div>
-                        <div className="flex flex-grow justify-around">
-                            <div className="flex flex-col items-center">
-                                <SortableMobileHeader sortKey="priceChgPct" label="24%" />
-                                <span className={`font-mono text-foreground ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                    {(contract.priceChgPct * 100).toFixed(2)}%
-                                </span>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <SortableMobileHeader sortKey="fundingFeeRate" label="Fund" />
-                                <button onClick={() => handleInfoClick(contract)} className="font-mono text-foreground hover:text-primary transition-colors">
-                                  {(contract.fundingFeeRate * 100).toFixed(4)}%
-                                </button>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <SortableMobileHeader sortKey="openInterest" label="OI" />
-                                <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <SortableMobileHeader sortKey="volumeOf24h" label="Vol" />
-                                <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
-                            </div>
+                        <div className="flex flex-col items-center text-center">
+                            <SortableMobileHeader sortKey="priceChgPct" label="24%" />
+                            <span className={`font-mono text-foreground ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                {(contract.priceChgPct * 100).toFixed(2)}%
+                            </span>
+                        </div>
+                        <div className="flex flex-col items-center text-center">
+                            <SortableMobileHeader sortKey="fundingFeeRate" label="Fund" />
+                            <button onClick={() => handleInfoClick(contract)} className="font-mono text-foreground hover:text-primary transition-colors">
+                              {(contract.fundingFeeRate * 100).toFixed(4)}%
+                            </button>
+                        </div>
+                        <div className="flex flex-col items-center text-center">
+                            <SortableMobileHeader sortKey="openInterest" label="OI" />
+                            <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
+                        </div>
+                        <div className="flex flex-col items-center text-center">
+                            <SortableMobileHeader sortKey="volumeOf24h" label="Vol" />
+                            <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
                         </div>
                     </div>
                       
@@ -242,11 +240,11 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
 
-                  <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div role="cell" className="flex items-center justify-end gap-0 p-0 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                         <BarChartHorizontal className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract, contract.highPrice, contract.lowPrice, contract.priceChgPct)}>
+                      <Button variant="ghost" size="icon" className={`h-8 w-8 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract)}>
                           <Eye className="h-4 w-4" />
                       </Button>
                   </div>
