@@ -178,12 +178,6 @@ class WebSocketManager {
   private onMessage(data: WebSocket.Data) {
     this.lastPong = Date.now();
     try {
-      // --- TEMPORARY DEBUG LOG ---
-      if (this.name.startsWith('FUTURES')) {
-          console.log(`[FUTURES_RAW_MSG]: ${data.toString()}`);
-      }
-      // --- END TEMPORARY DEBUG LOG ---
-
       const msg = JSON.parse(data.toString());
       if (msg.type === 'welcome' && !this.heartbeatStarted) {
         info(`[${this.name}] Welcome message received. Starting heartbeat.`);
@@ -203,15 +197,15 @@ class WebSocketManager {
       if (msg.topic && msg.data) {
         let sym: string | undefined;
         let price: number | undefined;
-        
+
         if (this.name.startsWith('SPOT') && msg.subject === 'trade.snapshot') {
-            sym = msg.topic.split(':')[1];
-            price = parseFloat(msg.data?.data?.lastTradedPrice);
-        } else if (this.name.startsWith('FUTURES') && msg.subject === 'snapshot') {
-            sym = msg.topic.replace('/contractMarket/snapshot:', '');
-            price = parseFloat(msg.data?.data?.markPrice);
+          sym = msg.topic.split(':')[1];
+          price = parseFloat(msg.data?.data?.lastTradedPrice);
+        } else if (this.name.startsWith('FUTURES') && msg.subject === 'snapshot.24h') {
+          sym = msg.topic.replace('/contractMarket/snapshot:', '');
+          price = parseFloat(msg.data?.lastPrice);
         }
-        
+
         if (sym && price !== undefined && !Number.isNaN(price)) {
           processPriceUpdate(sym, price).catch(err => error(`processPriceUpdate err: ${err}`));
         }
@@ -583,5 +577,3 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-    
