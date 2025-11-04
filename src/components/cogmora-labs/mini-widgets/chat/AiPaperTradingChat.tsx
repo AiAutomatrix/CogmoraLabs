@@ -190,7 +190,7 @@ const AiPaperTradingChat: React.FC = () => {
         }
         
         return (
-            <div className="p-4 space-y-6 h-full flex flex-col">
+            <div className="p-4 space-y-4 h-full flex flex-col">
                 {activePlan.analysis && (
                     <Card className="flex-shrink-0">
                         <CardHeader className="p-3">
@@ -203,7 +203,7 @@ const AiPaperTradingChat: React.FC = () => {
                 )}
 
                 <div className="flex-grow min-h-0">
-                    <ScrollArea className="h-full w-full">
+                    <ScrollArea className="h-full w-full pr-4">
                         {activePlan.plan && activePlan.plan.length > 0 ? (
                             <div>
                                 <h3 className="text-base font-semibold mb-2">Proposed Plan of Action</h3>
