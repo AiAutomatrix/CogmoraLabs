@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { LandingPageDemoProvider } from '@/context/LandingPageDemoContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
 import Features from '@/components/landing/Features';
+import AiAgentShowcase from '@/components/landing/AiAgentShowcase'; // Import the new component
 import { Github, Linkedin } from 'lucide-react';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { FirebaseClientProvider, useUser } from '@/firebase';
@@ -84,6 +86,7 @@ export default function LandingPage() {
           <LiveDemo />
         </LandingPageDemoProvider>
         <Features />
+        <AiAgentShowcase /> 
         <Footer />
       </FirebaseClientProvider>
     </main>

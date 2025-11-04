@@ -37,6 +37,12 @@ const nextConfig: NextConfig = {
         hostname: 'cdn.dexscreener.com', // Added this new hostname
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+        port: '',
+        pathname: '/**',
       }
     ],
   },
