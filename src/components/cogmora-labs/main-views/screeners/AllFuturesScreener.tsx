@@ -207,7 +207,9 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                             </div>
                             <div className="flex flex-col items-center">
                                 <SortableMobileHeader sortKey="fundingFeeRate" label="Fund" />
-                                <span className="font-mono text-foreground">{(contract.fundingFeeRate * 100).toFixed(4)}%</span>
+                                <button onClick={() => handleInfoClick(contract)} className="font-mono text-foreground hover:text-primary transition-colors">
+                                  {(contract.fundingFeeRate * 100).toFixed(4)}%
+                                </button>
                             </div>
                             <div className="flex flex-col items-center">
                                 <SortableMobileHeader sortKey="openInterest" label="OI" />
@@ -232,14 +234,15 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                   </div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{(contract.fundingFeeRate * 100).toFixed(4)}%</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">
+                    <button onClick={() => handleInfoClick(contract)} className="hover:text-primary transition-colors">
+                      {(contract.fundingFeeRate * 100).toFixed(4)}%
+                    </button>
+                  </div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
 
                   <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleInfoClick(contract)}>
-                        <Info className="h-4 w-4 text-blue-400" />
-                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                         <BarChartHorizontal className="h-4 w-4" />
                       </Button>
@@ -271,5 +274,3 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
     </>
   );
 }
-
-    
