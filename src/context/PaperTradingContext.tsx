@@ -939,7 +939,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
                         low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                         order: orderIndex++,
-                        futuresContractData: isSpot ? undefined : item,
+                        futuresContractData: isSpot ? undefined : item as KucoinFuturesContract,
                     };
                     finalItems.push(newItem);
                 }
