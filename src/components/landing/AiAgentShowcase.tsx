@@ -1,5 +1,7 @@
+
 'use client';
 import React from 'react';
+import Image from 'next/image';
 import { Card, CardContent } from "@/components/ui/card";
 import { Settings, ShieldCheck, FilePlus, Edit, Trash2 } from 'lucide-react';
 
@@ -62,12 +64,13 @@ const AiAgentShowcase = () => {
           <div className="order-1 md:order-2">
             <Card className="overflow-hidden shadow-2xl shadow-primary/20">
               <CardContent className="p-0">
-                <img
+                <Image
                   src="/action-plan.jpg"
                   alt="AI Agent Interface Showcase"
                   width={800}
                   height={1000}
                   className="w-full h-auto object-cover"
+                  priority
                 />
               </CardContent>
             </Card>
