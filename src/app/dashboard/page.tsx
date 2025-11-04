@@ -344,7 +344,7 @@ const PageContent: React.FC = () => {
             handleAiTriggerAnalysis={runAiAnalysis}
           />
         </section>
-        <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[1000px] lg:min-h-0">
+        <aside className="flex flex-col lg:w-1/3 lg:border-l border-border min-h-[675px] lg:min-h-0">
           <MiniWidgets
             currentSymbol={activeSymbol}
             onSymbolChange={handleSymbolChange}

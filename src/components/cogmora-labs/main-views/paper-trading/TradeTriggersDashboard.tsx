@@ -79,7 +79,7 @@ export default function TradeTriggersDashboard({
 }: {
     aiSettings: AiTriggerSettings;
     setAiSettings: (settings: AiTriggerSettings) => void;
-    handleAiTriggerAnalysis: (isScheduled?: boolean) => void;
+    handleAiTriggerAnalysis: () => void;
 }) {
   const { tradeTriggers, removeTradeTrigger, automationConfig } = usePaperTrading();
   
@@ -104,7 +104,7 @@ export default function TradeTriggersDashboard({
       <CardHeader className="flex flex-row items-start justify-between">
         <div className="flex-grow">
             <div className="flex items-center gap-2">
-                <CardTitle className="text-lg md:text-xl">Active Triggers & Automations</CardTitle>
+                <CardTitle className="text-lg md:text-xl">AI Automation Engine</CardTitle>
                  <Popover>
                     <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4" /></Button>
@@ -112,9 +112,12 @@ export default function TradeTriggersDashboard({
                     <PopoverContent className="w-80">
                        <div className="grid gap-4">
                             <div className="space-y-2">
-                                <h4 className="font-medium leading-none">Automation Engine</h4>
+                                <h4 className="font-medium leading-none">AI Control Panel</h4>
                                 <p className="text-sm text-muted-foreground">
-                                    This section shows your conditional trade triggers and scheduled automations for the AI agent and watchlist scraper.
+                                    This is the command center for your AI trading agent. The agent analyzes your account metrics, open positions, and active triggers to generate a strategic plan.
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                    Use the <Settings className="inline-block h-3 w-3" /> settings to configure its behavior, such as allowing it to manage open positions or auto-executing its plans.
                                 </p>
                             </div>
                         </div>
@@ -122,11 +125,11 @@ export default function TradeTriggersDashboard({
                 </Popover>
             </div>
             <CardDescription className="text-xs md:text-sm">
-                Conditional orders and scheduled automations.
+                Manage conditional orders and configure your AI trading agent.
             </CardDescription>
         </div>
         <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-            <Button variant="outline" size="sm" onClick={() => handleAiTriggerAnalysis(false)}>
+            <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis}>
                 <Wand2 className="mr-0 md:mr-2 h-4 w-4" />
                 <span className="hidden md:inline">Run AI Now</span>
             </Button>

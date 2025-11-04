@@ -220,9 +220,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       if (!prevTradeHistory || !isLoaded) return;
   
       if (tradeHistory.length > prevTradeHistory.length) {
-          const newHistoryIds = new Set(tradeHistory.map(t => t.id));
-          const oldHistoryIds = new Set(prevTradeHistory.map(t => t.id));
-          const addedTradeId = [...newHistoryIds].find(id => !oldHistoryIds.has(id));
+          const newHistoryIds = new Set(tradeHistory.map(t => t.id || ''));
+          const oldHistoryIds = new Set(prevTradeHistory.map(t => t.id || ''));
+          const addedTradeId = [...newHistoryIds].find(id => id && !oldHistoryIds.has(id));
   
           if (addedTradeId) {
               const newTrade = tradeHistory.find(t => t.id === addedTradeId);
@@ -691,7 +691,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.markPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -782,6 +782,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [lastAiActionPlan, saveDataToFirestore]);
 
   const handleAiTriggerAnalysis = useCallback(async (): Promise<void> => {
+    toast({
+        title: "AI Analysis Started...",
+        description: "Check the AI Agent tab to see the plan.",
+    });
+    
     if (watchlist.length === 0) {
       toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
       return;
