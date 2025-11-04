@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,15 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
   const [updateMode, setUpdateMode] = useState<'one-time' | 'auto-refresh'>(automationConfig.updateMode);
   const [refreshInterval, setRefreshInterval] = useState<number>(automationConfig.refreshInterval);
   const [clearExisting, setClearExisting] = useState<boolean>(automationConfig.clearExisting);
+
+  useEffect(() => {
+    if (isOpen) {
+        setRules(automationConfig.rules);
+        setUpdateMode(automationConfig.updateMode);
+        setRefreshInterval(automationConfig.refreshInterval);
+        setClearExisting(automationConfig.clearExisting);
+    }
+  }, [isOpen, automationConfig]);
 
   const totalSymbolCount = useMemo(() => {
     return rules.reduce((acc, rule) => acc + (rule.count || 0), 0);
@@ -163,3 +172,5 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
     </Dialog>
   );
 };
+
+    

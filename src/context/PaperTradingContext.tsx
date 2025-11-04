@@ -85,7 +85,7 @@ interface PaperTradingContextType {
   isLoaded: boolean;
   isAiLoading: boolean;
   equity: number;
-  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractData?: any, high?: number, low?: number, priceChgPct?: number, order?: number) => void;
+  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractOrData?: KucoinFuturesContract | KucoinTicker) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'details'>) => void;
@@ -692,7 +692,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.markPrice ?? futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.lastPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -718,7 +718,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setWatchlist(prev => prev.map(item =>
           item.symbol === symbol
-            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct, snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData, futuresContractData: isSpot ? item.futuresContractData : { ...item.futuresContractData, ...(data as FuturesSnapshotData) } }
+            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct, snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData }
             : item
         ));
 
@@ -730,7 +730,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
     };
-  }, [priceAlerts]);
+  }, [priceAlerts, isWsConnected]);
 
   useEffect(() => {
     if (triggeredAlerts.current.size > 0) {
@@ -892,16 +892,39 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const spotResponse = await fetch('/api/kucoin-tickers');
         const spotData = await spotResponse.json();
         const allSpotTickers: KucoinTicker[] = (spotData?.data?.ticker || []).filter((t: KucoinTicker) => t.symbol.endsWith('-USDT'));
+        
+        const futuresResponse = await fetch("/api/kucoin-futures-tickers");
+        const futuresData = await futuresResponse.json();
+        const allFuturesContracts: KucoinFuturesContract[] = futuresData?.data || [];
 
-        if (!allSpotTickers.length && !futuresContracts.length) {
+        if (!allSpotTickers.length && !allFuturesContracts.length) {
             throw new Error('Could not fetch any screener data.');
         }
+        
+        const totalSymbolsFromRules = config.rules.reduce((acc, rule) => acc + (rule.count || 0), 0);
+        if (!config.clearExisting && (watchlist.length + totalSymbolsFromRules > 25)) {
+             toast({
+                title: 'Automation Limit Exceeded',
+                description: `This action would exceed the 25 symbol limit for your watchlist. Please adjust your rules or clear existing symbols.`,
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (config.clearExisting && totalSymbolsFromRules > 25) {
+            toast({
+                title: 'Automation Limit Exceeded',
+                description: `Your automation rules would generate ${totalSymbolsFromRules} symbols, exceeding the 25 symbol limit.`,
+                variant: 'destructive',
+            });
+            return;
+        }
+
 
         let finalItems: WatchlistItem[] = [];
         const addedSymbols = new Set<string>();
 
         let orderIndex = 0;
-        for (const rule of config.rules) {
+        config.rules.forEach(rule => {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[];
             let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct';
 
@@ -926,10 +949,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 selected = sorted.slice(-rule.count).reverse();
             }
 
-            for (const item of selected) {
+            selected.forEach(item => {
                 if (!addedSymbols.has(item.symbol)) {
                     addedSymbols.add(item.symbol);
-                    const isSpot = rule.source === 'spot';
+                    const isSpot = 'volValue' in item; // Differentiate spot from futures
+                    
                     const newItem: WatchlistItem = {
                         symbol: item.symbol,
                         symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
@@ -939,12 +963,16 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
                         low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                         order: orderIndex++,
-                        futuresContractData: isSpot ? undefined : item as KucoinFuturesContract,
                     };
+
+                    if (!isSpot) {
+                        newItem.futuresContractData = item as KucoinFuturesContract;
+                    }
+                    
                     finalItems.push(newItem);
                 }
-            }
-        }
+            });
+        });
 
         if (userContextDocRef && firestore) {
             const batch = writeBatch(firestore);
@@ -992,14 +1020,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const needsSpot = symbolsToWatch.spot.length > 0;
         const needsFutures = symbolsToWatch.futures.length > 0;
 
-        // Simplified logic: If we are connected to either websocket, we consider it connected for loading purposes
-        const anyWsConnected = spotWsStatus === 'connected' || futuresWsStatus === 'connected';
+        const spotReady = !needsSpot || isWsConnected;
+        const futuresReady = !needsFutures || isWsConnected;
 
-        if ((!needsSpot && !needsFutures) || anyWsConnected) {
+        if (spotReady && futuresReady) {
             setIsLoaded(true);
         }
     }
-  }, [spotWsStatus, futuresWsStatus, symbolsToWatch, dataLoadedRef]);
+  }, [isWsConnected, symbolsToWatch, dataLoadedRef]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
@@ -1109,14 +1137,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
-      const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === 'snapshot.24h') {
-          const data = message.data as FuturesSnapshotData;
-          const symbol = data.symbol || message.topic.split(':')[1];
-          if (symbol) {
-             processUpdateRef.current(symbol, false, data);
-          }
-      }
+    const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
+    if (message.type === 'message' && message.subject === "snapshot.24h") {
+        const data = message.data as FuturesSnapshotData;
+        const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
+        const symbol = topicMatch ? topicMatch[1] : data.symbol;
+        if (symbol) {
+           processUpdateRef.current(symbol, false, data);
+        }
+    }
   }, []);
   
   useEffect(() => {
@@ -1172,7 +1201,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
   }, [toast, deleteSubcollectionDoc]);
 
-  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', contractData?: any, high?: number, low?: number, priceChgPct?: number, order?: number) => {
+  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', contractOrData?: KucoinFuturesContract | KucoinTicker) => {
     const existingIndex = watchlist.findIndex(item => item.symbol === symbol);
 
     if (existingIndex > -1) {
@@ -1181,23 +1210,24 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } else {
         if (watchlist.length >= 25) {
             toast({
-                title: 'Watchlist Limit Reached',
-                description: 'The free plan is limited to 25 symbols. Please remove one to add another.',
-                variant: 'destructive',
+                title: "Watchlist Limit Reached",
+                description: "You can only have up to 25 symbols. This is a feature of the free plan.",
+                variant: "destructive",
             });
             return;
         }
+
         const newItem: WatchlistItem = {
             symbol,
             symbolName,
             type,
             currentPrice: 0,
-            high: high ?? undefined,
-            low: low ?? undefined,
-            priceChgPct: priceChgPct ?? 0,
-            order: order ?? 0,
-            futuresContractData: type === 'futures' ? contractData : undefined
+            high: contractOrData && 'high' in contractOrData ? parseFloat(contractOrData.high) : contractOrData && 'highPrice' in contractOrData ? contractOrData.highPrice : undefined,
+            low: contractOrData && 'low' in contractOrData ? parseFloat(contractOrData.low) : contractOrData && 'lowPrice' in contractOrData ? contractOrData.lowPrice : undefined,
+            priceChgPct: contractOrData && 'changeRate' in contractOrData ? parseFloat(contractOrData.changeRate) : contractOrData && 'priceChgPct' in contractOrData ? contractOrData.priceChgPct : 0,
+            order: watchlist.length,
         };
+
         if (type === 'spot' && futuresContracts.length > 0) {
             const baseCurrency = symbolName.split('-')[0];
             const futuresEquivalent = futuresContracts.find(c => c.baseCurrency === baseCurrency);
@@ -1206,6 +1236,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 newItem.hasFutures = true;
             }
         }
+        
+        if (type === 'futures' && contractOrData && 'openInterest' in contractOrData) {
+            newItem.futuresContractData = contractOrData as KucoinFuturesContract;
+        }
+
         saveSubcollectionDoc('watchlist', newItem.symbol, newItem);
         toast({ title: 'Watchlist', description: `${symbolName} added to watchlist.` });
     }
