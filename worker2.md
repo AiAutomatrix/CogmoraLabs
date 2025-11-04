@@ -195,10 +195,18 @@ class WebSocketManager {
       }
 
       if (msg.topic && msg.data) {
-        const sym = this.name.startsWith('SPOT') ? msg.topic.split(':')[1] : msg.topic.replace('/contractMarket/snapshot:', '');
-        const price = this.name.startsWith('SPOT') ? parseFloat(msg.data?.data?.lastTradedPrice) : parseFloat(msg.data?.markPrice);
-        if (sym && !Number.isNaN(price)) {
-          // Keep price tick handling lightweight — do not query firestore here
+        let sym: string | undefined;
+        let price: number | undefined;
+
+        if (this.name.startsWith('SPOT') && msg.subject === 'trade.snapshot') {
+          sym = msg.topic.split(':')[1];
+          price = parseFloat(msg.data?.data?.lastTradedPrice);
+        } else if (this.name.startsWith('FUTURES') && msg.subject === 'snapshot.24h') {
+          sym = msg.topic.replace('/contractMarket/snapshot:', '');
+          price = parseFloat(msg.data?.lastPrice);
+        }
+
+        if (sym && price !== undefined && !Number.isNaN(price)) {
           processPriceUpdate(sym, price).catch(err => error(`processPriceUpdate err: ${err}`));
         }
       }
@@ -569,5 +577,3 @@ async function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-    
