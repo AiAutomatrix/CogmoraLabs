@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 //==========================================================================
@@ -40,7 +41,7 @@ export const PaperTradeSchema = z.object({
   entryPrice: z.number(),
   closePrice: z.number().optional().nullable(),
   leverage: z.number().nullable(),
-  openTimestamp: z.number(),
+  openTimestamp: z.any(),
   closeTimestamp: z.any().optional().nullable(), // Allow Firestore server timestamp
   pnl: z.number().optional().nullable(),
   status: z.enum(['open', 'closed']),
@@ -300,7 +301,7 @@ export const TradeSchema = z.object({
   id: z.string(),
   cryptocurrency: z.string().min(1, "Cryptocurrency symbol is required (e.g., BTCUSDT)"),
   entryPrice: z.coerce.number().positive("Entry price must be a positive number"),
-  targetPrice: z.coerce.number().positive("Stop loss must be a positive number"),
+  targetPrice: z.coerce.number().positive("Target price must be a positive number"),
   stopLoss: z.coerce.number().positive("Stop loss must be a positive number"),
   status: z.enum(['active', 'closed']).default('active'),
   createdAt: z.date().default(() => new Date()),
@@ -557,7 +558,7 @@ export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker' | 'trade.snapshot';
-  data: KucoinTicker | KucoinSnapshotDataWrapper;
+  data: z.infer<typeof z.any>; // Was KucoinTicker which is not a Zod schema
 };
 
 export type IncomingKucoinWebSocketMessage =
@@ -586,7 +587,7 @@ export type FuturesSnapshotData = {
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot';
+    subject: 'snapshot.24h';
     data: FuturesSnapshotData;
 };
 
@@ -608,6 +609,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-
-    

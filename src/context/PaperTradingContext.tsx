@@ -494,7 +494,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', positionId), newPosition, {});
       }
       
-      const newTrade: Omit<PaperTrade, 'id'|'closePrice'> = {
+      const newTrade: Omit<PaperTrade, 'id'|'closePrice'|'closeTimestamp'> = {
         positionId: positionId!,
         positionType: 'spot', symbol, symbolName, size,
         entryPrice: currentPrice, side: 'buy', leverage: null,
@@ -540,7 +540,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ balance: newBalance });
       setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', newPosition.id), newPosition, {});
 
-      const newTrade: Omit<PaperTrade, 'id'|'closePrice'> = {
+      const newTrade: Omit<PaperTrade, 'id'|'closePrice'|'closeTimestamp'> = {
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "long", leverage, openTimestamp: Date.now(), status: "open",
       };
@@ -581,7 +581,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       saveDataToFirestore({ balance: newBalance });
       setDocumentNonBlocking(doc(userContextDocRef, 'openPositions', newPosition.id), newPosition, {});
 
-      const newTrade: Omit<PaperTrade, 'id'|'closePrice'> = {
+      const newTrade: Omit<PaperTrade, 'id'|'closePrice'|'closeTimestamp'> = {
           positionId: newPosition.id, positionType: "futures", symbol, symbolName: newPosition.symbolName,
           size, entryPrice: entryPrice, side: "short", leverage, openTimestamp: Date.now(), status: "open",
       };
