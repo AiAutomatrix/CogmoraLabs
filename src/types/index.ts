@@ -387,7 +387,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof LiquiditySchema>;
+export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -582,6 +582,7 @@ export type FuturesSnapshotData = {
     turnover: number;
     volume: number;
     openInterest?: string;
+    markPrice?: number;
 };
 
 export type KucoinFuturesSnapshotMessage = {
@@ -609,3 +610,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    
