@@ -114,9 +114,11 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
 
   const formatPrice = (price: number) => {
     if (!price || isNaN(price)) return '0.00';
+    if (price < 0.001) {
+        return price.toExponential(2); // e.g., 1.23e-4
+    }
     if (price < 10) {
-      if (price < 0.0001) return price.toFixed(8);
-      return price.toFixed(6);
+        return price.toFixed(4);
     }
     return price.toFixed(2);
   };
@@ -138,8 +140,8 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
     </div>
   );
 
-  const SortableMobileHeader: React.FC<{ sortKey: SortKey; label: string }> = ({ sortKey, label }) => (
-    <button onClick={() => requestSort(sortKey)} className="flex flex-col items-center focus:outline-none">
+  const SortableMobileHeader: React.FC<{ sortKey: SortKey; label: string; className?: string }> = ({ sortKey, label, className }) => (
+    <button onClick={() => requestSort(sortKey)} className={`flex flex-col items-center focus:outline-none ${className}`}>
       <span className="text-muted-foreground text-xs flex items-center">{label}{getSortIcon(sortKey)}</span>
     </button>
   );
@@ -187,7 +189,7 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="grid grid-cols-5 flex-grow items-center gap-2 lg:hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="grid grid-cols-5 flex-grow items-center gap-2 w-full lg:hidden" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col col-span-1 text-left">
                            <Button
                               variant="link"
