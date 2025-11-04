@@ -239,11 +239,12 @@ export default function PaperTradingDashboard({
                     <AlertDialogTrigger asChild>
                     <Button
                         variant="destructive"
-                        size="sm"
+                        size="icon"
                         disabled={openPositions.length === 0}
+                        className="h-9 w-9"
                     >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Close All
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Close All Positions</span>
                     </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
@@ -270,7 +271,7 @@ export default function PaperTradingDashboard({
                         <TableRow>
                         <TableHead className="px-2 py-2">Symbol</TableHead>
                         <TableHead className="px-1 py-2 text-center">Type</TableHead>
-                        <TableHead className="text-right px-1 py-2">Size</TableHead>
+                        <TableHead className="hidden sm:table-cell text-right px-1 py-2">Size</TableHead>
                         <TableHead className="hidden md:table-cell text-right px-2 py-2">
                             Value (USD)
                         </TableHead>
@@ -322,7 +323,7 @@ export default function PaperTradingDashboard({
                                     <Badge variant="secondary">Spot</Badge>
                                 )}
                                 </TableCell>
-                                <TableCell className="text-right px-1 py-2">
+                                <TableCell className="hidden sm:table-cell text-right px-1 py-2">
                                 {formatSize(pos.size)}
                                 </TableCell>
                                 <TableCell className="hidden md:table-cell text-right px-2 py-2">
@@ -528,4 +529,5 @@ export default function PaperTradingDashboard({
     
 
     
+
 
