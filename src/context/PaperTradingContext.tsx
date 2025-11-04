@@ -46,6 +46,15 @@ import { proposeTradeTriggers } from "@/ai/flows/propose-trade-triggers-flow";
 import { getSpotWsToken, getFuturesWsToken } from "@/app/actions/kucoinActions";
 import type { KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
 
+// Custom hook to get previous value
+function usePrevious<T>(value: T) {
+  const ref = useRef<T>();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
 
 const INITIAL_BALANCE = 100000;
 const INITIAL_AUTOMATION_CONFIG: AutomationConfig = {
@@ -182,6 +191,56 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     }
     return null;
   }, [user, firestore]);
+
+  // --- Start of Backend Action Detection Effects ---
+  const prevPositions = usePrevious(openPositions);
+  const prevTradeHistory = usePrevious(tradeHistory);
+
+  useEffect(() => {
+    if (!prevPositions || !isLoaded) return;
+
+    if (openPositions.length > prevPositions.length) {
+      const newPositionIds = new Set(openPositions.map(p => p.id));
+      const oldPositionIds = new Set(prevPositions.map(p => p.id));
+      const addedPositionId = [...newPositionIds].find(id => !oldPositionIds.has(id));
+
+      if (addedPositionId) {
+        const newPosition = openPositions.find(p => p.id === addedPositionId);
+        if (newPosition && newPosition.details?.triggeredBy?.startsWith('trigger')) {
+          toast({
+            title: `Trade Executed by Trigger`,
+            description: `${newPosition.side.toUpperCase()} ${newPosition.symbolName} @ ${formatPrice(newPosition.averageEntryPrice)}`
+          });
+        }
+      }
+    }
+  }, [openPositions, prevPositions, isLoaded, toast]);
+  
+  useEffect(() => {
+      if (!prevTradeHistory || !isLoaded) return;
+  
+      if (tradeHistory.length > prevTradeHistory.length) {
+          const newHistoryIds = new Set(tradeHistory.map(t => t.id));
+          const oldHistoryIds = new Set(prevTradeHistory.map(t => t.id));
+          const addedTradeId = [...newHistoryIds].find(id => !oldHistoryIds.has(id));
+  
+          if (addedTradeId) {
+              const newTrade = tradeHistory.find(t => t.id === addedTradeId);
+              if (newTrade && newTrade.status === 'closed' && newTrade.pnl !== undefined && newTrade.pnl !== null) {
+                  toast({
+                      title: `Position Closed`,
+                      description: `${newTrade.symbolName} | P&L: ${formatCurrency(newTrade.pnl)}`,
+                      variant: newTrade.pnl >= 0 ? 'default' : 'destructive',
+                  });
+              }
+          }
+      }
+  }, [tradeHistory, prevTradeHistory, isLoaded, toast]);
+
+  const formatPrice = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: value < 0.1 ? 8 : 4 }).format(value);
+  const formatCurrency = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+  // --- End of Backend Action Detection Effects ---
+
 
   // Combined listener setup
   useEffect(() => {
@@ -1188,3 +1247,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
