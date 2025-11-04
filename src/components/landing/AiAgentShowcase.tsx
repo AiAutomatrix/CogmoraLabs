@@ -1,4 +1,3 @@
-
 'use client';
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
@@ -65,12 +64,11 @@ const AiAgentShowcase = () => {
                         <Card className="overflow-hidden shadow-2xl shadow-primary/20">
                             <CardContent className="p-0">
                                 <Image
-                                    src="https://picsum.photos/seed/ai-agent/800/1000"
+                                    src="/action-plan.jpg"
                                     alt="AI Agent Interface Showcase"
                                     width={800}
                                     height={1000}
                                     className="w-full h-auto object-cover"
-                                    data-ai-hint="ai interface"
                                 />
                             </CardContent>
                         </Card>
