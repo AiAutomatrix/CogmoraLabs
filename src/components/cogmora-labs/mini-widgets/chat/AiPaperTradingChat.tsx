@@ -189,7 +189,7 @@ const AiPaperTradingChat: React.FC = () => {
         }
         
         return (
-             <div className="space-y-4">
+             <div className="space-y-4 p-2">
                 {activePlan.analysis && (
                     <Card className="flex-shrink-0">
                         <CardHeader className="p-3">
@@ -225,7 +225,9 @@ const AiPaperTradingChat: React.FC = () => {
                 <TabsTrigger value="logs"><History className="mr-2 h-4 w-4" /> Execution Logs</TabsTrigger>
             </TabsList>
             <TabsContent value="plan" className="flex-grow mt-0 overflow-hidden">
-                <MainContent />
+                 <ScrollArea className="h-full">
+                    <MainContent />
+                </ScrollArea>
             </TabsContent>
             <TabsContent value="logs" className="flex-grow mt-0 overflow-hidden flex flex-col">
                 <div className="p-2 border-b flex justify-end">

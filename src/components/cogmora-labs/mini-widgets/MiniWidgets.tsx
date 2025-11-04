@@ -6,7 +6,6 @@ import { TrendingUp, MessageCircle, Bot } from 'lucide-react';
 import TradingViewTechAnalysisWidget from './analysis/TradingViewTechAnalysisWidget';
 import AiWebchat from './chat/AiWebchat';
 import AiPaperTradingChat from './chat/AiPaperTradingChat';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface MiniWidgetsProps {
   currentSymbol: string;
@@ -53,7 +52,7 @@ const MiniWidgets: FC<MiniWidgetsProps> = ({
         <AiWebchat />
       </TabsContent>
 
-      <TabsContent value="ai_paper_trading" className="overflow-y-auto flex-grow mt-0 p-2">
+      <TabsContent value="ai_paper_trading" className="flex-grow mt-0 overflow-hidden">
         <AiPaperTradingChat />
       </TabsContent>
     </Tabs>
