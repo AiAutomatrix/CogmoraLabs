@@ -189,8 +189,8 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="grid grid-cols-5 flex-grow items-center gap-2 w-full lg:hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-col col-span-1 text-left">
+                    <div className="grid grid-cols-[1.5fr_repeat(4,_1fr)] flex-grow items-center gap-x-2 w-full lg:hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col text-left">
                            <Button
                               variant="link"
                               className="p-0 h-auto text-xs font-medium text-left justify-start truncate"
