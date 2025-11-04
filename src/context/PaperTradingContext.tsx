@@ -1106,15 +1106,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
-      const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === 'snapshot.24h') {
-          const data = message.data as FuturesSnapshotData;
-          const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
-          const symbol = topicMatch ? topicMatch[1] : data.symbol;
-          if (symbol) {
-             processUpdateRef.current(symbol, false, data);
-          }
-      }
+    const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
+    if (message.type === 'message' && message.subject === "snapshot.24h") {
+        const data = message.data as FuturesSnapshotData;
+        const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
+        const symbol = topicMatch ? topicMatch[1] : data.symbol;
+        if (symbol) {
+           processUpdateRef.current(symbol, false, data);
+        }
+    }
   }, []);
   
   useEffect(() => {
@@ -1253,4 +1253,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   return context;
 };
 
+    
     
