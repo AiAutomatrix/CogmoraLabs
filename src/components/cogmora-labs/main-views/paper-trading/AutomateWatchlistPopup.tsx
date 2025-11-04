@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -33,6 +33,10 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
   const [updateMode, setUpdateMode] = useState<'one-time' | 'auto-refresh'>(automationConfig.updateMode);
   const [refreshInterval, setRefreshInterval] = useState<number>(automationConfig.refreshInterval);
   const [clearExisting, setClearExisting] = useState<boolean>(automationConfig.clearExisting);
+
+  const totalSymbolCount = useMemo(() => {
+    return rules.reduce((acc, rule) => acc + (rule.count || 0), 0);
+  }, [rules]);
 
   const addRule = () => {
     setRules([...rules, { id: crypto.randomUUID(), source: 'spot', criteria: 'top_volume', count: 10 }]);
@@ -70,8 +74,16 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
         
         <div className="space-y-6 py-4 max-h-[60vh] overflow-y-auto pr-4">
             <div className="space-y-4">
-                <Label className="font-semibold">Selection Criteria</Label>
-                {rules.map((rule, index) => (
+                <div className="flex justify-between items-center">
+                  <Label className="font-semibold">Selection Criteria</Label>
+                  <div className="text-sm font-medium">
+                    Total Symbols: 
+                    <span className={totalSymbolCount > 25 ? 'text-destructive' : 'text-primary'}>
+                       {totalSymbolCount} / 25
+                    </span>
+                  </div>
+                </div>
+                {rules.map((rule) => (
                     <div key={rule.id} className="p-3 border rounded-md space-y-3 bg-muted/50 relative">
                          <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7" onClick={() => removeRule(rule.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />

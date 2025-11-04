@@ -1182,7 +1182,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (watchlist.length >= 25) {
             toast({
                 title: 'Watchlist Limit Reached',
-                description: 'You can only have up to 25 symbols in your watchlist.',
+                description: 'The free plan is limited to 25 symbols. Please remove one to add another.',
                 variant: 'destructive',
             });
             return;
