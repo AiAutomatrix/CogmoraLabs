@@ -4,7 +4,6 @@ import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FilePlus, Edit, Trash2, Settings, ShieldCheck } from 'lucide-react';
-import Image from 'next/image';
 
 const AiAgentShowcase = () => {
     
@@ -64,11 +63,11 @@ const AiAgentShowcase = () => {
                     <div className="order-1 md:order-2">
                         <Card className="overflow-hidden shadow-2xl shadow-primary/20">
                             <CardContent className="p-0">
-                                <Image
+                                <img
                                     src="/action-plan.jpg"
                                     alt="AI Agent Interface Showcase"
-                                    width={800}
-                                    height={1000}
+                                    width="800"
+                                    height="1000"
                                     className="w-full h-auto object-cover"
                                 />
                             </CardContent>
