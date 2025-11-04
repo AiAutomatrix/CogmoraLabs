@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -190,7 +189,7 @@ const AiPaperTradingChat: React.FC = () => {
         }
         
         return (
-            <div className="p-4 space-y-4 h-full flex flex-col">
+             <div className="space-y-4">
                 {activePlan.analysis && (
                     <Card className="flex-shrink-0">
                         <CardHeader className="p-3">
@@ -202,22 +201,18 @@ const AiPaperTradingChat: React.FC = () => {
                     </Card>
                 )}
 
-                <div className="flex-grow min-h-0">
-                    <ScrollArea className="h-full w-full pr-4">
-                        {activePlan.plan && activePlan.plan.length > 0 ? (
-                            <div>
-                                <h3 className="text-base font-semibold mb-2">Proposed Plan of Action</h3>
-                                <div className="space-y-3">
-                                    {activePlan.plan.map((action, index) => (
-                                        <ActionCard key={index} action={action} onApprove={handleApprove} onDecline={handleDecline} />
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
-                             <p className="text-sm text-muted-foreground text-center py-4">All proposed actions have been completed.</p>
-                        )}
-                    </ScrollArea>
-                </div>
+                {activePlan.plan && activePlan.plan.length > 0 ? (
+                    <div>
+                        <h3 className="text-base font-semibold mb-2">Proposed Plan of Action</h3>
+                        <div className="space-y-3">
+                            {activePlan.plan.map((action, index) => (
+                                <ActionCard key={index} action={action} onApprove={handleApprove} onDecline={handleDecline} />
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                     <p className="text-sm text-muted-foreground text-center py-4">All proposed actions have been completed.</p>
+                )}
             </div>
         )
     }
