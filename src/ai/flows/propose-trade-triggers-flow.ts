@@ -110,20 +110,26 @@ Based on all this information, your task is to **formulate a comprehensive plan 
     *   If a trigger seems outdated or no longer strategic (e.g., price has moved far away), consider CANCELING it.
     *   If a promising symbol on the watchlist has NO trigger, CREATE a new one. Look for both long and short opportunities based on market conditions.
 
-2.  **Trade Allocation**:
+2.  **CRITICAL: Interpret Futures Sentiment via Funding Rate**:
+    *   For futures symbols in the watchlist, inspect the 'futuresContractData' object. The 'fundingFeeRate' is a powerful sentiment indicator.
+    *   **Positive Funding Rate** (e.g., > 0): Longs are paying shorts. This indicates bullish sentiment. If the rate is very high (e.g., > 0.0002), it may signal an overcrowded long trade, creating an opportunity for a short (mean reversion) trade.
+    *   **Negative Funding Rate** (e.g., < 0): Shorts are paying longs. This indicates bearish sentiment. A very low negative rate might signal an overcrowded short trade, creating an opportunity for a long squeeze.
+    *   **Use this sentiment** in your 'reasoning' for any futures-related action. For example: "Funding rate is positive, indicating bullish pressure. Proposing a long trigger on a pullback."
+
+3.  **Trade Allocation**:
     *   When creating a new trigger, the 'amount' should be between 3% and 10% of the account's available 'balance'. Do not use more than 10%.
     *   For futures, this 'amount' is the collateral.
 
-3.  **CRITICAL: Stop Loss and Take Profit Logic**:
+4.  **CRITICAL: Stop Loss and Take Profit Logic**:
     *   For **BUY** or **LONG** trades, the 'takeProfit' price MUST be **HIGHER** than the 'targetPrice' (entry).
     *   For **BUY** or **LONG** trades, the 'stopLoss' price MUST be **LOWER** than the 'targetPrice' (entry).
     *   For **SHORT** trades, the 'takeProfit' price MUST be **LOWER** than the 'targetPrice' (entry).
     *   For **SHORT** trades, the 'stopLoss' price MUST be **HIGHER** than the 'targetPrice' (entry).
     *   These rules are non-negotiable.
 
-4.  **Generate an Analysis**: Write a brief, high-level summary of what you see in the market and what your overall strategy is for this plan. Explain your reasoning based on the account metrics.
+5.  **Generate an Analysis**: Write a brief, high-level summary of what you see in the market and what your overall strategy is for this plan. Explain your reasoning based on the account metrics.
 
-5.  **Formulate the Plan**: Use the provided tools ('createTradeTrigger', 'updateTradeTrigger', 'cancelTradeTrigger', 'updateOpenPosition') to build your plan.
+6.  **Formulate the Plan**: Use the provided tools ('createTradeTrigger', 'updateTradeTrigger', 'cancelTradeTrigger', 'updateOpenPosition') to build your plan.
     *   **CRITICAL**: For each action, you MUST provide a clear 'reasoning' field inside the action object explaining why you are recommending it. This is not optional.
     *   Do not create duplicate triggers for a symbol that already has one. Either update the existing one or ignore it.
     *   For futures, suggest reasonable leverage (2x-20x).
