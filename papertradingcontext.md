@@ -85,7 +85,7 @@ interface PaperTradingContextType {
   isLoaded: boolean;
   isAiLoading: boolean;
   equity: number;
-  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractData?: any, high?: number, low?: number, priceChgPct?: number, order?: number) => void;
+  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'details'>) => void;
@@ -692,7 +692,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.markPrice ?? futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.lastPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -718,7 +718,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
         setWatchlist(prev => prev.map(item =>
           item.symbol === symbol
-            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct, snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData, futuresContractData: isSpot ? item.futuresContractData : { ...item.futuresContractData, ...(data as FuturesSnapshotData) } }
+            ? { ...item, currentPrice: newPrice!, priceChgPct: priceChgPct ?? item.priceChgPct, snapshotData: isSpot ? (data as SpotSnapshotData) : item.snapshotData }
             : item
         ));
 
@@ -730,7 +730,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             }
         }
     };
-  }, [priceAlerts]);
+  }, [priceAlerts, isWsConnected]);
 
   useEffect(() => {
     if (triggeredAlerts.current.size > 0) {
@@ -901,7 +901,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const addedSymbols = new Set<string>();
 
         let orderIndex = 0;
-        for (const rule of config.rules) {
+        config.rules.forEach(rule => {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[];
             let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct';
 
@@ -926,11 +926,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 selected = sorted.slice(-rule.count).reverse();
             }
 
-            for (const item of selected) {
+            selected.forEach(item => {
                 if (!addedSymbols.has(item.symbol)) {
                     addedSymbols.add(item.symbol);
                     const isSpot = rule.source === 'spot';
-                    const newItem: WatchlistItem = {
+                    finalItems.push({
                         symbol: item.symbol,
                         symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
                         type: rule.source,
@@ -939,12 +939,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
                         low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                         order: orderIndex++,
-                        futuresContractData: isSpot ? undefined : item as KucoinFuturesContract,
-                    };
-                    finalItems.push(newItem);
+                    });
                 }
-            }
-        }
+            });
+        });
 
         if (userContextDocRef && firestore) {
             const batch = writeBatch(firestore);
@@ -992,14 +990,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const needsSpot = symbolsToWatch.spot.length > 0;
         const needsFutures = symbolsToWatch.futures.length > 0;
 
-        // Simplified logic: If we are connected to either websocket, we consider it connected for loading purposes
-        const anyWsConnected = spotWsStatus === 'connected' || futuresWsStatus === 'connected';
+        const spotReady = !needsSpot || isWsConnected;
+        const futuresReady = !needsFutures || isWsConnected;
 
-        if ((!needsSpot && !needsFutures) || anyWsConnected) {
+        if (spotReady && futuresReady) {
             setIsLoaded(true);
         }
     }
-  }, [spotWsStatus, futuresWsStatus, symbolsToWatch, dataLoadedRef]);
+  }, [isWsConnected, symbolsToWatch, dataLoadedRef]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
@@ -1109,14 +1107,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
-      const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === 'snapshot.24h') {
-          const data = message.data as FuturesSnapshotData;
-          const symbol = data.symbol || message.topic.split(':')[1];
-          if (symbol) {
-             processUpdateRef.current(symbol, false, data);
-          }
-      }
+    const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
+    if (message.type === 'message' && message.subject === "snapshot.24h") {
+        const data = message.data as FuturesSnapshotData;
+        const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
+        const symbol = topicMatch ? topicMatch[1] : data.symbol;
+        if (symbol) {
+           processUpdateRef.current(symbol, false, data);
+        }
+    }
   }, []);
   
   useEffect(() => {
@@ -1172,21 +1171,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
   }, [toast, deleteSubcollectionDoc]);
 
-  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', contractData?: any, high?: number, low?: number, priceChgPct?: number, order?: number) => {
+  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => {
     const existingIndex = watchlist.findIndex(item => item.symbol === symbol);
 
     if (existingIndex > -1) {
       deleteSubcollectionDoc('watchlist', symbol);
       toast({ title: 'Watchlist', description: `${symbolName} removed from watchlist.` });
     } else {
-        if (watchlist.length >= 25) {
-            toast({
-                title: 'Watchlist Limit Reached',
-                description: 'The free plan is limited to 25 symbols. Please remove one to add another.',
-                variant: 'destructive',
-            });
-            return;
-        }
         const newItem: WatchlistItem = {
             symbol,
             symbolName,
@@ -1196,7 +1187,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             low: low ?? undefined,
             priceChgPct: priceChgPct ?? 0,
             order: order ?? 0,
-            futuresContractData: type === 'futures' ? contractData : undefined
         };
         if (type === 'spot' && futuresContracts.length > 0) {
             const baseCurrency = symbolName.split('-')[0];
@@ -1263,5 +1253,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
