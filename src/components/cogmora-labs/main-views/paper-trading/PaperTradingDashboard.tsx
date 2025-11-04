@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Settings2, Info, XCircle } from "lucide-react";
+import { StopCircle, Settings2, Info, XCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -238,12 +238,12 @@ export default function PaperTradingDashboard({
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
                     <Button
-                        variant="destructive"
+                        variant="outline"
                         size="icon"
                         disabled={openPositions.length === 0}
-                        className="h-9 w-9"
+                        className="h-9 w-9 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
                     >
-                        <Trash2 className="h-4 w-4" />
+                        <StopCircle className="h-5 w-5" />
                         <span className="sr-only">Close All Positions</span>
                     </Button>
                     </AlertDialogTrigger>
@@ -401,7 +401,7 @@ export default function PaperTradingDashboard({
                         size="sm"
                         disabled={tradeHistory.length === 0}
                     >
-                        <Trash2 className="mr-2 h-4 w-4" />
+                        <StopCircle className="mr-2 h-4 w-4" />
                         Clear History
                     </Button>
                     </AlertDialogTrigger>
@@ -531,3 +531,6 @@ export default function PaperTradingDashboard({
     
 
 
+
+
+    
