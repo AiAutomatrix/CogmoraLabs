@@ -13,19 +13,20 @@ import {
   type KucoinFuturesContract,
 } from "@/hooks/useKucoinFuturesTickers";
 import { useKucoinFuturesSocket } from "@/hooks/useKucoinFuturesSocket";
-import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye } from "lucide-react";
+import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FuturesTradePopup } from "../paper-trading/FuturesTradePopup";
 import { usePaperTrading } from "@/context/PaperTradingContext";
+import { FuturesSentimentInfoPopup } from "../paper-trading/FuturesSentimentInfoPopup";
 
 interface AllFuturesScreenerProps {
   onSymbolSelect: (symbol: string) => void;
 }
 
 export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreenerProps) {
-  type SortKey = "markPrice" | "priceChgPct" | "volumeOf24h" | "openInterest" | "maxLeverage";
+  type SortKey = "markPrice" | "priceChgPct" | "volumeOf24h" | "openInterest" | "fundingFeeRate";
 
   const { contracts, loading: httpLoading } = useKucoinFuturesContracts();
   const { liveData, loading: wsLoading } = useKucoinFuturesSocket(contracts.map(c => c.symbol));
@@ -38,6 +39,7 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
   } | null>({ key: "volumeOf24h", direction: "descending" });
 
   const [isTradePopupOpen, setIsTradePopupOpen] = useState(false);
+  const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<KucoinFuturesContract | null>(null);
 
   const watchedSymbols = useMemo(() => new Set(watchlist.map(item => item.symbol)), [watchlist]);
@@ -95,6 +97,11 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
     setSelectedContract(contract);
     setIsTradePopupOpen(true);
   };
+  
+  const handleInfoClick = (contract: KucoinFuturesContract) => {
+    setSelectedContract(contract);
+    setIsInfoPopupOpen(true);
+  }
 
   const getSortIcon = (key: SortKey) => {
     if (!sortConfig || sortConfig.key !== key) return null;
@@ -164,9 +171,9 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
         <div className="cursor-pointer" onClick={() => requestSort("volumeOf24h")}>Pair{getSortIcon("volumeOf24h")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("markPrice")}>Price{getSortIcon("markPrice")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("priceChgPct")}>24h %{getSortIcon("priceChgPct")}</div>
+        <div className="text-right cursor-pointer" onClick={() => requestSort("fundingFeeRate")}>Funding{getSortIcon("fundingFeeRate")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("openInterest")}>Open Interest{getSortIcon("openInterest")}</div>
         <div className="text-right cursor-pointer" onClick={() => requestSort("volumeOf24h")}>24h Vol{getSortIcon("volumeOf24h")}</div>
-        <div className="text-right cursor-pointer" onClick={() => requestSort("maxLeverage")}>Max Lev{getSortIcon("maxLeverage")}</div>
         <div className="text-center">Actions</div>
       </div>
 
@@ -199,16 +206,16 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                                 </span>
                             </div>
                             <div className="flex flex-col items-center">
+                                <SortableMobileHeader sortKey="fundingFeeRate" label="Fund" />
+                                <span className="font-mono text-foreground">{(contract.fundingFeeRate * 100).toFixed(4)}%</span>
+                            </div>
+                            <div className="flex flex-col items-center">
                                 <SortableMobileHeader sortKey="openInterest" label="OI" />
                                 <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
                             </div>
                             <div className="flex flex-col items-center">
                                 <SortableMobileHeader sortKey="volumeOf24h" label="Vol" />
                                 <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
-                            </div>
-                            <div className="flex flex-col items-center">
-                                <SortableMobileHeader sortKey="maxLeverage" label="Lev" />
-                                <span className="font-mono text-foreground">{contract.maxLeverage}x</span>
                             </div>
                         </div>
                     </div>
@@ -225,11 +232,14 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                   </div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">${formatPrice(contract.markPrice)}</div>
                   <div role="cell" className={`hidden lg:flex items-center justify-end font-mono p-0 ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>{(contract.priceChgPct * 100).toFixed(2)}%</div>
+                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{(contract.fundingFeeRate * 100).toFixed(4)}%</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.openInterest)}</div>
                   <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{formatVolume(contract.volumeOf24h)}</div>
-                  <div role="cell" className="hidden lg:flex items-center justify-end font-mono p-0">{contract.maxLeverage}x</div>
 
                   <div role="cell" className="flex items-center justify-center gap-0 p-0 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleInfoClick(contract)}>
+                        <Info className="h-4 w-4 text-blue-400" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(contract)}>
                         <BarChartHorizontal className="h-4 w-4" />
                       </Button>
@@ -251,6 +261,15 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
           contract={selectedContract}
         />
       )}
+      {selectedContract && (
+        <FuturesSentimentInfoPopup
+          isOpen={isInfoPopupOpen}
+          onOpenChange={setIsInfoPopupOpen}
+          contract={selectedContract}
+        />
+      )}
     </>
   );
 }
+
+    
