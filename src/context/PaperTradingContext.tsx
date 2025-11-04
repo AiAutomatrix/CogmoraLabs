@@ -196,6 +196,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const prevPositions = usePrevious(openPositions);
   const prevTradeHistory = usePrevious(tradeHistory);
 
+  const formatPrice = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: value < 0.1 ? 8 : 4 }).format(value);
+  const formatCurrency = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+
   useEffect(() => {
     if (!prevPositions || !isLoaded) return;
 
@@ -237,8 +240,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       }
   }, [tradeHistory, prevTradeHistory, isLoaded, toast]);
 
-  const formatPrice = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: value < 0.1 ? 8 : 4 }).format(value);
-  const formatCurrency = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
   // --- End of Backend Action Detection Effects ---
 
 
@@ -691,7 +692,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.markPrice ?? undefined;
+            newPrice = futuresData.lastPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -1252,6 +1253,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
-    
