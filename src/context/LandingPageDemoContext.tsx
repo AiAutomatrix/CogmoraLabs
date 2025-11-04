@@ -165,6 +165,42 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, [toast, processUpdate, watchlist]);
 
+  useEffect(() => {
+    const applyInitialSnapshot = async () => {
+        try {
+            const res = await fetch('/api/kucoin-tickers');
+            if (res.ok) {
+                const spotData = await res.json();
+                if (spotData?.data?.ticker) {
+                    const tickerMap = new Map<string, KucoinTicker>();
+                    spotData.data.ticker.forEach((t: KucoinTicker) => tickerMap.set(t.symbol, t));
+                    
+                    setWatchlist(currentWatchlist => {
+                        return currentWatchlist.map(item => {
+                            const ticker = tickerMap.get(item.symbol);
+                            if (ticker) {
+                                return {
+                                    ...item,
+                                    currentPrice: parseFloat(ticker.last),
+                                    priceChgPct: parseFloat(ticker.changeRate)
+                                };
+                            }
+                            return item;
+                        });
+                    });
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch initial snapshot for landing page watchlist:", error);
+        }
+    };
+    
+    applyInitialSnapshot();
+    applyWatchlistAutomation(INITIAL_AUTOMATION_CONFIG);
+
+  }, []); // Intentionally empty to run only once on mount
+
+
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig) => {
     toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data for demo...' });
     setAutomationConfig(config);
@@ -245,10 +281,6 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
       toast({ title: 'Automation Failed', description: 'Could not fetch screener data.', variant: 'destructive'});
     }
   }, [toast]);
-
-  useEffect(() => {
-    applyWatchlistAutomation(INITIAL_AUTOMATION_CONFIG);
-  }, [applyWatchlistAutomation]);
 
   useEffect(() => {
     const symbols = watchlist.map(item => item.symbol);
