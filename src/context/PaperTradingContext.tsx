@@ -85,7 +85,7 @@ interface PaperTradingContextType {
   isLoaded: boolean;
   isAiLoading: boolean;
   equity: number;
-  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => void;
+  toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractData?: any, high?: number, low?: number, priceChgPct?: number, order?: number) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
   addTradeTrigger: (trigger: Omit<TradeTrigger, 'id' | 'details'>) => void;
@@ -901,7 +901,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         const addedSymbols = new Set<string>();
 
         let orderIndex = 0;
-        config.rules.forEach(rule => {
+        for (const rule of config.rules) {
             let sourceData: (KucoinTicker | KucoinFuturesContract)[];
             let sortKey: 'volValue' | 'changeRate' | 'volumeOf24h' | 'priceChgPct';
 
@@ -926,11 +926,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 selected = sorted.slice(-rule.count).reverse();
             }
 
-            selected.forEach(item => {
+            for (const item of selected) {
                 if (!addedSymbols.has(item.symbol)) {
                     addedSymbols.add(item.symbol);
                     const isSpot = rule.source === 'spot';
-                    finalItems.push({
+                    const newItem: WatchlistItem = {
                         symbol: item.symbol,
                         symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
                         type: rule.source,
@@ -939,10 +939,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
                         low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
                         order: orderIndex++,
-                    });
+                        futuresContractData: isSpot ? undefined : item,
+                    };
+                    finalItems.push(newItem);
                 }
-            });
-        });
+            }
+        }
 
         if (userContextDocRef && firestore) {
             const batch = writeBatch(firestore);
@@ -1171,7 +1173,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     toast({ title: 'Alert Removed', description: `Alert for ${symbol} removed.` });
   }, [toast, deleteSubcollectionDoc]);
 
-  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', high?: number, low?: number, priceChgPct?: number, order?: number) => {
+  const toggleWatchlist = useCallback((symbol: string, symbolName: string, type: 'spot' | 'futures', contractData?: any, high?: number, low?: number, priceChgPct?: number, order?: number) => {
     const existingIndex = watchlist.findIndex(item => item.symbol === symbol);
 
     if (existingIndex > -1) {
@@ -1187,6 +1189,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             low: low ?? undefined,
             priceChgPct: priceChgPct ?? 0,
             order: order ?? 0,
+            futuresContractData: type === 'futures' ? contractData : undefined
         };
         if (type === 'spot' && futuresContracts.length > 0) {
             const baseCurrency = symbolName.split('-')[0];

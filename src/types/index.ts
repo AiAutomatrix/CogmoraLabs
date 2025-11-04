@@ -135,6 +135,7 @@ export const WatchlistItemSchema = z.object({
     low: z.number().optional(),
     priceChgPct: z.number().optional(),
     snapshotData: SpotSnapshotDataSchema.optional(),
+    futuresContractData: z.any().optional(), // To store full futures contract info
     baseCurrency: z.string().optional(),
     quoteCurrency: z.string().optional(),
     hasFutures: z.boolean().optional(),
@@ -380,7 +381,7 @@ export type PairVolume = z.infer<typeof VolumeSchema>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
+export type PairPriceChange = z.infer<typeof PairPriceChange>;
 
 export const LiquiditySchema = z.object({
   usd: z.number().optional().nullable(),

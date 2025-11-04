@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
-import type { WatchlistItem } from '@/types';
+import type { WatchlistItem, KucoinFuturesContract } from '@/types';
 import {
   Card,
   CardContent,
@@ -23,7 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText, Wand2, Settings } from 'lucide-react';
+import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText, Wand2, Settings, Info } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +33,7 @@ import type { SpotSnapshotData } from '@/types';
 import { AutomateWatchlistPopup } from './AutomateWatchlistPopup';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { FuturesSentimentInfoPopup } from './FuturesSentimentInfoPopup';
 
 
 const CountdownTimer = ({ nextRunTime }: { nextRunTime: number | null | undefined }) => {
@@ -104,6 +105,9 @@ export default function Watchlist({
   const [isSnapshotPopupOpen, setIsSnapshotPopupOpen] = useState(false);
   const [selectedSnapshotData, setSelectedSnapshotData] = useState<{item: WatchlistItem, data: SpotSnapshotData} | null>(null);
 
+  const [isFuturesInfoPopupOpen, setIsFuturesInfoPopupOpen] = useState(false);
+  const [selectedFuturesContract, setSelectedFuturesContract] = useState<KucoinFuturesContract | null>(null);
+
   const [openAlertPopover, setOpenAlertPopover] = useState<string | null>(null);
   const [isAutomatePopupOpen, setIsAutomatePopupOpen] = useState(false);
   
@@ -143,15 +147,18 @@ export default function Watchlist({
     setIsTradePopupOpen(true);
   };
 
-  const handleSnapshotClick = useCallback((item: WatchlistItem) => {
-    if (item.snapshotData) {
-      const [base, quote] = item.symbolName.split('-');
-      setSelectedSnapshotData({ 
-          item: { ...item, baseCurrency: base, quoteCurrency: quote },
-          data: item.snapshotData 
-      });
-      setIsSnapshotPopupOpen(true);
-    }
+  const handleInfoClick = useCallback((item: WatchlistItem) => {
+      if (item.type === 'spot' && item.snapshotData) {
+          const [base, quote] = item.symbolName.split('-');
+          setSelectedSnapshotData({
+              item: { ...item, baseCurrency: base, quoteCurrency: quote },
+              data: item.snapshotData
+          });
+          setIsSnapshotPopupOpen(true);
+      } else if (item.type === 'futures' && item.futuresContractData) {
+          setSelectedFuturesContract(item.futuresContractData);
+          setIsFuturesInfoPopupOpen(true);
+      }
   }, []);
 
   const handleCloseSnapshot = useCallback(() => {
@@ -224,7 +231,8 @@ export default function Watchlist({
                   const alert = priceAlerts[item.symbol];
                   const symbolForHighlight = getHighlightSymbol(item);
                   const isSelected = selectedSymbolsForHighlight.includes(symbolForHighlight);
-                  
+                  const hasInfo = item.snapshotData || item.futuresContractData;
+
                   return (
                     <TableRow 
                       key={item.symbol}
@@ -242,11 +250,9 @@ export default function Watchlist({
                       
                       <TableCell className="text-right px-2 py-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-0">
-                           {item.type === 'spot' && (
-                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleSnapshotClick(item)} disabled={!item.snapshotData}>
-                                <FileText className="h-4 w-4" />
-                            </Button>
-                           )}
+                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleInfoClick(item)} disabled={!hasInfo}>
+                              <Info className="h-4 w-4" />
+                           </Button>
                            <Popover open={openAlertPopover === item.symbol} onOpenChange={(open) => {
                               if (open) {
                                 if (item.currentPrice > 0) setAlertPrice(item.currentPrice.toFixed(4));
@@ -341,6 +347,13 @@ export default function Watchlist({
           quoteCurrency={selectedSnapshotData.item.quoteCurrency!}
           data={selectedSnapshotData.data}
         />
+      )}
+      {selectedFuturesContract && (
+          <FuturesSentimentInfoPopup 
+            isOpen={isFuturesInfoPopupOpen}
+            onOpenChange={setIsFuturesInfoPopupOpen}
+            contract={selectedFuturesContract}
+          />
       )}
     </>
   );
