@@ -114,8 +114,8 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
 
   const formatPrice = (price: number) => {
     if (!price || isNaN(price)) return '0.00';
-    if (price < 0.001) {
-        return price.toExponential(2); // e.g., 1.23e-4
+    if (price < 0.001 && price > 0) {
+        return price.toPrecision(3);
     }
     if (price < 10) {
         return price.toFixed(4);
@@ -200,23 +200,23 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                             </Button>
                             <span className="font-mono text-foreground">${formatPrice(contract.markPrice)}</span>
                         </div>
-                        <div className="flex flex-col items-center text-center">
+                        <div className="flex flex-col items-center justify-center text-center">
                             <SortableMobileHeader sortKey="priceChgPct" label="24%" />
                             <span className={`font-mono text-foreground ${contract.priceChgPct >= 0 ? "text-green-500" : "text-red-500"}`}>
                                 {(contract.priceChgPct * 100).toFixed(2)}%
                             </span>
                         </div>
-                        <div className="flex flex-col items-center text-center">
+                        <div className="flex flex-col items-center justify-center text-center">
                             <SortableMobileHeader sortKey="fundingFeeRate" label="Fund" />
                             <button onClick={() => handleInfoClick(contract)} className="font-mono text-foreground hover:text-primary transition-colors">
                               {(contract.fundingFeeRate * 100).toFixed(4)}%
                             </button>
                         </div>
-                        <div className="flex flex-col items-center text-center">
+                        <div className="flex flex-col items-center justify-center text-center">
                             <SortableMobileHeader sortKey="openInterest" label="OI" />
                             <span className="font-mono text-foreground">{formatVolume(contract.openInterest)}</span>
                         </div>
-                        <div className="flex flex-col items-center text-center">
+                        <div className="flex flex-col items-center justify-center text-center">
                             <SortableMobileHeader sortKey="volumeOf24h" label="Vol" />
                             <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
                         </div>
