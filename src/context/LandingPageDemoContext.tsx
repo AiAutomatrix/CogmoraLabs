@@ -41,11 +41,7 @@ interface LandingPageDemoContextType {
 
 const LandingPageDemoContext = createContext<LandingPageDemoContextType | undefined>(undefined);
 
-const defaultWatchlistItems: WatchlistItem[] = [
-    { symbol: 'BTC-USDT', symbolName: 'Bitcoin', type: 'spot', currentPrice: 0, priceChgPct: 0, order: 1 },
-    { symbol: 'ETH-USDT', symbolName: 'Ethereum', type: 'spot', currentPrice: 0, priceChgPct: 0, order: 2 },
-    { symbol: 'SOL-USDT', symbolName: 'Solana', type: 'spot', currentPrice: 0, priceChgPct: 0, order: 3 },
-];
+const defaultWatchlistItems: WatchlistItem[] = [];
 
 const INITIAL_AUTOMATION_CONFIG: AutomationConfig = {
   rules: [{ id: 'default', source: 'spot', criteria: 'top_volume', count: 5 }],
@@ -165,42 +161,6 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, [toast, processUpdate, watchlist]);
 
-  useEffect(() => {
-    const applyInitialSnapshot = async () => {
-        try {
-            const res = await fetch('/api/kucoin-tickers');
-            if (res.ok) {
-                const spotData = await res.json();
-                if (spotData?.data?.ticker) {
-                    const tickerMap = new Map<string, KucoinTicker>();
-                    spotData.data.ticker.forEach((t: KucoinTicker) => tickerMap.set(t.symbol, t));
-                    
-                    setWatchlist(currentWatchlist => {
-                        return currentWatchlist.map(item => {
-                            const ticker = tickerMap.get(item.symbol);
-                            if (ticker) {
-                                return {
-                                    ...item,
-                                    currentPrice: parseFloat(ticker.last),
-                                    priceChgPct: parseFloat(ticker.changeRate)
-                                };
-                            }
-                            return item;
-                        });
-                    });
-                }
-            }
-        } catch (error) {
-            console.error("Failed to fetch initial snapshot for landing page watchlist:", error);
-        }
-    };
-    
-    applyInitialSnapshot();
-    applyWatchlistAutomation(INITIAL_AUTOMATION_CONFIG);
-
-  }, []); // Intentionally empty to run only once on mount
-
-
   const applyWatchlistAutomation = useCallback(async (config: AutomationConfig) => {
     toast({ title: 'Automation Running', description: 'Fetching KuCoin screener data for demo...' });
     setAutomationConfig(config);
@@ -283,12 +243,21 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
   }, [toast]);
 
   useEffect(() => {
+    // Run automation on initial load
+    applyWatchlistAutomation(INITIAL_AUTOMATION_CONFIG);
+  }, [applyWatchlistAutomation]);
+
+
+  useEffect(() => {
     const symbols = watchlist.map(item => item.symbol);
-    connectToSpot(symbols);
+    if (symbols.length > 0) {
+      connectToSpot(symbols);
+    }
     
     return () => {
       if(spotWs.current?.readyState === WebSocket.OPEN) {
         spotWs.current.close();
+        spotWs.current = null;
       }
     }
   }, [watchlist, connectToSpot]);
