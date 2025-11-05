@@ -156,7 +156,7 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center gap-1 cursor-default">
-                <span>{name.substring(0, 8)}…</span>
+                <span>{name.substring(0, 4)}…</span>
                 <Info className="h-3 w-3 text-muted-foreground" />
               </div>
             </TooltipTrigger>
