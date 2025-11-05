@@ -213,7 +213,7 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_0.6fr] flex-grow items-center w-full lg:hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr_0.5fr] flex-grow items-center w-full gap-x-1 lg:hidden" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col text-left">
                            <Button
                               variant="link"
@@ -244,11 +244,11 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                             <SortableMobileHeader sortKey="volumeOf24h" label="Vol" />
                             <span className="font-mono text-foreground">{formatVolume(contract.volumeOf24h)}</span>
                         </div>
-                        <div role="cell" className="flex items-center justify-end gap-0 p-0" onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleTradeClick(contract)}>
+                        <div role="cell" className="flex items-center justify-end p-0" onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 -mr-2" onClick={() => handleTradeClick(contract)}>
                             <BarChartHorizontal className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className={`h-7 w-7 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract)}>
+                          <Button variant="ghost" size="icon" className={`h-7 w-7 -mr-2 ${watchedSymbols.has(contract.symbol) ? 'text-primary' : ''}`} onClick={() => toggleWatchlist(contract.symbol, contract.symbol.replace(/M$/, ""), 'futures', contract)}>
                               <Eye className="h-4 w-4" />
                           </Button>
                       </div>
