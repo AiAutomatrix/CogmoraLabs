@@ -13,13 +13,15 @@ import {
   type KucoinFuturesContract,
 } from "@/hooks/useKucoinFuturesTickers";
 import { useKucoinFuturesSocket } from "@/hooks/useKucoinFuturesSocket";
-import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye } from "lucide-react";
+import { ArrowUp, ArrowDown, Search, BarChartHorizontal, Eye, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { FuturesTradePopup } from "../paper-trading/FuturesTradePopup";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import { FuturesSentimentInfoPopup } from "../paper-trading/FuturesSentimentInfoPopup";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 interface AllFuturesScreenerProps {
   onSymbolSelect: (symbol: string) => void;
@@ -145,6 +147,28 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
       <span className="text-muted-foreground text-xs flex items-center">{label}{getSortIcon(sortKey)}</span>
     </button>
   );
+  
+  const renderSymbolName = (fullName: string) => {
+    const name = fullName.replace(/M$/, "");
+    if (name.length > 8) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1 cursor-default">
+                <span>{name.substring(0, 8)}…</span>
+                <Info className="h-3 w-3 text-muted-foreground" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{name}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+    return <span>{name}</span>;
+  };
 
   return (
     <>
@@ -189,14 +213,14 @@ export default function AllFuturesScreener({ onSymbolSelect }: AllFuturesScreene
                 <div key={contract.symbol} role="row" className="flex items-center justify-between px-4 py-3 text-xs border-b transition-colors hover:bg-muted/50 lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_minmax(0,_1fr)] lg:gap-4">
                   
                     {/* === MOBILE VIEW === */}
-                    <div className="grid grid-cols-[1.5fr_repeat(4,_1fr)_0.8fr] flex-grow items-center gap-x-1 w-full lg:hidden" onClick={(e) => e.stopPropagation()}>
+                    <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_0.6fr] flex-grow items-center w-full lg:hidden" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-col text-left">
                            <Button
                               variant="link"
                               className="p-0 h-auto text-xs font-medium text-left justify-start truncate"
                               onClick={() => onSymbolSelect(contract.symbol)}
                             >
-                              {contract.symbol.replace(/M$/, "")}
+                              {renderSymbolName(contract.symbol)}
                             </Button>
                             <span className="font-mono text-foreground">${formatPrice(contract.markPrice)}</span>
                         </div>
