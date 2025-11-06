@@ -156,7 +156,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   // State for subcollections, managed by real-time listeners
   const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
   const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
-  const [watchlist, setWatchlistItem[]>([]);
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [priceAlerts, setPriceAlerts] = useState<Record<string, PriceAlert>>({});
   const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
@@ -1312,4 +1312,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
