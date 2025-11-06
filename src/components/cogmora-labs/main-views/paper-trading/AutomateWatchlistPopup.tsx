@@ -27,7 +27,7 @@ interface AutomateWatchlistPopupProps {
 }
 
 export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ isOpen, onOpenChange }) => {
-  const { automationConfig, applyWatchlistAutomation, setAutomationConfig: saveAutomationConfig } = usePaperTrading();
+  const { automationConfig, setAutomationConfig: saveAutomationConfig } = usePaperTrading();
   
   const [rules, setRules] = useState<AutomationRule[]>(automationConfig.rules);
   const [updateMode, setUpdateMode] = useState<'one-time' | 'auto-refresh'>(automationConfig.updateMode);
@@ -57,12 +57,6 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
 
   const removeRule = (id: string) => {
     setRules(rules.filter(rule => rule.id !== id));
-  };
-  
-  const handleApply = () => {
-    const config: AutomationConfig = { rules, updateMode, refreshInterval, clearExisting };
-    applyWatchlistAutomation(config, true); // Force immediate scrape
-    onOpenChange(false);
   };
   
   const handleSave = () => {
@@ -165,12 +159,9 @@ export const AutomateWatchlistPopup: React.FC<AutomateWatchlistPopupProps> = ({ 
 
         <DialogFooter>
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" variant="outline" onClick={handleSave}>Save</Button>
-          <Button type="button" onClick={handleApply}>Scrape Now</Button>
+          <Button type="button" onClick={handleSave}>Save Settings</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
-
-    

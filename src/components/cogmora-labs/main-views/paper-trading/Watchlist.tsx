@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { usePaperTrading } from '@/context/PaperTradingContext';
-import type { WatchlistItem, KucoinFuturesContract } from '@/types';
+import type { WatchlistItem, KucoinFuturesContract, SpotSnapshotData } from '@/types';
 import {
   Card,
   CardContent,
@@ -23,13 +23,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, FileText, Wand2, Settings, Info } from 'lucide-react';
+import { EyeOff, Bell, ArrowUp, ArrowDown, BarChartHorizontal, Wand2, Settings, Info, LineChart } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Badge } from '@/components/ui/badge';
 import { WatchlistTradeTriggerPopup } from './WatchlistTradeTriggerPopup';
 import { SpotSnapshotPopup } from './SpotSnapshotPopup';
-import type { SpotSnapshotData } from '@/types';
 import { AutomateWatchlistPopup } from './AutomateWatchlistPopup';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -94,6 +93,7 @@ export default function Watchlist({
     addPriceAlert,
     removePriceAlert,
     automationConfig,
+    applyWatchlistAutomation,
   } = usePaperTrading();
 
   const [alertPrice, setAlertPrice] = useState('');
@@ -193,15 +193,17 @@ export default function Watchlist({
               Track symbols, set alerts, and load charts.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {isAutoRefreshEnabled && <CountdownTimer nextRunTime={automationConfig.lastRun ? automationConfig.lastRun + automationConfig.refreshInterval : undefined} />}
-            <Button variant="outline" size="sm" onClick={() => setIsAutomatePopupOpen(true)}>
-                <Wand2 className="mr-2 h-4 w-4" />
-                Automate
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => applyWatchlistAutomation(automationConfig, true)}>
+                <Wand2 className="h-4 w-4" />
+            </Button>
+             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsAutomatePopupOpen(true)}>
+                <Settings className="h-4 w-4" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm"><Settings className="mr-2 h-4 w-4" />{selectedChartLayout}</Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9"><LineChart className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 {chartOptions.map(num => (
@@ -302,7 +304,7 @@ export default function Watchlist({
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTradeClick(item)}>
                             <BarChartHorizontal className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleWatchlist(item.symbol, item.symbolName, item.type)}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleWatchlist(item.symbol, item.symbolName, item.type, item as any)}>
                             <EyeOff className="h-4 w-4" />
                           </Button>
                         </div>
