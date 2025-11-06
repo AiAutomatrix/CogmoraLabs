@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     siteName: 'Cogmora Labs',
     images: [
       {
-        url: '/lottie/hero.png', // Main hero image for social sharing
+        url: '/action-plan.jpg', // Main hero image for social sharing
         width: 1200,
         height: 630,
       },
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Cogmora Labs - AI Crypto Paper Trading & Analysis',
     description: 'Test trading strategies with a live paper trading engine, real-time screeners, advanced charting, and an autonomous AI agent.',
-    images: ['/lottie/hero.png'],
+    images: ['/action-plan.jpg'],
   },
 };
 
