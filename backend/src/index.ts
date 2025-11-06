@@ -286,7 +286,7 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
 
   // --- CRITICAL VALIDATION ---
   if (executedTrigger.type === "futures" && (executedTrigger.action !== "long" && executedTrigger.action !== "short")) {
-    logger.error(`CRITICAL: Invalid futures trigger action detected. Deleting trigger ${triggerId}. Action was: ${executedTrigger.action}`);
+    logger.error(`CRITICAL: Invalid futures trigger action detected. Deleting trigger ${triggerId}. Action was: "${executedTrigger.action}"`);
     await event.data!.ref.delete();
     return; // Stop processing
   }
@@ -310,6 +310,28 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         throw new Error(`Executed trigger ${triggerId} is missing currentPrice.`);
       }
 
+      // --- CLOSE OPPOSING POSITION LOGIC ---
+      const openPositionsRef = userContextRef.collection("openPositions");
+      const sideToClose = action === "long" ? "short" : "long";
+      
+      // We only care about this for futures, as spot is just 'buy'.
+      if (type === "futures") {
+          const conflictingPositionQuery = openPositionsRef
+              .where("symbol", "==", symbol)
+              .where("side", "==", sideToClose)
+              .where("positionType", "==", "futures")
+              .limit(1);
+          
+          const conflictingSnapshot = await transaction.get(conflictingPositionQuery);
+          if (!conflictingSnapshot.empty) {
+              const conflictingPosDoc = conflictingSnapshot.docs[0];
+              logger.info(`Found conflicting ${sideToClose} position (${conflictingPosDoc.id}) for new ${action} trigger. Closing it first.`);
+              transaction.update(conflictingPosDoc.ref, { "details.status": "closing", "details.closePrice": currentPrice });
+          }
+      }
+      // --- END CLOSE OPPOSING POSITION LOGIC ---
+
+
       if (type === "spot") {
         if (currentBalance < amount) {
           throw new Error("Insufficient balance for spot buy.");
@@ -318,7 +340,6 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         const newBalance = currentBalance - amount;
 
         // Check for existing position to average into
-        const openPositionsRef = userContextRef.collection("openPositions");
         const existingPositionQuery = openPositionsRef.where("symbol", "==", symbol).where("positionType", "==", "spot").limit(1);
         const existingPositionSnapshot = await transaction.get(existingPositionQuery);
 
