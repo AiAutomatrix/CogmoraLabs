@@ -1053,6 +1053,20 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return { spot: Array.from(spot), futures: Array.from(futures) };
   }, [openPositions, tradeTriggers, watchlist]);
 
+   useEffect(() => {
+    if (dataLoadedRef.current) {
+        const needsSpot = symbolsToWatch.spot.length > 0;
+        const needsFutures = symbolsToWatch.futures.length > 0;
+
+        const spotReady = !needsSpot || isWsConnected;
+        const futuresReady = !needsFutures || isWsConnected;
+
+        if (spotReady && futuresReady) {
+            setIsLoaded(true);
+        }
+    }
+  }, [isWsConnected, symbolsToWatch]);
+
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
       statusSetter: React.Dispatch<React.SetStateAction<string>>,

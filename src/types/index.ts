@@ -502,6 +502,14 @@ export const KucoinFuturesContractSchema = z.object({
     highPrice: z.number(),
     priceChgPct: z.number(),
     priceChg: z.number(),
+    k: z.number(),
+    m: z.number(),
+    f: z.number(),
+    mmrLimit: z.number(),
+    mmrLevConstant: z.number(),
+    supportCross: z.boolean(),
+    buyLimit: z.number(),
+    sellLimit: z.number(),
 });
 export type KucoinFuturesContract = z.infer<typeof KucoinFuturesContractSchema>;
 
