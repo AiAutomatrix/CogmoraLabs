@@ -285,7 +285,7 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
   }
 
   // --- CRITICAL VALIDATION ---
-  if (executedTrigger.type === 'futures' && (executedTrigger.action !== 'long' && executedTrigger.action !== 'short')) {
+  if (executedTrigger.type === "futures" && (executedTrigger.action !== "long" && executedTrigger.action !== "short")) {
     logger.error(`CRITICAL: Invalid futures trigger action detected. Deleting trigger ${triggerId}. Action was: ${executedTrigger.action}`);
     await event.data!.ref.delete();
     return; // Stop processing
