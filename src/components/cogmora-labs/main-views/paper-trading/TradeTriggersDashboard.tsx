@@ -138,6 +138,17 @@ export default function TradeTriggersDashboard({
     return new Intl.NumberFormat("en-US", options).format(price);
   };
   
+  const formatAmount = (amount?: number) => {
+    if (amount === undefined || isNaN(amount)) return "N/A";
+    const options: Intl.NumberFormatOptions = {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2, // Always 2 decimal places for amount
+    };
+    return new Intl.NumberFormat("en-US", options).format(amount);
+  };
+  
   return (
     <>
     <Card>
@@ -282,7 +293,7 @@ export default function TradeTriggersDashboard({
                         {trigger.action} {trigger.type === 'futures' ? `${trigger.leverage}x` : ''}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right px-2 py-3">{formatPrice(trigger.amount)}</TableCell>
+                    <TableCell className="text-right px-2 py-3">{formatAmount(trigger.amount)}</TableCell>
                     <TableCell className="text-center px-2 py-3">
                       <Button
                         variant="ghost"
@@ -317,4 +328,3 @@ export default function TradeTriggersDashboard({
     </>
   );
 }
-
