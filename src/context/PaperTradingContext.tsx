@@ -156,7 +156,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   // State for subcollections, managed by real-time listeners
   const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
   const [tradeHistory, setTradeHistory] = useState<PaperTrade[]>([]);
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [watchlist, setWatchlistItem[]>([]);
   const [priceAlerts, setPriceAlerts] = useState<Record<string, PriceAlert>>({});
   const [tradeTriggers, setTradeTriggers] = useState<TradeTrigger[]>([]);
   const [aiActionLogs, setAiActionLogs] = useState<AiActionExecutionLog[]>([]);
@@ -582,6 +582,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
       }
+
+      const existingShort = openPositions.find(p => p.symbol === symbol && p.side === 'short');
+      if (existingShort) {
+          toast({ title: "Trade Blocked", description: "You already have a short position for this symbol. Please close it before opening a long position.", variant: "destructive" });
+          return;
+      }
+
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 - (1 / leverage));
@@ -607,7 +614,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `LONG ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, toast, saveDataToFirestore, userContextDocRef]);
+  }, [balance, openPositions, toast, saveDataToFirestore, userContextDocRef]);
 
   const futuresSell = useCallback((
     symbol: string,
@@ -623,6 +630,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           toast({ title: "Error", description: "Insufficient balance for collateral.", variant: "destructive" });
           return;
       }
+
+      const existingLong = openPositions.find(p => p.symbol === symbol && (p.side === 'long' || p.side === 'buy'));
+      if (existingLong) {
+          toast({ title: "Trade Blocked", description: "You already have a long position for this symbol. Please close it before opening a short position.", variant: "destructive" });
+          return;
+      }
+      
       const positionValue = collateral * leverage;
       const size = positionValue / entryPrice;
       const liquidationPrice = entryPrice * (1 + (1 / leverage));
@@ -648,7 +662,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       addDocumentNonBlocking(collection(userContextDocRef, 'tradeHistory'), newTrade);
 
       toast({ title: "Futures Trade Executed", description: `SHORT ${size.toFixed(4)} ${newPosition.symbolName} @ ${entryPrice.toFixed(4)}` });
-  }, [balance, toast, saveDataToFirestore, userContextDocRef]);
+  }, [balance, openPositions, toast, saveDataToFirestore, userContextDocRef]);
   
   const closePosition = useCallback(async (positionId: string) => {
     if (!firestore || !userContextDocRef) return;
@@ -932,7 +946,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 sourceData = allSpotTickers;
                 sortKey = rule.criteria.includes('volume') ? 'volValue' : 'changeRate';
             } else {
-                sourceData = futuresContracts;
+                sourceData = allFuturesContracts;
                 sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
             }
 
@@ -1299,4 +1313,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   return context;
 };
 
-    
