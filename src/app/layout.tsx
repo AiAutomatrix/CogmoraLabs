@@ -18,15 +18,36 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Cogmora Labs - AI-Powered Crypto Trading & Analysis Platform',
+    default: 'Cogmora Labs - AI Crypto Paper Trading & Analysis',
     template: '%s | Cogmora Labs',
   },
-  description: 'Cogmora Labs offers a comprehensive suite of AI-powered tools for cryptocurrency traders, including advanced charting, real-time spot and futures screeners, a DEX explorer, and a live paper trading engine to test your strategies risk-free.',
+  description: 'An AI-powered cryptocurrency analysis and paper trading platform. Test strategies with a live paper trading engine, real-time screeners, advanced charting, and an autonomous AI agent.',
   keywords: [
-    'crypto', 'trading', 'AI', 'screener', 'paper trading', 'technical analysis',
+    'crypto', 'trading', 'AI', 'paper trading', 'screener', 'technical analysis',
     'cryptocurrency', 'blockchain', 'market analysis', 'trading tools', 'financial charts',
-    'DEX screener', 'futures trading', 'spot trading', 'KuCoin', 'TradingView'
+    'DEX screener', 'futures trading', 'spot trading', 'KuCoin', 'TradingView', 'AI trading agent'
   ],
+  openGraph: {
+    title: 'Cogmora Labs - AI Crypto Paper Trading & Analysis',
+    description: 'Test trading strategies with a live paper trading engine, real-time screeners, advanced charting, and an autonomous AI agent.',
+    url: 'https://cogmora-labs.web.app', // Using a placeholder, but good practice
+    siteName: 'Cogmora Labs',
+    images: [
+      {
+        url: '/lottie/hero.png', // Main hero image for social sharing
+        width: 1200,
+        height: 630,
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Cogmora Labs - AI Crypto Paper Trading & Analysis',
+    description: 'Test trading strategies with a live paper trading engine, real-time screeners, advanced charting, and an autonomous AI agent.',
+    images: ['/lottie/hero.png'],
+  },
 };
 
 export default function RootLayout({
