@@ -312,25 +312,21 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
 
       // --- CLOSE OPPOSING POSITION LOGIC ---
       const openPositionsRef = userContextRef.collection("openPositions");
-      const sideToClose = action === "long" ? "short" : "long";
-      
-      // We only care about this for futures, as spot is just 'buy'.
       if (type === "futures") {
-          const conflictingPositionQuery = openPositionsRef
-              .where("symbol", "==", symbol)
-              .where("side", "==", sideToClose)
-              .where("positionType", "==", "futures")
-              .limit(1);
-          
-          const conflictingSnapshot = await transaction.get(conflictingPositionQuery);
-          if (!conflictingSnapshot.empty) {
-              const conflictingPosDoc = conflictingSnapshot.docs[0];
-              logger.info(`Found conflicting ${sideToClose} position (${conflictingPosDoc.id}) for new ${action} trigger. Closing it first.`);
-              transaction.update(conflictingPosDoc.ref, { "details.status": "closing", "details.closePrice": currentPrice });
-          }
+        const sideToClose = action === "long" ? "short" : "long";
+        const conflictingPositionQuery = openPositionsRef
+          .where("symbol", "==", symbol)
+          .where("side", "==", sideToClose)
+          .where("positionType", "==", "futures")
+          .limit(1);
+        const conflictingSnapshot = await transaction.get(conflictingPositionQuery);
+        if (!conflictingSnapshot.empty) {
+          const conflictingPosDoc = conflictingSnapshot.docs[0];
+          logger.info(`Found conflicting ${sideToClose} position (${conflictingPosDoc.id}) for new ${action} trigger. Closing it first.`);
+          transaction.update(conflictingPosDoc.ref, {"details.status": "closing", "details.closePrice": currentPrice});
+        }
       }
       // --- END CLOSE OPPOSING POSITION LOGIC ---
-
 
       if (type === "spot") {
         if (currentBalance < amount) {
