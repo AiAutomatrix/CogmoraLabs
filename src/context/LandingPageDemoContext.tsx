@@ -19,8 +19,8 @@ import type {
   AutomationConfig,
   AutomationRule,
   KucoinFuturesContract,
-  KucoinTicker,
 } from "@/types";
+import type { KucoinTicker } from "@/hooks/useKucoinAllTickersSocket";
 import { useToast } from "@/hooks/use-toast";
 import { getSpotWsToken } from "@/app/actions/kucoinActions";
 
@@ -65,7 +65,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
   
   const processUpdate = useCallback((symbol: string, data: Partial<SpotSnapshotData>) => {
     const newPrice = data.lastTradedPrice;
-    if (newPrice === undefined || isNaN(newPrice) || newPrice === 0) return;
+    if (newPrice === undefined || newPrice === null || isNaN(newPrice) || newPrice === 0) return;
 
     setWatchlist(prev => prev.map(item =>
         item.symbol === symbol ? {
@@ -194,7 +194,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
                 sortKey = rule.criteria.includes('volume') ? 'volumeOf24h' : 'priceChgPct';
             }
             
-            const sorted = [...sourceData].sort((a, b) => {
+            const sorted: (KucoinTicker | KucoinFuturesContract)[] = [...sourceData].sort((a, b) => {
                 const valA = parseFloat((a as any)[sortKey]) || 0;
                 const valB = parseFloat((b as any)[sortKey]) || 0;
                 return valB - valA;
@@ -210,7 +210,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
             selected.forEach(item => {
                 if (!addedSymbols.has(item.symbol)) {
                     addedSymbols.add(item.symbol);
-                    const isSpot = rule.source === 'spot';
+                    const isSpot = 'volValue' in item;
                     finalItems.push({
                         symbol: item.symbol,
                         symbolName: isSpot ? (item as KucoinTicker).symbolName : (item as KucoinFuturesContract).symbol.replace(/M$/, ''),
@@ -274,7 +274,7 @@ export const LandingPageDemoProvider: React.FC<{ children: ReactNode }> = ({ chi
   };
 
   const addPriceAlert = (symbol: string, price: number, condition: 'above' | 'below') => {
-    setPriceAlerts(prev => ({...prev, [symbol]: { price, condition, triggered: false }}));
+    setPriceAlerts(prev => ({...prev, [symbol]: { price, condition, triggered: false, notified: false }}));
     toast({ title: 'Demo Alert Set', description: `Alert set for ${symbol}.` });
   };
   
@@ -327,3 +327,5 @@ export const useLandingPageDemo = (): LandingPageDemoContextType => {
   }
   return context;
 };
+
+    
