@@ -71,6 +71,43 @@ const CountdownTimer = ({ nextRunTime }: { nextRunTime: number | null | undefine
     );
 };
 
+const AiCooldownTimer = ({ lastRunTimestamp }: { lastRunTimestamp: number | null }) => {
+    const AI_COOLDOWN_MS = 300000; // 5 minutes
+    const [timeLeft, setTimeLeft] = useState(0);
+
+    useEffect(() => {
+        if (!lastRunTimestamp) {
+            setTimeLeft(0);
+            return;
+        }
+
+        const calculateTimeLeft = () => {
+            const now = Date.now();
+            const timeSinceLastRun = now - lastRunTimestamp;
+            const newTimeLeft = AI_COOLDOWN_MS - timeSinceLastRun;
+            setTimeLeft(newTimeLeft > 0 ? newTimeLeft : 0);
+        };
+
+        calculateTimeLeft();
+        const interval = setInterval(calculateTimeLeft, 1000);
+
+        return () => clearInterval(interval);
+    }, [lastRunTimestamp]);
+    
+    if (timeLeft <= 0) {
+        return null; // Don't render the timer if cooldown is over
+    }
+
+    const minutes = Math.floor(timeLeft / 60000);
+    const seconds = Math.floor((timeLeft % 60000) / 1000);
+
+    return (
+        <span className="text-xs font-mono text-muted-foreground ml-2">
+            ({minutes}:{seconds.toString().padStart(2, '0')})
+        </span>
+    );
+}
+
 
 export default function TradeTriggersDashboard({
     aiSettings,
@@ -81,11 +118,14 @@ export default function TradeTriggersDashboard({
     setAiSettings: (settings: AiTriggerSettings) => void;
     handleAiTriggerAnalysis: () => void;
 }) {
-  const { tradeTriggers, removeTradeTrigger, automationConfig } = usePaperTrading();
+  const { tradeTriggers, removeTradeTrigger, automationConfig, lastManualAiRunTimestamp } = usePaperTrading();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const isWatchlistAutomationActive = automationConfig.updateMode === 'auto-refresh';
   const isAiAutomationActive = !!aiSettings.scheduleInterval;
+  
+  const AI_COOLDOWN_MS = 300000;
+  const isAiOnCooldown = lastManualAiRunTimestamp ? (Date.now() - lastManualAiRunTimestamp) < AI_COOLDOWN_MS : false;
 
   const formatPrice = (price?: number) => {
     if (price === undefined || isNaN(price)) return "N/A";
@@ -129,10 +169,13 @@ export default function TradeTriggersDashboard({
             </CardDescription>
         </div>
         <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-            <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis}>
-                <Wand2 className="mr-0 md:mr-2 h-4 w-4" />
-                <span className="hidden md:inline">Run AI Now</span>
-            </Button>
+            <div className="flex items-center">
+              <Button variant="outline" size="sm" onClick={handleAiTriggerAnalysis} disabled={isAiOnCooldown}>
+                  <Wand2 className="mr-0 md:mr-2 h-4 w-4" />
+                  <span className="hidden md:inline">Run AI Now</span>
+              </Button>
+               {isAiOnCooldown && <AiCooldownTimer lastRunTimestamp={lastManualAiRunTimestamp} />}
+            </div>
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setIsSettingsOpen(true)}>
                 <Settings className="h-4 w-4" />
             </Button>

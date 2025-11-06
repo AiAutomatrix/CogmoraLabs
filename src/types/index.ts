@@ -26,6 +26,7 @@ export const FirestorePaperTradingContextSchema = z.object({
   aiSettings: z.any(),
   lastAiActionPlan: z.any().nullable(),
   aiActionLogs: z.array(z.any()),
+  lastManualAiRunTimestamp: z.number().nullable().optional(),
 });
 export type FirestorePaperTradingContext = z.infer<typeof FirestorePaperTradingContextSchema>;
 
@@ -381,7 +382,7 @@ export type PairVolume = z.infer<typeof VolumeSchema>;
 
 // Allows keys like "m5", "h1", "h6", "h24"
 export const PriceChangeSchema = z.record(z.string(), z.coerce.number().optional()).optional().nullable();
-export type PairPriceChange = z.infer<typeof PairPriceChange>;
+export type PairPriceChange = z.infer<typeof PriceChangeSchema>;
 
 export const LiquiditySchema = z.object({
   usd: z.number().optional().nullable(),
@@ -589,7 +590,7 @@ export type FuturesSnapshotData = {
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot.24h';
+    subject: 'snapshot';
     data: FuturesSnapshotData;
 };
 
@@ -611,5 +612,3 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
