@@ -17,27 +17,36 @@ export type UserProfile = z.infer<typeof UserProfileSchema>;
 
 export const FirestorePaperTradingContextSchema = z.object({
   balance: z.number().default(100000),
+  equity: z.number().optional(),
+  unrealizedPnl: z.number().optional(),
+  realizedPnl: z.number().optional(),
+  winRate: z.number().optional(),
+  wonTrades: z.number().optional(),
+  lostTrades: z.number().optional(),
   automationConfig: z.any(), // Keeping it simple for now
   aiSettings: z.any(),
   lastAiActionPlan: z.any().nullable(),
   aiActionLogs: z.array(z.any()),
+  lastManualAiRunTimestamp: z.number().nullable().optional(),
 });
 export type FirestorePaperTradingContext = z.infer<typeof FirestorePaperTradingContextSchema>;
 
 
 export const PaperTradeSchema = z.object({
-  id: z.string().optional(), // Made optional as it's assigned by Firestore
+  id: z.string().optional(),
   positionId: z.string(),
   positionType: z.enum(['spot', 'futures']),
   symbol: z.string(),
   symbolName: z.string(),
+  side: z.enum(['buy', 'long', 'short', 'sell']),
   size: z.number(),
-  price: z.number(),
-  side: z.enum(['buy', 'sell', 'long', 'short']),
-  leverage: z.number().nullable(), // Allow null
-  timestamp: z.number(),
-  status: z.enum(['open', 'closed']),
+  entryPrice: z.number(),
+  closePrice: z.number().optional().nullable(),
+  leverage: z.number().nullable(),
+  openTimestamp: z.any().optional(),
+  closeTimestamp: z.any().optional().nullable(),
   pnl: z.number().optional().nullable(),
+  status: z.enum(['open', 'closed']),
 });
 export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 
@@ -45,8 +54,9 @@ export type PaperTrade = z.infer<typeof PaperTradeSchema>;
 export const OpenPositionDetailsSchema = z.object({
   stopLoss: z.number().optional(),
   takeProfit: z.number().optional(),
-  triggeredBy: z.string().optional(), // e.g., 'manual', 'trigger:above', 'trigger:below'
-  status: z.enum(['open', 'closing']).optional(), // For backend processing
+  triggeredBy: z.string().optional(),
+  status: z.enum(['open', 'closing']).optional(),
+  closePrice: z.number().optional(), // Price at the moment of manual close
 });
 export type OpenPositionDetails = z.infer<typeof OpenPositionDetailsSchema>;
 
@@ -127,6 +137,7 @@ export const WatchlistItemSchema = z.object({
     low: z.number().optional(),
     priceChgPct: z.number().optional(),
     snapshotData: SpotSnapshotDataSchema.optional(),
+    futuresContractData: z.any().optional(), // To store full futures contract info
     baseCurrency: z.string().optional(),
     quoteCurrency: z.string().optional(),
     hasFutures: z.boolean().optional(),
@@ -143,6 +154,11 @@ export const PriceAlertSchema = z.object({
 });
 export type PriceAlert = z.infer<typeof PriceAlertSchema>;
 
+export const TradeTriggerDetailsSchema = z.object({
+  status: z.enum(['active', 'executed', 'canceled']),
+});
+export type TradeTriggerDetails = z.infer<typeof TradeTriggerDetailsSchema>;
+
 export const TradeTriggerSchema = z.object({
   id: z.string(),
   symbol: z.string(),
@@ -153,16 +169,17 @@ export const TradeTriggerSchema = z.object({
   action: z.enum(['buy', 'long', 'short']),
   amount: z.number(), // For spot, this is USD amount. For futures, this is collateral.
   leverage: z.number(), // Only for futures
-  status: z.enum(['active', 'executed', 'canceled']),
   cancelOthers: z.boolean().optional(),
   stopLoss: z.number().optional(),
   takeProfit: z.number().optional(),
+  details: TradeTriggerDetailsSchema,
 });
 export type TradeTrigger = z.infer<typeof TradeTriggerSchema>;
 
 // This is the type for the AI output, omitting fields the AI should not generate
-export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, status: true });
+export const ProposedTradeTriggerSchema = TradeTriggerSchema.omit({ id: true, details: true });
 export type ProposedTradeTrigger = z.infer<typeof ProposedTradeTriggerSchema>;
+
 
 //==========================================================================
 // AI AGENT SCHEMAS
@@ -373,7 +390,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
+export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -465,7 +482,7 @@ export const KucoinFuturesContractSchema = z.object({
     fundingQuoteSymbol: z.string(),
     fundingRateSymbol: z.string(),
     indexSymbol: z.string(),
-    settlementSymbol: z_string(),
+    settlementSymbol: z.string(),
     status: z.string(),
     fundingFeeRate: z.number(),
     predictedFundingFeeRate: z.number(),
@@ -486,6 +503,14 @@ export const KucoinFuturesContractSchema = z.object({
     highPrice: z.number(),
     priceChgPct: z.number(),
     priceChg: z.number(),
+    k: z.number(),
+    m: z.number(),
+    f: z.number(),
+    mmrLimit: z.number(),
+    mmrLevConstant: z.number(),
+    supportCross: z.boolean(),
+    buyLimit: z.number(),
+    sellLimit: z.number(),
 });
 export type KucoinFuturesContract = z.infer<typeof KucoinFuturesContractSchema>;
 
@@ -533,31 +558,6 @@ export type KucoinErrorMessage = {
   data: string; 
 };
 
-// This interface is a bit of a union of the snapshot and ticker data
-export interface KucoinTicker {
-  symbol: string;
-  symbolName: string;
-  buy: string;
-  sell: string;
-  bestBidSize: string;
-  bestAskSize: string;
-  changeRate: string;
-  changePrice: string;
-  high: string;
-  low: string;
-  vol: string;
-  volValue: string;
-  last: string;
-  averagePrice?: string;
-  takerFeeRate: string;
-  makerFeeRate: string;
-  takerCoefficient?: string;
-  makerCoefficient?: string;
-  price?: string; // Add price to match ticker data structure
-  lastTradedPrice?: string;
-  datetime?: number;
-}
-
 export const KucoinSnapshotDataWrapperSchema = z.object({
     data: SpotSnapshotDataSchema,
     sequence: z.string(),
@@ -569,7 +569,7 @@ export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker' | 'trade.snapshot';
-  data: KucoinTicker | KucoinSnapshotDataWrapper;
+  data: z.infer<typeof z.any>; // Was KucoinTicker which is not a Zod schema
 };
 
 export type IncomingKucoinWebSocketMessage =
@@ -581,25 +581,26 @@ export type IncomingKucoinWebSocketMessage =
 
 
 // KuCoin FUTURES WebSocket Message Types
-export type FuturesSnapshotData = {
-    highPrice: number;
-    lastPrice: number;
-    lowPrice: number;
-    price24HoursBefore: number;
-    priceChg: number;
-    priceChgPct: number;
-    symbol: string;
-    ts: number;
-    turnover: number;
-    volume: number;
-    openInterest?: string;
-};
+export const FuturesSnapshotDataSchema = z.object({
+    highPrice: z.number(),
+    lastPrice: z.number(),
+    lowPrice: z.number(),
+    price24HoursBefore: z.number(),
+    priceChg: z.number(),
+    priceChgPct: z.number(),
+    symbol: z.string(),
+    ts: z.number(),
+    turnover: z.number(),
+    volume: z.number(),
+    openInterest: z.string().optional(),
+    markPrice: z.number().optional(),
+});
+export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
     subject: 'snapshot.24h';
-    id: string;
     data: FuturesSnapshotData;
 };
 
@@ -621,3 +622,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    
