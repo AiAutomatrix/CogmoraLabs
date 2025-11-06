@@ -1,4 +1,5 @@
 
+
 import { z } from 'zod';
 
 //==========================================================================
@@ -42,8 +43,8 @@ export const PaperTradeSchema = z.object({
   entryPrice: z.number(),
   closePrice: z.number().optional().nullable(),
   leverage: z.number().nullable(),
-  openTimestamp: z.any(),
-  closeTimestamp: z.any().optional().nullable(), // Allow Firestore server timestamp
+  openTimestamp: z.any().optional(),
+  closeTimestamp: z.any().optional().nullable(),
   pnl: z.number().optional().nullable(),
   status: z.enum(['open', 'closed']),
 });
@@ -389,7 +390,7 @@ export const LiquiditySchema = z.object({
   base: z.number().optional().nullable(),
   quote: z.number().optional().nullable(),
 });
-export type PairLiquidity = z.infer<typeof PairLiquiditySchema>;
+export type PairLiquidity = z.infer<typeof LiquiditySchema>;
 
 export const PairInfoWebsiteSchema = z.object({
   label: z.string().optional().nullable(),
@@ -580,20 +581,21 @@ export type IncomingKucoinWebSocketMessage =
 
 
 // KuCoin FUTURES WebSocket Message Types
-export type FuturesSnapshotData = {
-    highPrice: number;
-    lastPrice: number;
-    lowPrice: number;
-    price24HoursBefore: number;
-    priceChg: number;
-    priceChgPct: number;
-    symbol: string;
-    ts: number;
-    turnover: number;
-    volume: number;
-    openInterest?: string;
-    markPrice?: number;
-};
+export const FuturesSnapshotDataSchema = z.object({
+    highPrice: z.number(),
+    lastPrice: z.number(),
+    lowPrice: z.number(),
+    price24HoursBefore: z.number(),
+    priceChg: z.number(),
+    priceChgPct: z.number(),
+    symbol: z.string(),
+    ts: z.number(),
+    turnover: z.number(),
+    volume: z.number(),
+    openInterest: z.string().optional(),
+    markPrice: z.number().optional(),
+});
+export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
@@ -620,3 +622,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    
