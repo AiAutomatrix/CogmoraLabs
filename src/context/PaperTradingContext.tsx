@@ -16,9 +16,6 @@ import {
   writeBatch,
   getDocs,
   onSnapshot,
-  query,
-  where,
-  limit,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import type {
@@ -712,7 +709,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.markPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -1176,9 +1173,10 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
     const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-    if (message.type === 'message' && message.subject === "snapshot") {
+    if (message.type === 'message' && message.subject === 'snapshot') {
         const data = message.data as FuturesSnapshotData;
-        const symbol = data.symbol || message.topic.split(':')[1];
+        const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
+        const symbol = topicMatch ? topicMatch[1] : data.symbol;
         if (symbol) {
            processUpdateRef.current(symbol, false, data);
         }
