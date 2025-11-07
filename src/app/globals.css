@@ -82,3 +82,11 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  @keyframes scroll {
+    to {
+      transform: translate(calc(-50%));
+    }
+  }
+}

@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { LandingPageDemoProvider } from '@/context/LandingPageDemoContext';
 import LandingPageWatchlist from '@/components/landing/LandingPageWatchlist';
 import Features from '@/components/landing/Features';
-import AiAgentShowcase from '@/components/landing/AiAgentShowcase'; // Import the new component
+import AiAgentShowcase from '@/components/landing/AiAgentShowcase';
+import ImageCarousel from '@/components/landing/ImageCarousel'; // Import the new component
 import { Github, Linkedin } from 'lucide-react';
 import { SignInDialog } from '@/components/auth/SignInDialog';
 import { FirebaseClientProvider, useUser } from '@/firebase';
@@ -87,6 +88,7 @@ export default function LandingPage() {
         </LandingPageDemoProvider>
         <Features />
         <AiAgentShowcase /> 
+        <ImageCarousel />
         <Footer />
       </FirebaseClientProvider>
     </main>
