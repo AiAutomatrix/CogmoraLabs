@@ -116,7 +116,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   closePosition: (positionId: string) => void;
@@ -280,7 +280,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }
         if (!dataLoadedRef.current) {
             dataLoadedRef.current = true;
-            setIsLoaded(true); // *** THIS IS THE KEY FIX ***
         }
       },
       (error) => {
@@ -291,7 +290,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }));
         if (!dataLoadedRef.current) {
           dataLoadedRef.current = true;
-          setIsLoaded(true); // Also set loaded on error to unblock UI
         }
       }
     );
@@ -1053,11 +1051,19 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     return { spot: Array.from(spot), futures: Array.from(futures) };
   }, [openPositions, tradeTriggers, watchlist]);
 
-   useEffect(() => {
+  useEffect(() => {
     if (dataLoadedRef.current) {
-        setIsLoaded(true);
+        const needsSpot = symbolsToWatch.spot.length > 0;
+        const needsFutures = symbolsToWatch.futures.length > 0;
+
+        const spotReady = !needsSpot || isWsConnected;
+        const futuresReady = !needsFutures || isWsConnected;
+
+        if (spotReady && futuresReady) {
+            setIsLoaded(true);
+        }
     }
-  }, [dataLoadedRef.current]);
+  }, [isWsConnected, symbolsToWatch]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
@@ -1167,15 +1173,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [processUpdateRef]);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
-    const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-    if (message.type === 'message' && message.subject === "snapshot.24h") {
-        const data = message.data as FuturesSnapshotData;
-        const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
-        const symbol = topicMatch ? topicMatch[1] : data.symbol;
-        if (symbol) {
-           processUpdateRef.current(symbol, false, data);
-        }
-    }
+      const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
+      if (message.type === 'message' && message.subject === "snapshot.24h") {
+          const data = message.data as FuturesSnapshotData;
+          const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
+          const symbol = topicMatch ? topicMatch[1] : data.symbol;
+          if (symbol) {
+             processUpdateRef.current(symbol, false, data);
+          }
+      }
   }, [processUpdateRef]);
   
   useEffect(() => {
@@ -1290,7 +1296,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         isLoaded,
         isAiLoading,
         equity: equity,
-        lastManualAiRunTimestamp,
+        lastManualAiRunTimestamp: null,
         buy,
         futuresBuy,
         futuresSell,
@@ -1329,5 +1335,7 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
 
     
