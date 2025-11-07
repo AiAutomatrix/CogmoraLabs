@@ -568,7 +568,7 @@ export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker' | 'trade.snapshot';
-  data: z.any();
+  data: any;
 };
 
 export type IncomingKucoinWebSocketMessage =
@@ -581,25 +581,25 @@ export type IncomingKucoinWebSocketMessage =
 
 // KuCoin FUTURES WebSocket Message Types
 export const FuturesSnapshotDataSchema = z.object({
-    highPrice: z.number().optional().nullable(),
-    lastPrice: z.number().optional().nullable(),
-    lowPrice: z.number().optional().nullable(),
-    markPrice: z.number().optional().nullable(),
-    openInterest: z.string().optional().nullable(),
-    price24HoursBefore: z.number().optional().nullable(),
-    priceChg: z.number().optional().nullable(),
-    priceChgPct: z.number().optional().nullable(),
-    symbol: z.string().optional().nullable(),
-    ts: z.number().optional().nullable(),
-    turnover: z.number().optional().nullable(),
-    volume: z.number().optional().nullable(),
+    highPrice: z.number().optional(),
+    lastPrice: z.number().optional(),
+    lowPrice: z.number().optional(),
+    markPrice: z.number().optional(),
+    price24HoursBefore: z.number().optional(),
+    priceChg: z.number().optional(),
+    priceChgPct: z.number().optional(),
+    symbol: z.string().optional(),
+    ts: z.number().optional(),
+    turnover: z.number().optional(),
+    volume: z.number().optional(),
+    openInterest: z.string().optional(),
 });
 export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot';
+    subject: 'snapshot.24h';
     data: FuturesSnapshotData;
 };
 
