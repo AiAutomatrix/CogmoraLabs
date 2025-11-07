@@ -582,18 +582,18 @@ export type IncomingKucoinWebSocketMessage =
 
 // KuCoin FUTURES WebSocket Message Types
 export const FuturesSnapshotDataSchema = z.object({
-    highPrice: z.number(),
-    lastPrice: z.number(),
-    lowPrice: z.number(),
-    price24HoursBefore: z.number(),
-    priceChg: z.number(),
-    priceChgPct: z.number(),
-    symbol: z.string(),
-    ts: z.number(),
-    turnover: z.number(),
-    volume: z.number(),
-    openInterest: z.string().optional(),
-    markPrice: z.number().optional(),
+    highPrice: z.number().optional().nullable(),
+    lastPrice: z.number().optional().nullable(),
+    lowPrice: z.number().optional().nullable(),
+    price24HoursBefore: z.number().optional().nullable(),
+    priceChg: z.number().optional().nullable(),
+    priceChgPct: z.number().optional().nullable(),
+    symbol: z.string().optional().nullable(),
+    ts: z.number().optional().nullable(),
+    turnover: z.number().optional().nullable(),
+    volume: z.number().optional().nullable(),
+    openInterest: z.string().optional().nullable(),
+    markPrice: z.number().optional().nullable(),
 });
 export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 
@@ -622,8 +622,5 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
-
-    
-
 
     
