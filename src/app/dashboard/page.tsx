@@ -7,7 +7,7 @@ import { PaperTradingProvider, usePaperTrading } from '@/context/PaperTradingCon
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User } from 'lucide-react';
+import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User, Bot } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -34,7 +34,7 @@ const PageContent: React.FC = () => {
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   
-  const { handleAiTriggerAnalysis, isLoaded } = usePaperTrading();
+  const { handleAiTriggerAnalysis, isLoaded, aiCredits } = usePaperTrading();
 
   const { toast } = useToast();
 
@@ -315,6 +315,11 @@ const PageContent: React.FC = () => {
                     </p>
                   </div>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                 <DropdownMenuItem disabled>
+                    <Bot className="mr-2 h-4 w-4" />
+                    <span>AI Credits: {aiCredits}</span>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />

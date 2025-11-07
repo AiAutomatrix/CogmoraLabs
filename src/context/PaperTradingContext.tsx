@@ -19,6 +19,7 @@ import {
   query,
   where,
   limit,
+  increment,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import type {
@@ -87,6 +88,7 @@ interface PaperTradingContextType {
   isLoaded: boolean;
   isAiLoading: boolean;
   equity: number;
+  aiCredits: number;
   lastManualAiRunTimestamp: number | null;
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractOrData?: KucoinFuturesContract | KucoinTicker) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
@@ -152,6 +154,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   // State for core context data (not subcollections)
   const [balance, setBalance] = useState<number>(INITIAL_BALANCE);
+  const [aiCredits, setAiCredits] = useState<number>(0);
   const [automationConfig, setAutomationConfigInternal] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
   const [aiSettings, setAiSettingsInternal] = useState<AiTriggerSettings>(INITIAL_AI_SETTINGS);
   const [lastAiActionPlan, setLastAiActionPlan] = useState<AgentActionPlan | null>(null);
@@ -263,6 +266,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         if (snap.exists()) {
           const data = snap.data() as FirestorePaperTradingContext;
           setBalance(data.balance ?? INITIAL_BALANCE);
+          setAiCredits(data.ai_credits ?? INITIAL_AI_CREDITS);
           setAutomationConfigInternal(data.automationConfig ?? INITIAL_AUTOMATION_CONFIG);
           setAiSettingsInternal(data.aiSettings ?? INITIAL_AI_SETTINGS);
           setLastAiActionPlan(data.lastAiActionPlan ?? null);
@@ -806,6 +810,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [lastAiActionPlan, saveDataToFirestore]);
 
   const handleAiTriggerAnalysis = useCallback(async (): Promise<void> => {
+    if (aiCredits <= 0) {
+        toast({
+            title: "Out of AI Credits",
+            description: "Please purchase more credits to run the AI agent.",
+            variant: "destructive",
+        });
+        return;
+    }
+    
     const AI_COOLDOWN_MS = 300000; // 5 minutes
     const now = Date.now();
     
@@ -831,7 +844,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
 
-    saveDataToFirestore({ lastManualAiRunTimestamp: now });
+    if (userContextDocRef) {
+        updateDocumentNonBlocking(userContextDocRef, {
+            ai_credits: increment(-1),
+            lastManualAiRunTimestamp: now
+        });
+    }
 
     setIsAiLoading(true);
 
@@ -885,13 +903,17 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     } catch (error) {
       console.error("AI Trigger Analysis failed:", error);
+      // Re-credit user on failure
+      if (userContextDocRef) {
+        updateDocumentNonBlocking(userContextDocRef, { ai_credits: increment(1) });
+      }
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       toast({ title: "AI Analysis Failed", description: errorMessage, variant: "destructive"});
       saveDataToFirestore({ lastAiActionPlan: { analysis: `An error occurred: ${errorMessage}`, plan: [] } });
     } finally {
         setIsAiLoading(false);
     }
-  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
+  }, [aiCredits, watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore, userContextDocRef]);
 
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     const newConfig: AutomationConfig = { ...config };
@@ -1282,6 +1304,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     <PaperTradingContext.Provider
       value={{
         balance,
+        aiCredits,
         openPositions,
         tradeHistory,
         watchlist,
@@ -1331,5 +1354,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
