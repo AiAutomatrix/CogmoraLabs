@@ -83,12 +83,12 @@ export default function LandingPage() {
     <main>
       <FirebaseClientProvider>
         <HeroContent />
+        <ImageCarousel />
         <LandingPageDemoProvider>
           <LiveDemo />
         </LandingPageDemoProvider>
         <Features />
         <AiAgentShowcase /> 
-        <ImageCarousel />
         <Footer />
       </FirebaseClientProvider>
     </main>
