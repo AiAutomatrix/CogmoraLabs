@@ -600,7 +600,7 @@ export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot';
+    subject: 'snapshot.24h';
     data: FuturesSnapshotData;
 };
 
@@ -622,5 +622,8 @@ export type WebSocketStatus =
   | 'subscribed'
   | 'disconnected'
   | 'error';
+
+    
+
 
     
