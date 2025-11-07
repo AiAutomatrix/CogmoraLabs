@@ -57,6 +57,8 @@ function usePrevious<T>(value: T) {
 
 
 const INITIAL_BALANCE = 100000;
+const INITIAL_AI_CREDITS = 30;
+
 const INITIAL_AUTOMATION_CONFIG: AutomationConfig = {
   rules: [{ id: 'default', source: 'spot', criteria: 'top_volume', count: 10 }],
   updateMode: 'one-time',
@@ -274,12 +276,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 aiSettings: INITIAL_AI_SETTINGS,
                 lastAiActionPlan: null,
                 aiActionLogs: [],
+                ai_credits: INITIAL_AI_CREDITS,
                 lastManualAiRunTimestamp: null,
             };
             setDocumentNonBlocking(userContextDocRef, initialContext, { merge: false });
         }
         if (!dataLoadedRef.current) {
             dataLoadedRef.current = true;
+            setIsLoaded(true);
         }
       },
       (error) => {
@@ -290,6 +294,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }));
         if (!dataLoadedRef.current) {
           dataLoadedRef.current = true;
+          setIsLoaded(true);
         }
       }
     );
@@ -710,7 +715,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.markPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -1162,14 +1167,13 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const symbol = message.topic.split(":")[1];
       processUpdateRef.current(symbol, true, wrapper.data);
     }
-  }, []);
+  }, [processUpdateRef]);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === "snapshot.24h") {
+      if (message.type === 'message' && message.subject === 'snapshot.24h') {
           const data = message.data as FuturesSnapshotData;
-          const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
-          const symbol = topicMatch ? topicMatch[1] : data.symbol;
+          const symbol = message.topic.split(':')[1];
           if (symbol) {
              processUpdateRef.current(symbol, false, data);
           }

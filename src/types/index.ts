@@ -26,6 +26,7 @@ export const FirestorePaperTradingContextSchema = z.object({
   aiSettings: z.any(),
   lastAiActionPlan: z.any().nullable(),
   aiActionLogs: z.array(z.any()),
+  ai_credits: z.number().optional().default(30), // New field for monetization
   lastManualAiRunTimestamp: z.number().nullable().optional(),
 });
 export type FirestorePaperTradingContext = z.infer<typeof FirestorePaperTradingContextSchema>;
@@ -568,7 +569,7 @@ export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker' | 'trade.snapshot';
-  data: any;
+  data: any; // Was KucoinTicker which is not a Zod schema
 };
 
 export type IncomingKucoinWebSocketMessage =
@@ -581,18 +582,18 @@ export type IncomingKucoinWebSocketMessage =
 
 // KuCoin FUTURES WebSocket Message Types
 export const FuturesSnapshotDataSchema = z.object({
-    highPrice: z.number().optional(),
-    lastPrice: z.number().optional(),
-    lowPrice: z.number().optional(),
-    markPrice: z.number().optional(),
-    price24HoursBefore: z.number().optional(),
-    priceChg: z.number().optional(),
-    priceChgPct: z.number().optional(),
-    symbol: z.string().optional(),
-    ts: z.number().optional(),
-    turnover: z.number().optional(),
-    volume: z.number().optional(),
+    highPrice: z.number(),
+    lastPrice: z.number(),
+    lowPrice: z.number(),
+    price24HoursBefore: z.number(),
+    priceChg: z.number(),
+    priceChgPct: z.number(),
+    symbol: z.string(),
+    ts: z.number(),
+    turnover: z.number(),
+    volume: z.number(),
     openInterest: z.string().optional(),
+    markPrice: z.number().optional(),
 });
 export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 
