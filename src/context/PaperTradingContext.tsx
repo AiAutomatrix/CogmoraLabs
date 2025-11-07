@@ -16,6 +16,9 @@ import {
   writeBatch,
   getDocs,
   onSnapshot,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, setDocumentNonBlocking, deleteDocumentNonBlocking, addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import type {
@@ -82,7 +85,6 @@ interface PaperTradingContextType {
   isLoaded: boolean;
   isAiLoading: boolean;
   equity: number;
-  lastManualAiRunTimestamp: number | null;
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractOrData?: KucoinFuturesContract | KucoinTicker) => void;
   addPriceAlert: (symbol: string, price: number, condition: 'above' | 'below') => void;
   removePriceAlert: (symbol: string) => void;
@@ -150,7 +152,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   const [automationConfig, setAutomationConfigInternal] = useState<AutomationConfig>(INITIAL_AUTOMATION_CONFIG);
   const [aiSettings, setAiSettingsInternal] = useState<AiTriggerSettings>(INITIAL_AI_SETTINGS);
   const [lastAiActionPlan, setLastAiActionPlan] = useState<AgentActionPlan | null>(null);
-  const [lastManualAiRunTimestamp, setLastManualAiRunTimestamp] = useState<number | null>(null);
 
   // State for subcollections, managed by real-time listeners
   const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
@@ -262,7 +263,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           setAiSettingsInternal(data.aiSettings ?? INITIAL_AI_SETTINGS);
           setLastAiActionPlan(data.lastAiActionPlan ?? null);
           setAiActionLogs(data.aiActionLogs ?? []);
-          setLastManualAiRunTimestamp(data.lastManualAiRunTimestamp ?? null);
         } else {
             const initialContext: Partial<FirestorePaperTradingContext> = {
                 balance: INITIAL_BALANCE,
@@ -271,13 +271,11 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                 aiSettings: INITIAL_AI_SETTINGS,
                 lastAiActionPlan: null,
                 aiActionLogs: [],
-                lastManualAiRunTimestamp: null,
             };
             setDocumentNonBlocking(userContextDocRef, initialContext, { merge: false });
         }
         if (!dataLoadedRef.current) {
             dataLoadedRef.current = true;
-            setIsLoaded(true); // *** THIS IS THE KEY FIX ***
         }
       },
       (error) => {
@@ -288,7 +286,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         }));
         if (!dataLoadedRef.current) {
           dataLoadedRef.current = true;
-          setIsLoaded(true); // Also set loaded on error to unblock UI
         }
       }
     );
@@ -709,7 +706,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else {
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.markPrice ?? undefined;
+            newPrice = futuresData.lastPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -800,21 +797,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [lastAiActionPlan, saveDataToFirestore]);
 
   const handleAiTriggerAnalysis = useCallback(async (): Promise<void> => {
-    const AI_COOLDOWN_MS = 300000; // 5 minutes
-    const now = Date.now();
-    
-    if (lastManualAiRunTimestamp && now - lastManualAiRunTimestamp < AI_COOLDOWN_MS) {
-      const timeLeft = AI_COOLDOWN_MS - (now - lastManualAiRunTimestamp);
-      const minutes = Math.floor(timeLeft / 60000);
-      const seconds = Math.floor((timeLeft % 60000) / 1000);
-      toast({
-        title: "AI Agent on Cooldown",
-        description: `Please wait ${minutes}m ${seconds}s before running the analysis again.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
     toast({
         title: "AI Analysis Started...",
         description: "Check the AI Agent tab to see the plan.",
@@ -824,9 +806,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       toast({ title: "AI Analysis Skipped", description: "Please add items to your watchlist first.", variant: "destructive"});
       return;
     }
-
-    saveDataToFirestore({ lastManualAiRunTimestamp: now });
-
     setIsAiLoading(true);
 
     const { equity, realizedPnl, unrealizedPnl, winRate, wonTrades, lostTrades } = accountMetrics;
@@ -885,7 +864,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } finally {
         setIsAiLoading(false);
     }
-  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
+  }, [watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore]);
 
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     const newConfig: AutomationConfig = { ...config };
@@ -1062,7 +1041,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             setIsLoaded(true);
         }
     }
-  }, [isWsConnected, symbolsToWatch]);
+  }, [isWsConnected, symbolsToWatch, dataLoadedRef]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
@@ -1173,7 +1152,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
     const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-    if (message.type === 'message' && message.subject === 'snapshot') {
+    if (message.type === 'message' && message.subject === "snapshot.24h") {
         const data = message.data as FuturesSnapshotData;
         const topicMatch = message.topic.match(/\/contractMarket\/snapshot:(.*)/);
         const symbol = topicMatch ? topicMatch[1] : data.symbol;
@@ -1295,7 +1274,6 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         isLoaded,
         isAiLoading,
         equity: equity,
-        lastManualAiRunTimestamp,
         buy,
         futuresBuy,
         futuresSell,
@@ -1334,5 +1312,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    

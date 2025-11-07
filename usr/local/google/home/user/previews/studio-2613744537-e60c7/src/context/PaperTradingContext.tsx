@@ -107,7 +107,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   futuresSell: (
@@ -116,7 +116,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   closePosition: (positionId: string) => void;
@@ -1055,17 +1055,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
    useEffect(() => {
     if (dataLoadedRef.current) {
-        const needsSpot = symbolsToWatch.spot.length > 0;
-        const needsFutures = symbolsToWatch.futures.length > 0;
-
-        const spotReady = !needsSpot || isWsConnected;
-        const futuresReady = !needsFutures || isWsConnected;
-
-        if (spotReady && futuresReady) {
-            setIsLoaded(true);
-        }
+        setIsLoaded(true);
     }
-  }, [isWsConnected, symbolsToWatch]);
+  }, [dataLoadedRef.current]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,
@@ -1172,18 +1164,18 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const symbol = message.topic.split(":")[1];
       processUpdateRef.current(symbol, true, wrapper.data);
     }
-  }, []);
+  }, [processUpdateRef]);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
-      if (message.type === 'message' && message.subject === "snapshot.24h") {
+      if (message.type === 'message' && message.subject === 'snapshot.24h') {
           const data = message.data as FuturesSnapshotData;
-          const symbol = data.symbol || message.topic.split(':')[1];
+          const symbol = message.topic.split(':')[1];
           if (symbol) {
              processUpdateRef.current(symbol, false, data);
           }
       }
-  }, []);
+  }, [processUpdateRef]);
   
   useEffect(() => {
     setupWebSocket(
@@ -1337,3 +1329,4 @@ export const usePaperTrading = (): PaperTradingContextType => {
   return context;
 };
 
+    
