@@ -26,7 +26,7 @@ const HeroContent: React.FC = () => {
 
   return (
     <>
-      <section className="h-[60vh] flex flex-col justify-center items-center text-center p-4" style={{ 
+      <section className="py-20 flex flex-col justify-center items-center text-center p-4" style={{ 
           backgroundImage: `
             linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)),
             url('/lottie/hero.png')
