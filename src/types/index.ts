@@ -1,5 +1,4 @@
 
-
 import { z } from 'zod';
 
 //==========================================================================
@@ -569,7 +568,7 @@ export type KucoinTickerMessage = {
   type: 'message';
   topic: string; // e.g., /market/ticker:BTC-USDT or /market/ticker:all
   subject: 'trade.ticker' | 'trade.snapshot';
-  data: z.infer<typeof z.any>; // Was KucoinTicker which is not a Zod schema
+  data: z.any();
 };
 
 export type IncomingKucoinWebSocketMessage =
@@ -585,6 +584,8 @@ export const FuturesSnapshotDataSchema = z.object({
     highPrice: z.number().optional().nullable(),
     lastPrice: z.number().optional().nullable(),
     lowPrice: z.number().optional().nullable(),
+    markPrice: z.number().optional().nullable(),
+    openInterest: z.string().optional().nullable(),
     price24HoursBefore: z.number().optional().nullable(),
     priceChg: z.number().optional().nullable(),
     priceChgPct: z.number().optional().nullable(),
@@ -592,15 +593,13 @@ export const FuturesSnapshotDataSchema = z.object({
     ts: z.number().optional().nullable(),
     turnover: z.number().optional().nullable(),
     volume: z.number().optional().nullable(),
-    openInterest: z.string().optional().nullable(),
-    markPrice: z.number().optional().nullable(),
 });
 export type FuturesSnapshotData = z.infer<typeof FuturesSnapshotDataSchema>;
 
 export type KucoinFuturesSnapshotMessage = {
     topic: string; // /contractMarket/snapshot:XBTUSDTM
     type: 'message';
-    subject: 'snapshot.24h';
+    subject: 'snapshot';
     data: FuturesSnapshotData;
 };
 
@@ -623,4 +622,5 @@ export type WebSocketStatus =
   | 'disconnected'
   | 'error';
 
+    
     
