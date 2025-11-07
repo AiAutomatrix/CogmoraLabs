@@ -7,7 +7,7 @@ import { PaperTradingProvider, usePaperTrading } from '@/context/PaperTradingCon
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User, Bot } from 'lucide-react';
+import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User, Bot, PlusCircle } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +24,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BillingPopup } from '@/components/cogmora-labs/main-views/paper-trading/BillingPopup';
+
 
 const PageContent: React.FC = () => {
   const [activeSymbol, setActiveSymbol] = useState<string>('KUCOIN:BTCUSDT');
@@ -33,6 +35,7 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isBillingOpen, setIsBillingOpen] = useState(false);
   
   const { handleAiTriggerAnalysis, isLoaded, aiCredits } = usePaperTrading();
 
@@ -204,6 +207,7 @@ const PageContent: React.FC = () => {
 
 
   return (
+    <>
     <div className="flex flex-col bg-background h-full">
        <header className="border-b border-border shadow-md sticky top-0 bg-background z-50">
         <div className="container mx-auto flex items-center justify-between h-14">
@@ -316,9 +320,13 @@ const PageContent: React.FC = () => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                 <DropdownMenuItem disabled>
+                <DropdownMenuItem>
                     <Bot className="mr-2 h-4 w-4" />
                     <span>AI Credits: {aiCredits}</span>
+                </DropdownMenuItem>
+                 <DropdownMenuItem onSelect={() => setIsBillingOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    <span>Buy Credits / Reset</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
@@ -365,6 +373,8 @@ const PageContent: React.FC = () => {
         </p>
       </footer>
     </div>
+    <BillingPopup isOpen={isBillingOpen} onOpenChange={setIsBillingOpen} />
+    </>
   );
 }
 

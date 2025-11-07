@@ -111,7 +111,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: string,
+    takeProfit?: number,
     triggeredBy?: string
   ) => void;
   futuresSell: (
@@ -120,7 +120,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: string,
+    takeProfit?: number,
     triggeredBy?: string
   ) => void;
   closePosition: (positionId: string) => void;
@@ -138,6 +138,8 @@ interface PaperTradingContextType {
   handleAiTriggerAnalysis: () => Promise<void>;
   logAiAction: (action: AgentAction) => void;
   removeActionFromPlan: (action: AgentAction) => void;
+  addAiCredits: (amount: number) => void;
+  resetAccount: () => void;
 }
 
 const PaperTradingContext = createContext<PaperTradingContextType | undefined>(
@@ -473,6 +475,43 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
   }, [openPositions, balance, tradeHistory]);
 
   const equity = accountMetrics.equity;
+
+  const addAiCredits = useCallback((amount: number) => {
+    if (!userContextDocRef) return;
+    updateDocumentNonBlocking(userContextDocRef, { ai_credits: increment(amount) });
+    toast({ title: "Success", description: `${amount} AI credits have been added to your account.` });
+  }, [userContextDocRef, toast]);
+
+  const resetAccount = useCallback(async () => {
+      if (!userContextDocRef || !firestore) return;
+      
+      const batch = writeBatch(firestore);
+      const historyCol = collection(userContextDocRef, 'tradeHistory');
+
+      try {
+          // 1. Delete all trade history
+          const historySnapshot = await getDocs(historyCol);
+          historySnapshot.forEach(doc => {
+              batch.delete(doc.ref);
+          });
+          
+          // 2. Reset balance in the main context doc
+          batch.update(userContextDocRef, { balance: INITIAL_BALANCE });
+
+          // 3. Commit all changes
+          await batch.commit();
+
+          toast({ title: "Account Reset", description: "Your balance has been reset to $100,000 and trade history has been cleared." });
+
+      } catch (error) {
+          console.error("Error resetting account:", error);
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: userContextDocRef.path,
+              operation: 'write',
+          }));
+          toast({ title: "Error", description: "Could not reset account due to permissions.", variant: "destructive" });
+      }
+  }, [userContextDocRef, firestore, toast]);
 
   const updatePositionSlTp = useCallback((positionId: string, sl?: number, tp?: number) => {
     const pos = openPositions.find(p => p.id === positionId);
@@ -1340,6 +1379,8 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         handleAiTriggerAnalysis,
         logAiAction,
         removeActionFromPlan,
+        addAiCredits,
+        resetAccount,
       }}
     >
       {children}
@@ -1354,5 +1395,3 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
-
-    
