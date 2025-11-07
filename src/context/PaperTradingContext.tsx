@@ -111,7 +111,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   futuresSell: (
@@ -120,7 +120,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   closePosition: (positionId: string) => void;
@@ -1354,3 +1354,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
