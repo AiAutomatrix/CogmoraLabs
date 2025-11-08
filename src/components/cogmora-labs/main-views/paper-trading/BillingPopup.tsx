@@ -43,8 +43,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
           'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          priceId: 'price_1SREGsR1GTVMlhwAIHGT4Ofd',
-          productId: 'AI_CREDIT_PACK_100', // Pass productId for webhook
+          priceId: 'price_1SREGsR1GTVMlhwAIHGT4Ofd', // Using the correct hardcoded price ID
+          productId: 'AI_CREDIT_PACK_100', 
         }),
       });
 
@@ -61,20 +61,11 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       }
     } catch (error: any) {
       console.error('Purchase Error:', error);
-      // Check if error is the specific JSON parse error
-      if (error instanceof SyntaxError && error.message.includes("Unexpected token")) {
-         toast({
-            title: "Redirection Failed",
-            description: "Could not parse server response. The server may have sent an HTML error page instead of a JSON response.",
-            variant: "destructive",
-        });
-      } else {
-         toast({
-            title: "Purchase Failed",
-            description: error.message || "Could not initiate the purchase. Please try again.",
-            variant: "destructive",
-        });
-      }
+      toast({
+        title: "Purchase Failed",
+        description: error.message || "Could not initiate the purchase. Please try again.",
+        variant: "destructive",
+      });
       setIsRedirecting(false);
     }
   };
