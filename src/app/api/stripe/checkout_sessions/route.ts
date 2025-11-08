@@ -8,11 +8,10 @@ export async function POST(req: Request) {
   const origin = headersList.get('origin') || 'http://localhost:9002';
 
   try {
-    // The working Price ID from the sample application.
+    // This is the working Price ID from your sample application.
     const priceId = 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
       line_items: [
         {
           price: priceId,
@@ -24,16 +23,12 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/dashboard?payment=cancelled`,
     });
 
-    if (session.url) {
-      // Use NextResponse.redirect for form submissions.
-      return NextResponse.redirect(session.url, 303);
-    } else {
-      throw new Error('Stripe session URL not found.');
-    }
+    // For form submissions, we must use NextResponse.redirect.
+    return NextResponse.redirect(session.url!, 303);
 
   } catch (err: any) {
     console.error('Stripe Checkout Error:', err);
-    // Return a proper JSON error response.
+    // Return a proper JSON error response if something goes wrong.
     return NextResponse.json(
       { error: { message: err.message } },
       { status: err.statusCode || 500 }
