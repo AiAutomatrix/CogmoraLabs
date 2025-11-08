@@ -33,10 +33,50 @@ interface BillingPopupProps {
 }
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
-  const { resetAccount, equity } = usePaperTrading();
+  const { equity, resetAccount } = usePaperTrading();
   const auth = useAuth();
   const { toast } = useToast();
   const [isCheckoutLoading, setIsCheckoutLoading] = React.useState(false);
+
+  const handleCheckout = async (productId: 'AI_CREDIT_PACK_100' | 'ACCOUNT_RESET') => {
+    setIsCheckoutLoading(true);
+
+    if (!auth.currentUser) {
+      toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
+      setIsCheckoutLoading(false);
+      return;
+    }
+
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
+
+      const session = await response.json();
+
+      if (response.ok && session.url) {
+        // Redirect to Stripe's checkout page
+        window.location.href = session.url;
+      } else {
+        throw new Error(session.error?.message || 'Failed to create checkout session.');
+      }
+    } catch (error: any) {
+      console.error("Stripe checkout error:", error);
+      toast({
+        title: "Checkout Error",
+        description: error.message || "Could not connect to the payment processor.",
+        variant: "destructive",
+      });
+      setIsCheckoutLoading(false);
+    }
+  };
+
 
   const handleResetAccount = () => {
     resetAccount();
@@ -61,11 +101,9 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                     <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
                     <p className="text-sm text-muted-foreground">$30 CAD</p>
                 </div>
-                <form action="/api/stripe/checkout_sessions" method="POST">
-                    <Button type="submit" disabled={isCheckoutLoading} onClick={() => setIsCheckoutLoading(true)}>
-                        {isCheckoutLoading ? 'Redirecting...' : 'Purchase'}
-                    </Button>
-                </form>
+                <Button onClick={() => handleCheckout('AI_CREDIT_PACK_100')} disabled={isCheckoutLoading}>
+                    {isCheckoutLoading ? 'Redirecting...' : 'Purchase'}
+                </Button>
             </div>
         
          <div className="p-4 border rounded-lg flex items-center justify-between">

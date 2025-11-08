@@ -1228,7 +1228,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       const symbol = message.topic.split(":")[1];
       processUpdateRef.current(symbol, true, wrapper.data);
     }
-  }, [processUpdateRef]);
+  }, []);
 
   const handleFuturesMessage = useCallback((event: MessageEvent) => {
       const message: IncomingKucoinFuturesWebSocketMessage = JSON.parse(event.data);
@@ -1239,7 +1239,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
              processUpdateRef.current(symbol, false, data);
           }
       }
-  }, [processUpdateRef]);
+  }, []);
   
   useEffect(() => {
     setupWebSocket(
