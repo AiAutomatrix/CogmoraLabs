@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const decodedToken = await getAuth().verifyIdToken(idToken);
     const userId = decodedToken.uid;
 
-    const { priceId, productId } = await req.json(); // Accept priceId directly now
+    const { priceId, productId } = await req.json();
 
     if (!priceId) {
         console.error(`Stripe Price ID not found in request body.`);
@@ -40,10 +40,9 @@ export async function POST(req: Request) {
       mode: 'payment',
       success_url: `${origin}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/dashboard?payment=cancelled`,
-      // We will add the productId to metadata if available, to help the webhook
       metadata: {
         userId: userId,
-        productId: productId || 'AI_CREDIT_PACK_100', // Default for now
+        productId: productId || 'UNKNOWN_PRODUCT',
       },
     });
 
