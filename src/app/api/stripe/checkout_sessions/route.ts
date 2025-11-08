@@ -4,15 +4,16 @@ import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 
 export async function POST(req: Request) {
-  const headersList = await headers();
-  const origin = headersList.get('origin') || '';
+  const headersList = headers();
+  const origin = headersList.get('origin') || 'http://localhost:9002';
 
   try {
-    const priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
+    const priceId = process.env.STRIPE_PRICE_ID;
     if (!priceId) {
       throw new Error("Stripe Price ID is not configured in the environment variables.");
     }
 
+    // Create Checkout Sessions from body params.
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
@@ -25,8 +26,8 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/dashboard?payment=cancelled`,
     });
     
-    // Redirect to the Stripe checkout page
-    return NextResponse.redirect(session.url!, 303);
+    // Instead of redirecting from the server, we return the URL to the client.
+    return NextResponse.json({ url: session.url });
 
   } catch (err: any) {
     console.error('Stripe Checkout Error:', err);
