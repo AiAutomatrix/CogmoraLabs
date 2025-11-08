@@ -5,12 +5,12 @@ import { stripe } from '@/lib/stripe';
 
 export async function POST(req: Request) {
   const headersList = await headers();
-  // Use the origin from the request headers to build the redirect URLs.
-  // This makes it work dynamically in any environment (local or cloud).
-  const origin = headersList.get('origin') || '';
+  const origin = headersList.get('origin') || 'http://localhost:9002'; // Fallback for local dev
 
   try {
-    const { productId } = await req.json();
+    // Read the data from the form submission
+    const formData = await req.formData();
+    const productId = formData.get('productId') as string;
 
     let priceId;
     if (productId === 'AI_CREDIT_PACK_100') {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     }
 
     if (!priceId) {
-        throw new Error(`Stripe Price ID not found for product: ${productId}`);
+      throw new Error(`Stripe Price ID not found for product: ${productId}`);
     }
 
     // Create Checkout Sessions from body params.
@@ -36,7 +36,8 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/dashboard?payment=cancelled`,
     });
     
-    return NextResponse.json({ url: session.url });
+    // Use a 303 redirect for POST requests
+    return NextResponse.redirect(session.url!, 303);
 
   } catch (err: any) {
     console.error('Stripe Checkout Error:', err);
