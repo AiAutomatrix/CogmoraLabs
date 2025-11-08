@@ -10,7 +10,7 @@ adminApp();
 
 export async function POST(req: Request) {
   const headersList = headers();
-  const origin = headersList.get('origin') || 'http://localhost:9002'; // Adjusted default for local dev
+  const origin = headersList.get('origin') || 'http://localhost:9002';
 
   try {
     const authorization = headersList.get('authorization');
@@ -24,10 +24,12 @@ export async function POST(req: Request) {
     const { productId } = await req.json();
 
     let priceId;
+    // Using the test Price ID from the user's sample code.
     if (productId === 'AI_CREDIT_PACK_100') {
       priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
     } else if (productId === 'ACCOUNT_RESET') {
-      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd'; // Replace with actual ID
+      // We can add a different price ID for this later.
+      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
     } else {
         return NextResponse.json({ error: { message: 'Invalid product ID' } }, { status: 400 });
     }
