@@ -6,11 +6,12 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { adminApp } from '@/firebase/admin';
 
 // Initialize Firebase Admin SDK
-const db = getFirestore(adminApp());
+adminApp();
+const db = getFirestore();
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const signature = headers().get('stripe-signature') as string;
+  const signature = (await headers()).get('stripe-signature') as string;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
@@ -31,24 +32,38 @@ export async function POST(req: Request) {
   if (permittedEvents.includes(event.type)) {
     const session = event.data.object as any; // Cast to any to access metadata
     const userId = session?.metadata?.userId;
+    const productId = session?.metadata?.productId;
 
     if (event.type === 'checkout.session.completed') {
-      if (!userId) {
-        console.error('Webhook Error: No userId in session metadata.');
-        return NextResponse.json({ message: 'User ID missing from session metadata' }, { status: 400 });
+      if (!userId || !productId) {
+        console.error('Webhook Error: No userId or productId in session metadata.');
+        return NextResponse.json({ message: 'User ID or Product ID missing from session metadata' }, { status: 400 });
       }
 
-      console.log(`✅ Checkout session completed for user: ${userId}`);
+      console.log(`✅ Checkout session completed for user: ${userId}, product: ${productId}`);
 
       try {
-        // --- THIS IS THE FULFILLMENT LOGIC ---
-        // Add AI credits to the user's account in Firestore
         const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-        await userContextRef.update({
-          ai_credits: FieldValue.increment(100)
-        });
-        console.log(`✅ Successfully added 100 AI credits to user ${userId}`);
-        // --------------------------------------
+
+        if (productId === 'AI_CREDIT_PACK_100') {
+           await userContextRef.update({
+             ai_credits: FieldValue.increment(100)
+           });
+           console.log(`✅ Successfully added 100 AI credits to user ${userId}`);
+        } else if (productId === 'ACCOUNT_RESET') {
+            const historyColRef = userContextRef.collection('tradeHistory');
+            const historySnapshot = await historyColRef.get();
+            
+            const batch = db.batch();
+            historySnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            batch.update(userContextRef, { balance: 100000 });
+            await batch.commit();
+
+            console.log(`✅ Successfully reset account for user ${userId}`);
+        }
+
       } catch (error) {
         console.error(`Firestore update failed for user ${userId}:`, error);
         return NextResponse.json({ message: 'Webhook handler failed (Firestore update)' }, { status: 500 });
