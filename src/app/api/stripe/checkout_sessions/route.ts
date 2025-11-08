@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     });
 
     if (session.url) {
+      // This is the correct way to handle redirects from a form POST
       return NextResponse.redirect(session.url, 303);
     } else {
       throw new Error('Stripe session URL not found.');
