@@ -9,7 +9,7 @@ import { adminApp } from '@/firebase/admin';
 adminApp();
 
 export async function POST(req: Request) {
-  const headersList = headers();
+  const headersList = await headers();
   const origin = headersList.get('origin') || 'http://localhost:9002';
 
   try {
@@ -24,12 +24,11 @@ export async function POST(req: Request) {
     const { productId } = await req.json();
 
     let priceId;
-    // Using the test Price ID from the user's sample code.
+    // You should replace these with actual Price IDs from your Stripe Dashboard
     if (productId === 'AI_CREDIT_PACK_100') {
-      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
+      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1PgWdDR1GTVMlhwA230kzGKU'; // Replace with your actual Price ID
     } else if (productId === 'ACCOUNT_RESET') {
-      // We can add a different price ID for this later.
-      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
+      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID || 'price_1PgWdDR1GTVMlhwA230kzGKU'; // Replace with your actual Price ID
     } else {
         return NextResponse.json({ error: { message: 'Invalid product ID' } }, { status: 400 });
     }
@@ -44,7 +43,7 @@ export async function POST(req: Request) {
         },
       ],
       mode: 'payment',
-      success_url: `${origin}/dashboard?payment=success`,
+      success_url: `${origin}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/dashboard?payment=cancelled`,
       metadata: {
         userId: userId,

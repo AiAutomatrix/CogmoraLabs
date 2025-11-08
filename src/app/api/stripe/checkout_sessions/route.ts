@@ -4,12 +4,12 @@ import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 
 export async function POST(req: Request) {
-  const headersList = headers();
+  const headersList = await headers();
   const origin = headersList.get('origin') || 'http://localhost:9002';
 
   try {
-    // This is the working Price ID from your sample application.
-    const priceId = 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
+    // This is a test Price ID. Replace with your actual Price ID in production.
+    const priceId = 'price_1PgWdDR1GTVMlhwA230kzGKU';
 
     const session = await stripe.checkout.sessions.create({
       line_items: [
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
         },
       ],
       mode: 'payment',
-      success_url: `${origin}/dashboard?payment=success`,
+      success_url: `${origin}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/dashboard?payment=cancelled`,
     });
 
