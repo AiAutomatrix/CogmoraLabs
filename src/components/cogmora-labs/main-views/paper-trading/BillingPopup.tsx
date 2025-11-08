@@ -22,7 +22,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
-import { usePaperTrading, useAuth } from '@/context/PaperTradingContext';
+import { usePaperTrading } from '@/context/PaperTradingContext';
+import { useAuth } from '@/firebase';
 import { Bot, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
@@ -59,10 +60,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${idToken}`,
             },
+            body: JSON.stringify({ productId: 'AI_CREDIT_PACK_100' })
         });
 
         if (!response.ok) {
-            throw new Error(`Server error: ${response.statusText}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error.message || `Server error: ${response.statusText}`);
         }
 
         const { url } = await response.json();

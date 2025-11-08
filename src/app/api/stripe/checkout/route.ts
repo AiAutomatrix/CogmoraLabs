@@ -10,23 +10,34 @@ adminApp();
 
 export async function POST(req: Request) {
   const headersList = headers();
-  const origin = headersList.get('origin') || 'http://localhost:3000';
+  const origin = headersList.get('origin') || 'http://localhost:9002'; // Adjusted default for local dev
 
   try {
     const authorization = headersList.get('authorization');
     if (!authorization?.startsWith('Bearer ')) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return new NextResponse(JSON.stringify({ error: { message: 'Unauthorized: Missing token.' } }), { status: 401 });
     }
     const idToken = authorization.split('Bearer ')[1];
     const decodedToken = await getAuth().verifyIdToken(idToken);
     const userId = decodedToken.uid;
+
+    const { productId } = await req.json();
+
+    let priceId;
+    if (productId === 'AI_CREDIT_PACK_100') {
+      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd';
+    } else if (productId === 'ACCOUNT_RESET') {
+      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID || 'price_1SREGsR1GTVMlhwAIHGT4Ofd'; // Replace with actual ID
+    } else {
+        return NextResponse.json({ error: { message: 'Invalid product ID' } }, { status: 400 });
+    }
 
     // Create Checkout Sessions from body params.
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
-          price: process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1PX1qnR1GTVMlhwA9xK4mD5i', // Replace with your actual Price ID
+          price: priceId,
           quantity: 1,
         },
       ],
@@ -35,6 +46,7 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/dashboard?payment=cancelled`,
       metadata: {
         userId: userId,
+        productId: productId,
       },
     });
 
