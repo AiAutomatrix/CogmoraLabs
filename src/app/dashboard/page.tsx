@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BillingPopup } from '@/components/cogmora-labs/main-views/paper-trading/BillingPopup';
+import { Separator } from '@/components/ui/separator';
 
 
 const PageContent: React.FC = () => {
@@ -292,7 +293,16 @@ const PageContent: React.FC = () => {
                             </AccordionItem>
                         </Accordion>
                     </div>
-                    <div className="p-4 border-t mt-auto">
+                    <div className="p-4 border-t mt-auto space-y-2">
+                        <Button variant="ghost" className="w-full justify-start" onClick={() => {setIsBillingOpen(true); setIsMobileNavOpen(false);}}>
+                           <PlusCircle className="mr-2 h-4 w-4" />
+                           Buy Credits / Reset
+                        </Button>
+                        <Button variant="ghost" className="w-full justify-start cursor-default">
+                            <Bot className="mr-2 h-4 w-4" />
+                            AI Credits: {aiCredits}
+                        </Button>
+                         <Separator />
                          <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
                             <LogOut className="mr-2 h-4 w-4" />
                             Sign Out
@@ -320,7 +330,7 @@ const PageContent: React.FC = () => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem className="cursor-default">
                     <Bot className="mr-2 h-4 w-4" />
                     <span>AI Credits: {aiCredits}</span>
                 </DropdownMenuItem>
