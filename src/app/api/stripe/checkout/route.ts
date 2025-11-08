@@ -10,7 +10,8 @@ adminApp();
 
 export async function POST(req: Request) {
   const headersList = await headers();
-  const origin = headersList.get('origin') || 'http://localhost:9002';
+  // Reliably get the origin, falling back to a relative path if the header is missing.
+  const origin = headersList.get('origin') || '';
 
   try {
     const authorization = headersList.get('authorization');

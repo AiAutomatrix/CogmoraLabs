@@ -5,11 +5,12 @@ import { stripe } from '@/lib/stripe';
 
 export async function POST(req: Request) {
   const headersList = await headers();
-  const origin = headersList.get('origin') || 'http://localhost:9002';
+  // Reliably get the origin, falling back to a relative path if the header is missing.
+  const origin = headersList.get('origin') || '';
 
   try {
     // This is a test Price ID. Replace with your actual Price ID in production.
-    const priceId = 'price_1PgWdDR1GTVMlhwA230kzGKU';
+    const priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1PgWdDR1GTVMlhwA230kzGKU';
 
     const session = await stripe.checkout.sessions.create({
       line_items: [
