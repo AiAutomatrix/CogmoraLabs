@@ -4,13 +4,23 @@ import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 
 export async function POST(req: Request) {
-  const headersList = headers();
-  const origin = headersList.get('origin') || 'http://localhost:9002';
+  const headersList = await headers();
+  // Use the origin from the request headers to build the redirect URLs.
+  // This makes it work dynamically in any environment (local or cloud).
+  const origin = headersList.get('origin') || '';
 
   try {
-    const priceId = process.env.STRIPE_PRICE_ID;
+    const { productId } = await req.json();
+
+    let priceId;
+    if (productId === 'AI_CREDIT_PACK_100') {
+      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
+    } else if (productId === 'ACCOUNT_RESET') {
+      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID;
+    }
+
     if (!priceId) {
-      throw new Error("Stripe Price ID is not configured in the environment variables.");
+        throw new Error(`Stripe Price ID not found for product: ${productId}`);
     }
 
     // Create Checkout Sessions from body params.
@@ -26,7 +36,6 @@ export async function POST(req: Request) {
       cancel_url: `${origin}/dashboard?payment=cancelled`,
     });
     
-    // Instead of redirecting from the server, we return the URL to the client.
     return NextResponse.json({ url: session.url });
 
   } catch (err: any) {
