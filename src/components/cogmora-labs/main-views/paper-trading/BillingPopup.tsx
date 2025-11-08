@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,21 +9,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
-import { usePaperTrading } from '@/context/PaperTradingContext';
-import { Bot, RefreshCw } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Bot } from 'lucide-react';
 
 interface BillingPopupProps {
   isOpen: boolean;
@@ -32,19 +18,6 @@ interface BillingPopupProps {
 }
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
-  const { toast } = useToast();
-  const { equity, resetAccount } = usePaperTrading();
-
-  const handleResetAccount = () => {
-    resetAccount();
-    onOpenChange(false);
-    toast({
-      title: "Account Reset Initiated",
-      description: "Your balance and trade history are being cleared.",
-    });
-  };
-
-  const isResetDisabled = equity >= 5000;
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -52,7 +25,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         <DialogHeader>
           <DialogTitle>Account Actions</DialogTitle>
           <DialogDescription>
-            Purchase AI credits or reset your paper trading account.
+            Purchase AI credits to continue using the AI agent.
           </DialogDescription>
         </DialogHeader>
 
@@ -69,30 +42,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                     Purchase
                 </Button>
             </form>
-          </div>
-        
-          <div className="p-4 border rounded-lg flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
-              <p className="text-sm text-muted-foreground">Resets balance to $100,000 and clears trade history. Only available if equity is below $5,000.</p>
-            </div>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" disabled={isResetDisabled}>Reset</Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete your trade history and reset your balance to $100,000. This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleResetAccount}>Confirm Reset</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
         </div>
 
