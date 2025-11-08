@@ -10,7 +10,7 @@ adminApp();
 
 export async function POST(req: Request) {
   const headersList = await headers();
-  const origin = headersList.get('origin') || '';
+  const origin = headersList.get('origin') || 'http://localhost:9002'; // Fallback for safety
 
   try {
     const authorization = headersList.get('authorization');
@@ -21,19 +21,11 @@ export async function POST(req: Request) {
     const decodedToken = await getAuth().verifyIdToken(idToken);
     const userId = decodedToken.uid;
 
-    const { productId } = await req.json();
-
-    let priceId;
-    // Use the Price IDs from environment variables
-    if (productId === 'AI_CREDIT_PACK_100') {
-      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
-    } else if (productId === 'ACCOUNT_RESET') {
-      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID;
-    }
+    const { priceId, productId } = await req.json(); // Accept priceId directly now
 
     if (!priceId) {
-        console.error(`Stripe Price ID not found in .env for productId: ${productId}`);
-        return NextResponse.json({ error: { message: 'Server configuration error: Price ID not set.' } }, { status: 500 });
+        console.error(`Stripe Price ID not found in request body.`);
+        return NextResponse.json({ error: { message: `Price ID is missing from the request.` } }, { status: 400 });
     }
 
     // Create Checkout Sessions from body params.
@@ -48,9 +40,10 @@ export async function POST(req: Request) {
       mode: 'payment',
       success_url: `${origin}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/dashboard?payment=cancelled`,
+      // We will add the productId to metadata if available, to help the webhook
       metadata: {
         userId: userId,
-        productId: productId,
+        productId: productId || 'AI_CREDIT_PACK_100', // Default for now
       },
     });
 
