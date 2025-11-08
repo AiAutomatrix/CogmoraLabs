@@ -10,7 +10,6 @@ adminApp();
 
 export async function POST(req: Request) {
   const headersList = await headers();
-  // Reliably get the origin, falling back to a relative path if the header is missing.
   const origin = headersList.get('origin') || '';
 
   try {
@@ -25,13 +24,16 @@ export async function POST(req: Request) {
     const { productId } = await req.json();
 
     let priceId;
-    // You should replace these with actual Price IDs from your Stripe Dashboard
+    // Use the Price IDs from environment variables
     if (productId === 'AI_CREDIT_PACK_100') {
-      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID || 'price_1PgWdDR1GTVMlhwA230kzGKU'; // Replace with your actual Price ID
+      priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
     } else if (productId === 'ACCOUNT_RESET') {
-      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID || 'price_1PgWdDR1GTVMlhwA230kzGKU'; // Replace with your actual Price ID
-    } else {
-        return NextResponse.json({ error: { message: 'Invalid product ID' } }, { status: 400 });
+      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID;
+    }
+
+    if (!priceId) {
+        console.error(`Stripe Price ID not found in .env for productId: ${productId}`);
+        return NextResponse.json({ error: { message: 'Server configuration error: Price ID not set.' } }, { status: 500 });
     }
 
     // Create Checkout Sessions from body params.
