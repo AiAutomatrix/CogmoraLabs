@@ -23,12 +23,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from '@/components/ui/button';
 import { usePaperTrading } from '@/context/PaperTradingContext';
-import { useAuth } from '@/firebase';
 import { Bot, RefreshCw } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { loadStripe } from '@stripe/stripe-js';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 interface BillingPopupProps {
   isOpen: boolean;
@@ -37,58 +32,16 @@ interface BillingPopupProps {
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { resetAccount, equity } = usePaperTrading();
-  const { toast } = useToast();
-  const auth = useAuth();
   const [isCheckoutLoading, setIsCheckoutLoading] = React.useState(false);
 
-  const handleStripeCheckout = async () => {
-    setIsCheckoutLoading(true);
-    toast({ title: 'Redirecting to checkout...' });
-    
-    const currentUser = auth.currentUser;
-    if (!currentUser) {
-        toast({ title: 'Authentication Error', description: 'You must be signed in to make a purchase.', variant: 'destructive'});
-        setIsCheckoutLoading(false);
-        return;
-    }
-
-    try {
-        const idToken = await currentUser.getIdToken();
-        const response = await fetch('/api/stripe/checkout', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({ productId: 'AI_CREDIT_PACK_100' })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error.message || `Server error: ${response.statusText}`);
-        }
-
-        const { url } = await response.json();
-        if (url) {
-            window.location.href = url;
-        } else {
-            throw new Error('Failed to get checkout URL.');
-        }
-
-    } catch (error: any) {
-        console.error('Stripe checkout failed:', error);
-        toast({
-            title: 'Checkout Failed',
-            description: error.message || 'Please try again later.',
-            variant: 'destructive',
-        });
-        setIsCheckoutLoading(false);
-    }
-  };
-  
   const handleResetAccount = () => {
     resetAccount();
     onOpenChange(false);
+  };
+
+  const handlePurchaseClick = () => {
+    setIsCheckoutLoading(true);
+    // The form submission will handle the rest.
   };
 
   const isResetDisabled = equity >= 5000;
@@ -107,11 +60,13 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             <div className="p-4 border rounded-lg flex items-center justify-between">
                 <div>
                     <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
-                    <p className="text-sm text-muted-foreground">$5.00</p>
+                    <p className="text-sm text-muted-foreground">$30.00 CAD</p>
                 </div>
-                 <Button onClick={handleStripeCheckout} disabled={isCheckoutLoading}>
-                    {isCheckoutLoading ? 'Processing...' : 'Purchase'}
-                </Button>
+                 <form action="/api/stripe/checkout_sessions" method="POST" onSubmit={handlePurchaseClick}>
+                    <Button type="submit" disabled={isCheckoutLoading}>
+                        {isCheckoutLoading ? 'Redirecting...' : 'Purchase'}
+                    </Button>
+                </form>
             </div>
              <div className="p-4 border rounded-lg flex items-center justify-between">
                 <div>
