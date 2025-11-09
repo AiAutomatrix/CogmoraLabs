@@ -12,29 +12,26 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2, RefreshCw } from 'lucide-react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
-import { collection, addDoc, onSnapshot } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// Load Stripe.js. Your public key must be in .env.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
-  const firestore = useFirestore();
   const { toast } = useToast();
   const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
-  const handlePurchase = async (productId: string, priceId: string) => {
-    if (!user || !firestore) {
+  const handlePurchase = async (productId: string) => {
+    if (!user) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
@@ -42,44 +39,40 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
-      // 1. Create a new document in the `checkout_sessions` collection in Firestore.
-      // This is the trigger for the official "Run Payments with Stripe" Firebase Extension.
-      const checkoutSessionRef = await addDoc(
-        collection(firestore, 'users', user.uid, 'checkout_sessions'), 
-        {
-          price: priceId,
-          success_url: `${window.location.origin}/dashboard?payment=success`,
-          cancel_url: `${window.location.origin}/dashboard?payment=cancelled`,
-          mode: 'payment', // Important: for one-time purchases
-          metadata: {
-             productId: productId, // Pass our internal product ID
-          }
-        }
-      );
-
-      // 2. Listen for the checkout URL to be added to the document by the extension.
-      const unsubscribe = onSnapshot(checkoutSessionRef, async (snap) => {
-        const { error, url } = snap.data() || {};
-        
-        if (error) {
-          unsubscribe();
-          throw new Error(`An error occurred: ${error.message}`);
-        }
-
-        if (url) {
-          // 3. We have a URL, stop listening and redirect to Stripe.
-          unsubscribe();
-          window.location.assign(url);
-        }
+      const idToken = await user.getIdToken();
+      
+      const response = await fetch('/api/stripe/checkout', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ productId }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error.message || 'Failed to create checkout session.');
+      }
+      
+      const { sessionId } = await response.json();
+
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error('Stripe.js has not loaded yet.');
+      }
+      
+      const { error } = await stripe.redirectToCheckout({ sessionId });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error('Purchase Error:', errorMessage);
-      toast({ title: 'Purchase Error', description: `Could not initiate checkout. ${errorMessage}`, variant: 'destructive' });
+      toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
       setIsLoading(null);
     }
-    // Note: We don't set isLoading to false here because the redirect will happen.
   };
 
   const handleReset = () => {
@@ -101,9 +94,9 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             <div className="p-4 border rounded-lg flex items-center justify-between">
               <div>
                 <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
-                <p className="text-sm text-muted-foreground">$5.00</p>
+                <p className="text-sm text-muted-foreground">$29.99 CAD</p>
               </div>
-              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100', 'price_1SREGsR1GTVMlhwAIHGT4Ofd')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
+              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
                 {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
               </Button>
