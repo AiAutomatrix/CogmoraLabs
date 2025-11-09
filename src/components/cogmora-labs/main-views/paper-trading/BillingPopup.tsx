@@ -16,6 +16,9 @@ import { useUser } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
+
 
 interface BillingPopupProps {
   isOpen: boolean;
@@ -26,6 +29,7 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
@@ -39,40 +43,39 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
-      const idToken = await user.getIdToken();
-      
-      const response = await fetch('/api/stripe/checkout', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ productId }),
-      });
+        const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
+        const docRef = await addDoc(checkoutSessionsRef, {
+            price: 'price_1SREGsR1GTVMlhwAIHGT4Ofd', // Hardcoded Price ID for AI Credit Pack
+            success_url: window.location.href,
+            cancel_url: window.location.href,
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error.message || 'Failed to create checkout session.');
-      }
-      
-      const { sessionId } = await response.json();
+        // Listen for the session URL to be added by the extension
+        onSnapshot(docRef, async (snap) => {
+            const { error, url } = snap.data() || {};
 
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error('Stripe.js has not loaded yet.');
-      }
-      
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      
-      if (error) {
-        throw new Error(error.message);
-      }
+            if (error) {
+                console.error(`Stripe Checkout Error: ${error.message}`);
+                toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
+                setIsLoading(null);
+            }
+
+            if (url) {
+                const stripe = await stripePromise;
+                if (!stripe) {
+                    throw new Error('Stripe.js has not loaded yet.');
+                }
+                
+                // This is the correct way to redirect
+                await stripe.redirectToCheckout({ sessionId: snap.id }); 
+            }
+        });
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error('Purchase Error:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
-    } finally {
-        setIsLoading(null);
+      setIsLoading(null);
     }
   };
 
