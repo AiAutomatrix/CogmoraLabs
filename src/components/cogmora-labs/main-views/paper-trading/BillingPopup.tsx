@@ -71,7 +71,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error('Purchase Error:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
-      setIsLoading(null);
+    } finally {
+        setIsLoading(null);
     }
   };
 
