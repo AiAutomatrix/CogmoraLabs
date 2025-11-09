@@ -35,19 +35,25 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
+    console.log('[BillingPopup] handlePurchase called with productId:', productId);
     if (!user || !firestore) {
+      console.error('[BillingPopup] Authentication Error: User or Firestore not available.');
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
     
+    console.log('[BillingPopup] Setting loading state for:', productId);
     setIsLoading(productId);
 
     try {
         // This is the Price ID from your Stripe dashboard for the "AI Credit Pack" product.
         const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
+        console.log('[BillingPopup] Using Stripe Price ID:', priceId);
 
         const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
-        const docRef = await addDoc(checkoutSessionsRef, {
+        console.log('[BillingPopup] Creating Firestore document in:', checkoutSessionsRef.path);
+        
+        const docData = {
             price: priceId,
             success_url: window.location.href, // Redirect back to the current page on success
             cancel_url: window.location.href,  // Redirect back on cancellation
@@ -55,39 +61,50 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               productId: productId,
               userId: user.uid,
             }
-        });
+        };
+
+        console.log('[BillingPopup] Firestore document data:', docData);
+
+        const docRef = await addDoc(checkoutSessionsRef, docData);
+
+        console.log('[BillingPopup] Firestore document created with ID:', docRef.id);
 
         // Listen for the session ID to be added by the extension
         const unsubscribe = onSnapshot(docRef, async (snap) => {
+            console.log('[BillingPopup] onSnapshot listener triggered. Document data:', snap.data());
             const { error, sessionId, url } = snap.data() || {};
 
             if (error) {
-                console.error(`Stripe Checkout Error from extension: ${error.message}`);
+                console.error(`[BillingPopup] Stripe Checkout Error from extension: ${error.message}`);
                 toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
                 setIsLoading(null);
                 unsubscribe();
             }
 
             if (sessionId || url) { 
-                // We have a session, let's redirect to Stripe Checkout.
+                console.log('[BillingPopup] Session ID or URL found. Redirecting to Stripe...');
                 unsubscribe();
                 const stripe = await stripePromise;
                 if (!stripe) {
+                    console.error('[BillingPopup] Stripe.js has not loaded yet.');
                     throw new Error('Stripe.js has not loaded yet.');
                 }
                 
-                if (url) { // The extension now often provides a direct URL
+                if (url) { 
+                    console.log('[BillingPopup] Redirecting using URL...');
                     window.location.assign(url);
-                } else if (sessionId) { // Fallback for older extension versions
+                } else if (sessionId) {
+                    console.log('[BillingPopup] Redirecting using session ID...');
                     await stripe.redirectToCheckout({ sessionId });
                 }
-                // No need to setIsLoading(null) here as the page will redirect.
+            } else {
+                console.log('[BillingPopup] Waiting for sessionId or url from extension...');
             }
         });
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      console.error('Purchase Error:', errorMessage);
+      console.error('[BillingPopup] Purchase Error:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
       setIsLoading(null);
     }
