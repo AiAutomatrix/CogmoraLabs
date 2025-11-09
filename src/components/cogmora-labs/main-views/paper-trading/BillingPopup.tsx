@@ -58,7 +58,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
 
         // Listen for the session ID to be added by the extension
         const unsubscribe = onSnapshot(docRef, async (snap) => {
-            const { error, sessionId } = snap.data() || {};
+            const { error, sessionId, url } = snap.data() || {};
 
             if (error) {
                 console.error(`Stripe Checkout Error from extension: ${error.message}`);
@@ -67,15 +67,19 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                 unsubscribe();
             }
 
-            if (sessionId) { 
-                // We have a session ID, let's redirect to Stripe Checkout.
+            if (sessionId || url) { 
+                // We have a session ID or URL, let's redirect to Stripe Checkout.
                 unsubscribe();
                 const stripe = await stripePromise;
                 if (!stripe) {
                     throw new Error('Stripe.js has not loaded yet.');
                 }
                 
-                await stripe.redirectToCheckout({ sessionId });
+                if (url) {
+                    window.location.assign(url);
+                } else if (sessionId) {
+                    await stripe.redirectToCheckout({ sessionId });
+                }
                 // No need to setIsLoading(null) here as the page will redirect.
             }
         });
