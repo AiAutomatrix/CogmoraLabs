@@ -12,13 +12,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2, RefreshCw } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
 import { collection, addDoc, onSnapshot } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
-
 
 interface BillingPopupProps {
   isOpen: boolean;
@@ -35,7 +33,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
-    if (!user) {
+    if (!user || !firestore) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
@@ -43,31 +41,36 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
+        // This is the Price ID for the "AI Credit Pack" product in Stripe.
+        const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
+
         const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
         const docRef = await addDoc(checkoutSessionsRef, {
-            price: 'price_1SREGsR1GTVMlhwAIHGT4Ofd', // Hardcoded Price ID for AI Credit Pack
-            success_url: window.location.href,
-            cancel_url: window.location.href,
+            price: priceId,
+            success_url: window.location.href, // Redirect back to the current page on success
+            cancel_url: window.location.href,  // Redirect back on cancellation
         });
 
         // Listen for the session URL to be added by the extension
-        onSnapshot(docRef, async (snap) => {
-            const { error, url } = snap.data() || {};
+        const unsubscribe = onSnapshot(docRef, async (snap) => {
+            const { error, url, sessionId } = snap.data() || {};
 
             if (error) {
                 console.error(`Stripe Checkout Error: ${error.message}`);
                 toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
                 setIsLoading(null);
+                unsubscribe();
             }
 
-            if (url) {
+            if (sessionId) { // The extension provides the session ID
+                unsubscribe();
                 const stripe = await stripePromise;
                 if (!stripe) {
                     throw new Error('Stripe.js has not loaded yet.');
                 }
                 
-                // This is the correct way to redirect
-                await stripe.redirectToCheckout({ sessionId: snap.id }); 
+                await stripe.redirectToCheckout({ sessionId });
+                // No need to setIsLoading(null) here as the page will redirect.
             }
         });
 
