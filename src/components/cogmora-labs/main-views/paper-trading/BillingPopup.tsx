@@ -41,7 +41,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
-        // This is the Price ID for the "AI Credit Pack" product in Stripe.
+        // NOTE: This price ID must match a price in your Stripe dashboard.
         const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
 
         const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
@@ -49,20 +49,25 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             price: priceId,
             success_url: window.location.href, // Redirect back to the current page on success
             cancel_url: window.location.href,  // Redirect back on cancellation
+            // The Firebase extension will use this metadata
+            metadata: {
+              productId: productId,
+              userId: user.uid,
+            }
         });
 
-        // Listen for the session URL to be added by the extension
+        // Listen for the session ID to be added by the extension
         const unsubscribe = onSnapshot(docRef, async (snap) => {
-            const { error, url, sessionId } = snap.data() || {};
+            const { error, sessionId } = snap.data() || {};
 
             if (error) {
-                console.error(`Stripe Checkout Error: ${error.message}`);
+                console.error(`Stripe Checkout Error from extension: ${error.message}`);
                 toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
                 setIsLoading(null);
                 unsubscribe();
             }
 
-            if (sessionId) { // The extension provides the session ID
+            if (sessionId) { 
                 unsubscribe();
                 const stripe = await stripePromise;
                 if (!stripe) {
