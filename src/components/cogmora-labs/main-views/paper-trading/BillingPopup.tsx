@@ -50,7 +50,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             price: priceId,
             success_url: window.location.href, // Redirect back to the current page on success
             cancel_url: window.location.href,  // Redirect back on cancellation
-            // The Firebase extension will use this metadata in the webhook
             metadata: {
               productId: productId,
               userId: user.uid,
