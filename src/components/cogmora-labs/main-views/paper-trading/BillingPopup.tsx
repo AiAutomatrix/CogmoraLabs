@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2, RefreshCw } from 'lucide-react';
-import { useUser, useFirestore, usePaperTrading } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
+import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
 import { collection, addDoc, onSnapshot } from 'firebase/firestore';
