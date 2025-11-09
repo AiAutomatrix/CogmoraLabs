@@ -24,6 +24,7 @@ interface BillingPopupProps {
 }
 
 // The publishable key is safe to be included in client-side code.
+// Make sure this is your *test* publishable key.
 const stripePromise = loadStripe("pk_test_51SREAlR1GTVMlhwAIotsbUvdCPhwra3r7i0wsWC0PbIAkg7YdnGCCQaizXkDFBl7qmlWKsvj2aVpVn5rGjHFPUuN00DWxAJ7Qb");
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
@@ -68,16 +69,16 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             }
 
             if (sessionId || url) { 
-                // We have a session ID or URL, let's redirect to Stripe Checkout.
+                // We have a session, let's redirect to Stripe Checkout.
                 unsubscribe();
                 const stripe = await stripePromise;
                 if (!stripe) {
                     throw new Error('Stripe.js has not loaded yet.');
                 }
                 
-                if (url) {
+                if (url) { // The extension now often provides a direct URL
                     window.location.assign(url);
-                } else if (sessionId) {
+                } else if (sessionId) { // Fallback for older extension versions
                     await stripe.redirectToCheckout({ sessionId });
                 }
                 // No need to setIsLoading(null) here as the page will redirect.
