@@ -23,7 +23,8 @@ interface BillingPopupProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+// The publishable key is safe to be included in client-side code.
+const stripePromise = loadStripe("pk_test_51SREAlR1GTVMlhwAIotsbUvdCPhwra3r7i0wsWC0PbIAkg7YdnGCCQaizXkDFBl7qmlWKsvj2aVpVn5rGjHFPUuN00DWxAJ7Qb");
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
@@ -41,7 +42,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
-        // NOTE: This price ID must match a price in your Stripe dashboard.
+        // This is the Price ID from your Stripe dashboard for the "AI Credit Pack" product.
         const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
 
         const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
@@ -49,7 +50,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             price: priceId,
             success_url: window.location.href, // Redirect back to the current page on success
             cancel_url: window.location.href,  // Redirect back on cancellation
-            // The Firebase extension will use this metadata
+            // The Firebase extension will use this metadata in the webhook
             metadata: {
               productId: productId,
               userId: user.uid,
@@ -68,6 +69,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             }
 
             if (sessionId) { 
+                // We have a session ID, let's redirect to Stripe Checkout.
                 unsubscribe();
                 const stripe = await stripePromise;
                 if (!stripe) {
