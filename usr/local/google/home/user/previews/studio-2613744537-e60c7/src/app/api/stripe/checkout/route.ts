@@ -27,8 +27,8 @@ export async function POST(req: Request) {
     // Use the Price IDs from environment variables
     if (productId === 'AI_CREDIT_PACK_100') {
       priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
-    } else if (productId === 'ACCOUNT_RESET') {
-      priceId = process.env.STRIPE_ACCOUNT_RESET_PRICE_ID;
+    } else {
+      return NextResponse.json({ error: { message: `Unknown product ID: ${productId}` } }, { status: 400 });
     }
 
     if (!priceId) {
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ sessionId: session.id });
 
   } catch (err: any) {
     console.error('Stripe Checkout Error:', err);

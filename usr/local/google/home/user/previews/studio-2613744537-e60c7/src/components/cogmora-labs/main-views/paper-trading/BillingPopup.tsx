@@ -11,8 +11,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, Loader2, RefreshCw } from 'lucide-react';
 import { useUser } from '@/firebase';
+import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
 
@@ -21,14 +22,13 @@ interface BillingPopupProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// Load the Stripe.js script. Use your public key.
-// This should be outside the component to avoid re-loading on every render.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
   const { toast } = useToast();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const { resetAccount, balance } = usePaperTrading();
+  const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
     if (!user) {
@@ -36,18 +36,18 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       return;
     }
     
-    setIsLoading(true);
+    setIsLoading(productId);
 
     try {
       const idToken = await user.getIdToken();
       
-      const response = await fetch('/api/stripe/checkout_sessions', {
+      const response = await fetch('/api/stripe/checkout', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ productId: productId }),
+          body: JSON.stringify({ productId }),
       });
 
       if (!response.ok) {
@@ -57,7 +57,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       
       const { sessionId } = await response.json();
 
-      // When the session is created, redirect to the Stripe Checkout page.
       const stripe = await stripePromise;
       if (!stripe) {
         throw new Error('Stripe.js has not loaded yet.');
@@ -66,19 +65,20 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       const { error } = await stripe.redirectToCheckout({ sessionId });
       
       if (error) {
-        // If `redirectToCheckout` fails due to a browser or network
-        // error, display the localized error message to your customer.
         throw new Error(error.message);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error('Purchase Error:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
+      setIsLoading(null);
     }
   };
 
+  const handleReset = () => {
+    resetAccount();
+    onOpenChange(false);
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -86,7 +86,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         <DialogHeader>
           <DialogTitle>Account Actions</DialogTitle>
           <DialogDescription>
-            Purchase AI credits to continue using the AI agent.
+            Purchase AI credits or reset your paper trading account.
           </DialogDescription>
         </DialogHeader>
 
@@ -94,11 +94,20 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             <div className="p-4 border rounded-lg flex items-center justify-between">
               <div>
                 <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
-                <p className="text-sm text-muted-foreground">$5.00</p>
+                <p className="text-sm text-muted-foreground">$29.99 CAD</p>
               </div>
-              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
+                {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
+              </Button>
+            </div>
+             <div className="p-4 border rounded-lg flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
+                <p className="text-sm text-muted-foreground">Reset balance to $100k and clear history.</p>
+              </div>
+              <Button onClick={handleReset} variant="destructive" disabled={balance > 5000}>
+                Reset
               </Button>
             </div>
         </div>
