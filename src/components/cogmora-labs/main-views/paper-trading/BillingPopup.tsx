@@ -23,7 +23,6 @@ interface BillingPopupProps {
 }
 
 // The publishable key is safe to be included in client-side code.
-// Make sure this is your *test* publishable key.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
@@ -34,73 +33,61 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
-    console.log('[BillingPopup] handlePurchase called with productId:', productId);
     if (!user || !firestore) {
-      console.error('[BillingPopup] Authentication Error: User or Firestore not available.');
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
     
-    console.log('[BillingPopup] Setting loading state for:', productId);
     setIsLoading(productId);
 
     try {
-        // This is the Price ID from your Stripe dashboard for the "AI Credit Pack" product.
-        const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
-        console.log('[BillingPopup] Using Stripe Price ID:', priceId);
+      // This is the Price ID from your Stripe dashboard for the "AI Credit Pack" product.
+      // Ensure this Price ID exists in your Stripe Products catalog.
+      const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
 
-        // **FIX:** The collection path MUST be 'customers/{userId}/checkout_sessions' for the extension to work.
-        const checkoutSessionsRef = collection(firestore, 'customers', user.uid, 'checkout_sessions');
-        console.log('[BillingPopup] Creating Firestore document in:', checkoutSessionsRef.path);
-        
-        const docData = {
-            price: priceId,
-            success_url: window.location.href, // Redirect back to the current page on success
-            cancel_url: window.location.href,  // Redirect back on cancellation
-            metadata: {
-              productId: productId,
-              userId: user.uid,
-            }
-        };
+      // Create a new checkout session document in the 'customers' collection.
+      // The Firebase extension will listen for this new document.
+      const checkoutSessionRef = collection(firestore, 'customers', user.uid, 'checkout_sessions');
+      
+      const docRef = await addDoc(checkoutSessionRef, {
+          price: priceId,
+          success_url: window.location.href, // Redirect back to the current page on success
+          cancel_url: window.location.href,  // Redirect back on cancellation
+          metadata: {
+            // Pass any metadata you need to the webhook
+            productId: productId,
+            userId: user.uid,
+          }
+      });
 
-        console.log('[BillingPopup] Firestore document data:', docData);
+      // Listen for the session ID to be added by the extension's Cloud Function.
+      const unsubscribe = onSnapshot(docRef, async (snap) => {
+          const { error, sessionId, url } = snap.data() || {};
 
-        const docRef = await addDoc(checkoutSessionsRef, docData);
+          if (error) {
+              console.error(`[BillingPopup] Stripe Checkout Error from extension: ${error.message}`);
+              toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
+              setIsLoading(null);
+              unsubscribe();
+          }
 
-        console.log('[BillingPopup] Firestore document created with ID:', docRef.id);
-
-        // Listen for the session ID to be added by the extension
-        const unsubscribe = onSnapshot(docRef, async (snap) => {
-            console.log('[BillingPopup] onSnapshot listener triggered. Document data:', snap.data());
-            const { error, sessionId, url } = snap.data() || {};
-
-            if (error) {
-                console.error(`[BillingPopup] Stripe Checkout Error from extension: ${error.message}`);
-                toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
-                setIsLoading(null);
-                unsubscribe();
-            }
-
-            if (sessionId || url) { 
-                console.log('[BillingPopup] Session ID or URL found. Redirecting to Stripe...');
-                unsubscribe();
-                const stripe = await stripePromise;
-                if (!stripe) {
-                    console.error('[BillingPopup] Stripe.js has not loaded yet.');
-                    throw new Error('Stripe.js has not loaded yet.');
-                }
-                
-                if (url) { 
-                    console.log('[BillingPopup] Redirecting using URL...');
-                    window.location.assign(url);
-                } else if (sessionId) {
-                    console.log('[BillingPopup] Redirecting using session ID...');
-                    await stripe.redirectToCheckout({ sessionId });
-                }
-            } else {
-                console.log('[BillingPopup] Waiting for sessionId or url from extension...');
-            }
-        });
+          // The extension can return either a `sessionId` or a full `url`.
+          if (sessionId || url) { 
+              unsubscribe(); // Stop listening once we have the session
+              const stripe = await stripePromise;
+              if (!stripe) {
+                  throw new Error('Stripe.js has not loaded yet.');
+              }
+              
+              if (url) {
+                  // The extension now provides a full URL, which is the recommended way.
+                  window.location.assign(url);
+              } else if (sessionId) {
+                  // Fallback for older extension versions that only provide a session ID.
+                  await stripe.redirectToCheckout({ sessionId });
+              }
+          }
+      });
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
