@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -25,7 +24,7 @@ interface BillingPopupProps {
 
 // The publishable key is safe to be included in client-side code.
 // Make sure this is your *test* publishable key.
-const stripePromise = loadStripe("pk_test_51SREAlR1GTVMlhwAIotsbUvdCPhwra3r7i0wsWC0PbIAkg7YdnGCCQaizXkDFBl7qmlWKsvj2aVpVn5rGjHFPUuN00DWxAJ7Qb");
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
@@ -50,7 +49,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
         console.log('[BillingPopup] Using Stripe Price ID:', priceId);
 
-        const checkoutSessionsRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
+        // **FIX:** The collection path MUST be 'customers/{userId}/checkout_sessions' for the extension to work.
+        const checkoutSessionsRef = collection(firestore, 'customers', user.uid, 'checkout_sessions');
         console.log('[BillingPopup] Creating Firestore document in:', checkoutSessionsRef.path);
         
         const docData = {

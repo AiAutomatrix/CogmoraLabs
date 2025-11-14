@@ -3,36 +3,35 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Allow a user to read/write to their own user document and subcollections
+    // Rule for user's own data, including paperTradingContext
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
-    
-    // This rule allows the Stripe extension to access the checkout_sessions
-    // created by the user. The user can create docs, and both user and extension can update/read.
-    match /users/{userId}/checkout_sessions/{id} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // This rule allows a user to create a checkout session document for themselves.
+    // The Stripe extension, running with admin privileges, will then be able to read this
+    // and write the session ID back.
+    match /customers/{userId}/checkout_sessions/{sessionId} {
+      allow create: if request.auth.uid == userId;
+      allow read, update: if request.auth.uid == userId;
     }
-    
+
     // Allow users to read their own subscription and payment info, which the extension writes.
-    match /users/{userId}/subscriptions/{id} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+    match /customers/{userId}/subscriptions/{subscriptionId} {
+      allow read: if request.auth.uid == userId;
     }
-    match /users/{userId}/payments/{id} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+
+    match /customers/{userId}/payments/{paymentId} {
+      allow read: if request.auth.uid == userId;
     }
-    
-    // Public read access for products and prices, but no client writes
-    match /products/{id} {
+
+    // Public read access for products and prices, but no client writes.
+    // This allows the client to list available products.
+    match /products/{productId} {
       allow read: if true;
       allow write: if false;
 
-      match /prices/{id} {
-        allow read: if true;
-        allow write: if false;
-      }
-
-      match /tax_rates/{id} {
+      match /prices/{priceId} {
         allow read: if true;
         allow write: if false;
       }
