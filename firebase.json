@@ -19,5 +19,23 @@
   "firestore": {
     "rules": "backend/firestore.rules",
     "indexes": "backend/firestore.indexes.json"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8081
+    },
+    "hub": {
+      "port": 4402
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4002
+    }
   }
 }
