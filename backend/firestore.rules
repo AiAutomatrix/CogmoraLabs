@@ -3,10 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rule for user's own data, including paperTradingContext
+    // Rule for the application's user data (paper trading, etc.)
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Rules for the Stripe Firebase Extension
 
     // This rule allows a user to create a checkout session document for themselves.
     // The Stripe extension, running with admin privileges, will then be able to read this
