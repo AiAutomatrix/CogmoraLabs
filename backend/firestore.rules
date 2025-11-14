@@ -3,31 +3,30 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rules for the main application user data (paper trading, etc.)
-    // This allows a user full read/write access to their own data silo.
+    // Rule 1: Secure the application's main user data (paper trading, etc.)
+    // This allows a user full read/write access ONLY to their own data silo.
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Rules for the "Run Payments with Stripe" Firebase Extension
-    
+    // Rule 2: Secure the Stripe payments data
+    // This block handles all collections created by the "Run Payments with Stripe" extension.
+
     // Customer documents:
-    // A user can read their own customer document.
-    // They can also create their own customer document, which is necessary
-    // for the very first checkout session they create.
+    // Allow a user to read AND create their own customer document.
+    // The `create` permission is critical for the first time a user makes a purchase.
     match /customers/{userId} {
       allow read, create: if request.auth.uid == userId;
 
       // Checkout sessions:
-      // A user can create, read, and update their own checkout session documents.
-      // This is the CRITICAL rule that was missing/incorrect. It allows the
-      // client to initiate a payment.
+      // Allow a user to create, read, and update their own checkout session documents.
+      // This is the core permission that was missing and causing the error.
       match /checkout_sessions/{sessionId} {
         allow create, read, update: if request.auth.uid == userId;
       }
 
-      // Subscriptions and payments are read-only for the user.
-      // The extension writes to these with admin privileges.
+      // Subscriptions and payments should be read-only for the user.
+      // The extension writes to these with its own admin privileges.
       match /subscriptions/{subscriptionId} {
         allow read: if request.auth.uid == userId;
       }
@@ -36,14 +35,15 @@ service cloud.firestore {
       }
     }
 
-    // Product and pricing information is public and read-only for all clients.
+    // Rule 3: Make product and pricing information public and read-only.
+    // This allows the application to display product information without authentication.
     match /products/{productId} {
       allow read: if true;
-      allow write: if false;
+      allow write: if false; // Explicitly deny writes from clients
 
       match /prices/{priceId} {
         allow read: if true;
-        allow write: if false;
+        allow write: if false; // Explicitly deny writes from clients
       }
     }
   }
