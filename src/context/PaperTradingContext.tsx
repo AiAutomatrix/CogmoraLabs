@@ -756,9 +756,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             const spotData = data as SpotSnapshotData;
             newPrice = spotData.lastTradedPrice ?? undefined;
             priceChgPct = spotData.changeRate ?? undefined;
-        } else {
+        } else { // Don't change lastPrice because that is our live data that works. 
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.markPrice ?? undefined;
+            newPrice = futuresData.lastPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -858,7 +858,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
     }
     
-    const AI_COOLDOWN_MS = 300000; // 5 minutes
+    const AI_COOLDOWN_MS = 100000; // 5 minutes
     const now = Date.now();
     
     if (lastManualAiRunTimestamp && now - lastManualAiRunTimestamp < AI_COOLDOWN_MS) {
