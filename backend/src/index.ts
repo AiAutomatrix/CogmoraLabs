@@ -103,12 +103,13 @@ export const createTestCheckout = onRequest(async (request, response) => {
         success_url: "http://localhost:9002/success",
         cancel_url: "http://localhost:9002/cancel",
       });
-    
+
     logger.info(`TEST_CHECKOUT: Successfully created document with ID: ${docRef.id}`);
     response.status(200).send(`Successfully created checkout session doc: ${docRef.id}`);
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
     logger.error("TEST_CHECKOUT: FAILED to create checkout session document.", e);
-    response.status(500).send(`Failed to create checkout session: ${e.message}`);
+    response.status(500).send(`Failed to create checkout session: ${errorMessage}`);
   }
 });
 
