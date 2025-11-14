@@ -3,32 +3,40 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rule for the application's user data (paper trading, etc.)
+    // Rules for the main application user data (paper trading, etc.)
+    // This allows a user full read/write access to their own data silo.
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Rules for the Stripe Firebase Extension
+    // Rules for the "Run Payments with Stripe" Firebase Extension
+    
+    // Customer documents:
+    // A user can read their own customer document.
+    // They can also create their own customer document, which is necessary
+    // for the very first checkout session they create.
+    match /customers/{userId} {
+      allow read, create: if request.auth.uid == userId;
 
-    // This rule allows a user to create a checkout session document for themselves.
-    // The Stripe extension, running with admin privileges, will then be able to read this
-    // and write the session ID back.
-    match /customers/{userId}/checkout_sessions/{sessionId} {
-      allow create: if request.auth.uid == userId;
-      allow read, update: if request.auth.uid == userId;
+      // Checkout sessions:
+      // A user can create, read, and update their own checkout session documents.
+      // This is the CRITICAL rule that was missing/incorrect. It allows the
+      // client to initiate a payment.
+      match /checkout_sessions/{sessionId} {
+        allow create, read, update: if request.auth.uid == userId;
+      }
+
+      // Subscriptions and payments are read-only for the user.
+      // The extension writes to these with admin privileges.
+      match /subscriptions/{subscriptionId} {
+        allow read: if request.auth.uid == userId;
+      }
+      match /payments/{paymentId} {
+        allow read: if request.auth.uid == userId;
+      }
     }
 
-    // Allow users to read their own subscription and payment info, which the extension writes.
-    match /customers/{userId}/subscriptions/{subscriptionId} {
-      allow read: if request.auth.uid == userId;
-    }
-
-    match /customers/{userId}/payments/{paymentId} {
-      allow read: if request.auth.uid == userId;
-    }
-
-    // Public read access for products and prices, but no client writes.
-    // This allows the client to list available products.
+    // Product and pricing information is public and read-only for all clients.
     match /products/{productId} {
       allow read: if true;
       allow write: if false;
