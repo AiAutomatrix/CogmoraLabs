@@ -1,6 +1,7 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
@@ -75,6 +76,43 @@ interface TradeTrigger {
 
 // Define a runtime option for the scheduler functions
 const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
+
+/**
+ * ===============================================================
+ *                        TESTING FUNCTION
+ * ===============================================================
+ * A temporary HTTP function to test Stripe checkout creation.
+ */
+export const createTestCheckout = onRequest(async (request, response) => {
+  const userId = request.query.userId as string;
+  if (!userId) {
+    logger.error("TEST_CHECKOUT: userId query parameter is required.");
+    response.status(400).send("Please provide a userId query parameter.");
+    return;
+  }
+
+  logger.info(`TEST_CHECKOUT: Attempting to create checkout session for user: ${userId}`);
+
+  try {
+    const docRef = await db
+      .collection("customers")
+      .doc(userId)
+      .collection("checkout_sessions")
+      .add({
+        price: "price_1SREGsR1GTVMlhwAIHGT4Ofd", // Hardcoded test price ID
+        success_url: "http://localhost:9002/success",
+        cancel_url: "http://localhost:9002/cancel",
+      });
+    
+    logger.info(`TEST_CHECKOUT: Successfully created document with ID: ${docRef.id}`);
+    response.status(200).send(`Successfully created checkout session doc: ${docRef.id}`);
+  } catch (e: unknown) {
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    logger.error("TEST_CHECKOUT: FAILED to create checkout session document.", e);
+    response.status(500).send(`Failed to create checkout session: ${errorMessage}`);
+  }
+});
+
 
 /**
  * Scheduled function that runs every minute to execute due AI agent tasks.
@@ -284,6 +322,13 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
     return;
   }
 
+  // --- CRITICAL VALIDATION ---
+  if (executedTrigger.type === "futures" && (executedTrigger.action !== "long" && executedTrigger.action !== "short")) {
+    logger.error(`CRITICAL: Invalid futures trigger action detected. Deleting trigger ${triggerId}. Action was: "${executedTrigger.action}"`);
+    await event.data!.ref.delete();
+    return; // Stop processing
+  }
+
   logger.info(`Detected executed trigger ${triggerId} for user ${userId}. Opening position...`);
 
   const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
@@ -303,6 +348,24 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         throw new Error(`Executed trigger ${triggerId} is missing currentPrice.`);
       }
 
+      // --- CLOSE OPPOSING POSITION LOGIC ---
+      const openPositionsRef = userContextRef.collection("openPositions");
+      if (type === "futures") {
+        const sideToClose = action === "long" ? "short" : "long";
+        const conflictingPositionQuery = openPositionsRef
+          .where("symbol", "==", symbol)
+          .where("side", "==", sideToClose)
+          .where("positionType", "==", "futures")
+          .limit(1);
+        const conflictingSnapshot = await transaction.get(conflictingPositionQuery);
+        if (!conflictingSnapshot.empty) {
+          const conflictingPosDoc = conflictingSnapshot.docs[0];
+          logger.info(`Found conflicting ${sideToClose} position (${conflictingPosDoc.id}) for new ${action} trigger. Closing it first.`);
+          transaction.update(conflictingPosDoc.ref, {"details.status": "closing", "details.closePrice": currentPrice});
+        }
+      }
+      // --- END CLOSE OPPOSING POSITION LOGIC ---
+
       if (type === "spot") {
         if (currentBalance < amount) {
           throw new Error("Insufficient balance for spot buy.");
@@ -311,7 +374,6 @@ export const openPositionHandler = onDocumentCreated("/users/{userId}/paperTradi
         const newBalance = currentBalance - amount;
 
         // Check for existing position to average into
-        const openPositionsRef = userContextRef.collection("openPositions");
         const existingPositionQuery = openPositionsRef.where("symbol", "==", symbol).where("positionType", "==", "spot").limit(1);
         const existingPositionSnapshot = await transaction.get(existingPositionQuery);
 
