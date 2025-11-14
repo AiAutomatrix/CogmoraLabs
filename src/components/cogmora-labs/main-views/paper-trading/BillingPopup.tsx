@@ -33,8 +33,10 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
+    console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
     if (!user || !firestore) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
+      console.error("[BillingPopup] User or Firestore not available.");
       return;
     }
     
@@ -45,10 +47,9 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       // Ensure this Price ID exists in your Stripe Products catalog.
       const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
 
-      // Create a new checkout session document in the 'customers' collection.
-      // The Firebase extension will listen for this new document.
       const checkoutSessionRef = collection(firestore, 'customers', user.uid, 'checkout_sessions');
       
+      console.log(`[BillingPopup] Creating checkout session document at: ${checkoutSessionRef.path}`);
       const docRef = await addDoc(checkoutSessionRef, {
           price: priceId,
           success_url: window.location.href, // Redirect back to the current page on success
@@ -59,9 +60,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
             userId: user.uid,
           }
       });
+      console.log(`[BillingPopup] Document created with ID: ${docRef.id}. Attaching snapshot listener...`);
+
 
       // Listen for the session ID to be added by the extension's Cloud Function.
       const unsubscribe = onSnapshot(docRef, async (snap) => {
+          console.log("[BillingPopup] onSnapshot listener triggered.", snap.data());
           const { error, sessionId, url } = snap.data() || {};
 
           if (error) {
@@ -73,6 +77,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
 
           // The extension can return either a `sessionId` or a full `url`.
           if (sessionId || url) { 
+              console.log(`[BillingPopup] Received session info. URL: ${url}, SessionID: ${sessionId}. Redirecting...`);
               unsubscribe(); // Stop listening once we have the session
               const stripe = await stripePromise;
               if (!stripe) {
@@ -87,6 +92,10 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                   await stripe.redirectToCheckout({ sessionId });
               }
           }
+      }, (err) => {
+        console.error("[BillingPopup] onSnapshot listener failed:", err);
+        toast({ title: 'Listener Error', description: 'Could not listen for checkout session updates.', variant: 'destructive' });
+        setIsLoading(null);
       });
 
     } catch (err) {
