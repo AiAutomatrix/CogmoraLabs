@@ -1,64 +1,69 @@
 
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { stripe } from '@/lib/stripe';
-// Import the initialized adminAuth instance directly instead of the adminApp function
-import { adminAuth } from '@/firebase/admin';
+import { adminAuth, adminDb } from '@/firebase/admin';
 
 export async function POST(req: Request) {
+  console.log('[API Route] /api/stripe/checkout received a POST request.'); // Diagnostic log
+
   const headersList = await headers();
-  const origin = headersList.get('origin') || 'http://localhost:9002'; // Fallback for safety
+  const origin = headersList.get('origin') || 'http://localhost:9002';
 
   try {
     const authorization = headersList.get('authorization');
     if (!authorization?.startsWith('Bearer ')) {
+      console.error("Stripe Checkout Error: Missing Authorization token.");
       return new NextResponse(JSON.stringify({ error: { message: 'Unauthorized: Missing token.' } }), { status: 401 });
     }
     const idToken = authorization.split('Bearer ')[1];
-    // Use the imported adminAuth instance to verify the token
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const userId = decodedToken.uid;
 
     const { productId } = await req.json();
+    console.log(`[API Route] Received request for userId: ${userId}, productId: ${productId}`);
 
     let priceId;
-    // Use the Price ID from environment variables
     if (productId === 'AI_CREDIT_PACK_100') {
       priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
     } else {
+      console.error(`[API Route] Unknown product ID: ${productId}`);
       return NextResponse.json({ error: { message: `Unknown product ID: ${productId}` } }, { status: 400 });
     }
 
     if (!priceId) {
-        console.error(`Stripe Price ID not found in .env for productId: ${productId}`);
+        console.error(`[API Route] Stripe Price ID not found in .env for productId: ${productId}`);
         return NextResponse.json({ error: { message: `Stripe Price ID not found for product: ${productId}` } }, { status: 500 });
     }
 
-    // Create Checkout Sessions from body params.
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: `${origin}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/dashboard?payment=cancelled`,
-      metadata: {
-        userId: userId,
-        productId: productId,
-      },
-    });
+    console.log(`[API Route] Creating Firestore document for user ${userId} to trigger Stripe Extension.`);
 
-    return NextResponse.json({ sessionId: session.id });
+    // This now mimics the working Cloud Function. It writes to Firestore and lets the extension handle Stripe.
+    const docRef = await adminDb
+      .collection("customers")
+      .doc(userId)
+      .collection("checkout_sessions")
+      .add({
+        price: priceId,
+        success_url: `${origin}/dashboard?payment=success`,
+        cancel_url: `${origin}/dashboard?payment=cancelled`,
+        // We can add metadata if needed by the webhook later
+        metadata: {
+            userId: userId,
+            productId: productId,
+        }
+      });
+      
+    console.log(`[API Route] Successfully created checkout_sessions doc: ${docRef.id}. Waiting for extension to populate URL...`);
+    
+    // The client-side will now listen to this document for the Stripe URL.
+    // We return the path to the document so the client knows where to listen.
+    return NextResponse.json({ firestoreDocPath: docRef.path });
 
   } catch (err: any) {
-    console.error('Stripe Checkout Error:', err);
+    console.error('[API Route] Stripe Checkout Error:', err);
     return NextResponse.json(
-      { error: { message: err.message } },
-      { status: err.statusCode || 500 }
+      { error: { message: err.message || 'An unknown server error occurred.' } },
+      { status: 500 }
     );
   }
 }

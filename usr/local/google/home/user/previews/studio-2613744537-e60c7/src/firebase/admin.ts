@@ -1,25 +1,32 @@
+
 import * as admin from 'firebase-admin';
 
 // This file is for server-side Firebase Admin SDK initialization.
 
-// Check if there are any initialized apps, and if not, initialize one.
-// This is a more robust pattern for serverless environments like Next.js API routes.
-if (!admin.apps.length) {
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+const getApp = () => {
+  if (admin.apps.length > 0) {
+    return admin.apps[0] as admin.app.App;
+  }
 
-  if (serviceAccountKey) {
-    admin.initializeApp({
+  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!serviceAccountKey) {
+    // In a Google Cloud environment, default credentials are used.
+    // For local dev, you'd set GOOGLE_APPLICATION_CREDENTIALS.
+    console.log("Initializing Firebase Admin with default credentials.");
+    return admin.initializeApp();
+  }
+
+  try {
+    console.log("Initializing Firebase Admin with service account key.");
+    return admin.initializeApp({
       credential: admin.credential.cert(JSON.parse(serviceAccountKey)),
     });
-  } else {
-    // This will use the default credentials in a Google Cloud environment
-    // or look for GOOGLE_APPLICATION_CREDENTIALS env var locally.
-    console.warn("FIREBASE_SERVICE_ACCOUNT_KEY not found. Using default application credentials.");
-    admin.initializeApp();
+  } catch (error: any) {
+    console.error("Error parsing FIREBASE_SERVICE_ACCOUNT_KEY:", error.message);
+    throw new Error("Failed to initialize Firebase Admin SDK. Service account key may be malformed.");
   }
-}
+};
 
-// Export the initialized admin instance for use in other server-side files.
-// We no longer need an adminApp() function. We can just import this instance.
-export const adminAuth = admin.auth();
-export const adminDb = admin.firestore();
+const app = getApp();
+export const adminAuth = app.auth();
+export const adminDb = app.firestore();
