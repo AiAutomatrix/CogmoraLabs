@@ -3,47 +3,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rule 1: Secure the application's main user data (paper trading, etc.)
-    // This allows a user full read/write access ONLY to their own data silo.
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
+    match /users/{userId} {
+      // Allow a user to create their own user document
+      allow create: if request.auth != null && request.auth.uid == userId;
 
-    // Rule 2: Secure the Stripe payments data
-    // This block handles all collections created by the "Run Payments with Stripe" extension.
+      // Allow a user to read their own main document
+      allow read: if request.auth != null && request.auth.uid == userId;
 
-    // Customer documents:
-    // Allow a user to read AND create their own customer document.
-    // The `create` permission is critical for the first time a user makes a purchase.
-    match /customers/{userId} {
-      allow read, create: if request.auth.uid == userId;
-
-      // Checkout sessions:
-      // Allow a user to create, read, and update their own checkout session documents.
-      // This is the core permission that was missing and causing the error.
+      // Allow a user to create their own checkout session, and allow the Stripe
+      // extension to write back the URL. This is the key fix.
       match /checkout_sessions/{sessionId} {
-        allow create, read, update: if request.auth.uid == userId;
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-
-      // Subscriptions and payments should be read-only for the user.
-      // The extension writes to these with its own admin privileges.
-      match /subscriptions/{subscriptionId} {
-        allow read: if request.auth.uid == userId;
-      }
-      match /payments/{paymentId} {
-        allow read: if request.auth.uid == userId;
+      
+      // Secure all other subcollections (like paperTradingContext)
+      match /{subcollection}/{docId} {
+        // This rule applies to paths like /paperTradingContext/{main}
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    // Rule 3: Make product and pricing information public and read-only.
-    // This allows the application to display product information without authentication.
+    // Make products and prices public, as required by the Stripe extension.
     match /products/{productId} {
       allow read: if true;
-      allow write: if false; // Explicitly deny writes from clients
+      allow write: if false;
 
       match /prices/{priceId} {
         allow read: if true;
-        allow write: if false; // Explicitly deny writes from clients
+        allow write: if false;
       }
     }
   }
