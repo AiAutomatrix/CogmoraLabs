@@ -1,9 +1,10 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rule for user-specific data
+    // Rule for user-specific data (allow full access to owner)
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
@@ -12,15 +13,18 @@ service cloud.firestore {
     match /users/{userId} {
       allow create: if request.auth != null && request.auth.uid == userId;
     }
+    
+    // --- STRIPE EXTENSION RULES ---
 
-    // Rule for the Stripe checkout sessions inside a user's document
-    // This allows the user to create the session and the Stripe extension to update it.
+    // Rule for checkout sessions inside a user's document
+    // This allows the authenticated user to create the session doc, and the Stripe
+    // extension's backend service to write the URL/error back to it.
     match /users/{userId}/checkout_sessions/{sessionId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
     // Public rules for Stripe products and prices, as per extension documentation.
-    // This is the fix for the current permission error.
+    // This is the fix for the "Failed to fetch price ID" permission error.
     match /products/{productId} {
       allow read: if true;
       allow write: if false; // Only backend can write

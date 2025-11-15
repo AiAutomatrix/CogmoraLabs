@@ -37,6 +37,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
 
   useEffect(() => {
     if (!isOpen || !firestore) {
+      console.log("[BillingPopup] useEffect skipped: popup not open or firestore not ready.");
       return;
     }
 
@@ -45,17 +46,23 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       setIsPriceLoading(true);
       try {
         const productsRef = collection(firestore, 'products');
+        console.log(`[BillingPopup] Querying collection: ${productsRef.path}`);
         const q = query(productsRef, where('active', '==', true), limit(1));
         const productSnap = await getDocs(q);
+        console.log(`[BillingPopup] Products query snapshot received. Empty: ${productSnap.empty}`);
 
         if (productSnap.empty) {
-          throw new Error("No active products found in Firestore.");
+          throw new Error("No active products found in Firestore. Make sure you've created a product in your Stripe Dashboard and the extension has synced it.");
         }
 
         const productDoc = productSnap.docs[0];
+        console.log(`[BillingPopup] Found product doc: ${productDoc.id}`);
         const pricesRef = collection(productDoc.ref, 'prices');
+        console.log(`[BillingPopup] Querying subcollection: ${pricesRef.path}`);
         const pricesQuery = query(pricesRef, where('active', '==', true), limit(1));
         const pricesSnap = await getDocs(pricesQuery);
+        console.log(`[BillingPopup] Prices query snapshot received. Empty: ${pricesSnap.empty}`);
+
 
         if (pricesSnap.empty) {
           throw new Error(`No active prices found for product ${productDoc.id}.`);
@@ -63,17 +70,18 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         
         const fetchedPriceId = pricesSnap.docs[0].id;
         setPriceId(fetchedPriceId);
-        console.log(`[BillingPopup] Successfully fetched price ID: ${fetchedPriceId}`);
+        console.log(`[BillingPopup] SUCCESSFULLY fetched price ID: ${fetchedPriceId}`);
 
       } catch (e: any) {
         console.error("[BillingPopup] Failed to fetch price ID:", e);
         toast({
           title: "Pricing Error",
-          description: "Could not load product information. Please try again later.",
+          description: e.message || "Could not load product information. Please try again later.",
           variant: "destructive",
         });
         setPriceId(null);
       } finally {
+        console.log("[BillingPopup] Price fetching finished.");
         setIsPriceLoading(false);
       }
     };
@@ -90,16 +98,17 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     }
     if (!priceId) {
       toast({ title: "Pricing Error", description: "Product price could not be loaded. Cannot proceed.", variant: "destructive" });
+      console.error("[BillingPopup] Purchase attempt failed: priceId is null.");
       return;
     }
     
     setIsLoading(productId);
 
     try {
-      // **FIXED**: Changed collection path from 'customers' to 'users'
+      // Use the correct path for the user's checkout sessions.
       const checkoutSessionRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
       
-      console.log(`[BillingPopup] Creating checkout session document at: ${checkoutSessionRef.path}`);
+      console.log(`[BillingPopup] Creating checkout session document at path: ${checkoutSessionRef.path}`);
       const docRef = await addDoc(checkoutSessionRef, {
           price: priceId,
           success_url: window.location.href,
@@ -123,7 +132,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
           }
 
           if (url) { 
-              console.log(`[BillingPopup] Received checkout URL. Redirecting...`);
+              console.log(`[BillingPopup] Received checkout URL. Redirecting to Stripe...`);
               unsubscribe();
               window.location.assign(url);
           }
@@ -162,7 +171,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                 <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
                 <p className="text-sm text-muted-foreground">$29.99 CAD</p>
               </div>
-              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100' || isPriceLoading}>
+              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isPriceLoading || isLoading === 'AI_CREDIT_PACK_100'}>
                 {isPriceLoading || isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
               </Button>
