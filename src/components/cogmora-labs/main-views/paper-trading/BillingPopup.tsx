@@ -12,10 +12,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2, RefreshCw } from 'lucide-react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
@@ -26,13 +27,14 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
     console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
-    if (!user) {
+    if (!user || !firestore) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
@@ -51,33 +53,46 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
           },
           body: JSON.stringify({ productId }),
       });
+      
       console.log(`[BillingPopup] API response status: ${response.status}`);
 
       if (!response.ok) {
-        // Log the raw text response if it's not JSON
         const errorText = await response.text();
         console.error('[BillingPopup] API responded with an error:', errorText);
         throw new Error(`Server responded with ${response.status}. Check console for details.`);
       }
       
-      const { sessionId } = await response.json();
-      console.log(`[BillingPopup] Received Stripe session ID: ${sessionId}`);
+      const { firestoreDocPath } = await response.json();
+      console.log(`[BillingPopup] Received Firestore doc path: ${firestoreDocPath}. Listening for Stripe URL...`);
 
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error('Stripe.js has not loaded yet.');
-      }
-      
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      
-      if (error) {
-        throw new Error(error.message);
-      }
+      // Listen to the Firestore document for the Stripe session URL
+      const unsub = onSnapshot(doc(firestore, firestoreDocPath), async (snap) => {
+        const data = snap.data();
+        const { error, url } = data || {};
+
+        if (error) {
+          console.error(`[BillingPopup] Stripe Extension Error: ${error.message}`);
+          toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
+          unsub(); // Stop listening
+          setIsLoading(null);
+        }
+
+        if (url) {
+          console.log('[BillingPopup] Stripe URL received. Redirecting to checkout...');
+          unsub(); // Stop listening
+          const stripe = await stripePromise;
+          if (!stripe) {
+            throw new Error('Stripe.js has not loaded yet.');
+          }
+          await stripe.redirectToCheckout({ sessionId: snap.id });
+          // The user is redirected, so no need to set isLoading to null here.
+        }
+      });
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error('Purchase Error:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
-    } finally {
       setIsLoading(null);
     }
   };
