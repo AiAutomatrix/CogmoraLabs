@@ -3,19 +3,24 @@ import * as admin from 'firebase-admin';
 
 // This file is for server-side Firebase Admin SDK initialization.
 
-// Check if there are any initialized apps, and if not, initialize one.
-// This is a more robust pattern for serverless environments like Next.js API routes.
+// This is the correct pattern for initializing the Admin SDK in a serverless environment.
+// It ensures that we don't try to re-initialize the app on every API call.
 if (!admin.apps.length) {
   const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
   if (serviceAccountKey) {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(serviceAccountKey)),
-    });
+    try {
+      admin.initializeApp({
+        credential: admin.credential.cert(JSON.parse(serviceAccountKey)),
+      });
+      console.log("Firebase Admin SDK initialized with service account key.");
+    } catch (e: any) {
+        console.error("Firebase Admin SDK initialization failed:", e);
+    }
   } else {
     // This will use the default credentials in a Google Cloud environment
-    // or look for GOOGLE_APPLICATION_CREDENTIALS env var locally.
-    console.warn("FIREBASE_SERVICE_ACCOUNT_KEY not found. Using default application credentials.");
+    // (like Cloud Run or Cloud Functions)
+    console.warn("FIREBASE_SERVICE_ACCOUNT_KEY not found. Using default application credentials. This is expected in a deployed Google Cloud environment.");
     admin.initializeApp();
   }
 }

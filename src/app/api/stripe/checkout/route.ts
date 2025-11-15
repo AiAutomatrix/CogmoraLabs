@@ -4,6 +4,8 @@ import { headers } from 'next/headers';
 import { adminAuth, adminDb } from '@/firebase/admin';
 
 export async function POST(req: Request) {
+  console.log('[API Route] /api/stripe/checkout received a POST request.');
+
   const headersList = await headers();
   const origin = headersList.get('origin') || 'http://localhost:9002';
 
@@ -35,7 +37,6 @@ export async function POST(req: Request) {
 
     console.log(`[API Route] Creating Firestore document for user ${userId} to trigger Stripe Extension.`);
 
-    // This now mimics the working Cloud Function. It writes to Firestore and lets the extension handle Stripe.
     const docRef = await adminDb
       .collection("customers")
       .doc(userId)
@@ -44,7 +45,6 @@ export async function POST(req: Request) {
         price: priceId,
         success_url: `${origin}/dashboard?payment=success`,
         cancel_url: `${origin}/dashboard?payment=cancelled`,
-        // We can add metadata if needed by the webhook later
         metadata: {
             userId: userId,
             productId: productId,
@@ -53,8 +53,6 @@ export async function POST(req: Request) {
       
     console.log(`[API Route] Successfully created checkout_sessions doc: ${docRef.id}. Waiting for extension to populate URL...`);
     
-    // The client-side will now listen to this document for the Stripe URL.
-    // We return the path to the document so the client knows where to listen.
     return NextResponse.json({ firestoreDocPath: docRef.path });
 
   } catch (err: any) {
