@@ -37,8 +37,9 @@ export async function POST(req: Request) {
 
     console.log(`[API Route] Creating Firestore document for user ${userId} to trigger Stripe Extension.`);
 
+    // CORRECTED PATH: Write to the 'checkout_sessions' subcollection within the 'users' collection.
     const docRef = await adminDb
-      .collection("customers")
+      .collection("users") // Using the 'users' collection
       .doc(userId)
       .collection("checkout_sessions")
       .add({
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
         }
       });
       
-    console.log(`[API Route] Successfully created checkout_sessions doc: ${docRef.id}. Waiting for extension to populate URL...`);
+    console.log(`[API Route] Successfully created checkout_sessions doc: ${docRef.id} at path: ${docRef.path}`);
     
     // Return the path to the document so the client knows where to listen.
     return NextResponse.json({ firestoreDocPath: docRef.path });

@@ -76,14 +76,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
 
         if (url) {
           unsubscribe();
-          const stripe = await stripePromise;
-          if (!stripe) {
-            throw new Error('Stripe.js has not loaded.');
-          }
-          const { error: stripeError } = await stripe.redirectToCheckout({ sessionId: snap.id });
-          if (stripeError) {
-            throw stripeError;
-          }
+          window.location.assign(url);
         }
       });
 
