@@ -31,6 +31,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
+    console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
     if (!user) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
@@ -40,6 +41,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
 
     try {
       const idToken = await user.getIdToken();
+      console.log("[BillingPopup] Got user ID token.");
       
       const response = await fetch('/api/stripe/checkout', {
           method: 'POST',
@@ -49,13 +51,17 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
           },
           body: JSON.stringify({ productId }),
       });
+      console.log(`[BillingPopup] API response status: ${response.status}`);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error.message || 'Failed to create checkout session.');
+        // Log the raw text response if it's not JSON
+        const errorText = await response.text();
+        console.error('[BillingPopup] API responded with an error:', errorText);
+        throw new Error(`Server responded with ${response.status}. Check console for details.`);
       }
       
       const { sessionId } = await response.json();
+      console.log(`[BillingPopup] Received Stripe session ID: ${sessionId}`);
 
       const stripe = await stripePromise;
       if (!stripe) {
