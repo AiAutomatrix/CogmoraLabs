@@ -1,6 +1,7 @@
+
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,14 +16,13 @@ import { useUser, useFirestore } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
-import { collection, addDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, getDocs, limit } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// The publishable key is safe to be included in client-side code.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
@@ -30,7 +30,52 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const firestore = useFirestore();
   const { toast } = useToast();
   const { resetAccount, balance } = usePaperTrading();
+  
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
+  const [priceId, setPriceId] = useState<string | null>(null);
+  const [isPriceLoading, setIsPriceLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen || !firestore) {
+      return;
+    }
+
+    const fetchPriceId = async () => {
+      setIsPriceLoading(true);
+      try {
+        const productsRef = collection(firestore, 'products');
+        const q = query(productsRef, where('active', '==', true), limit(1));
+        const productSnap = await getDocs(q);
+
+        if (productSnap.empty) {
+          throw new Error("No active products found in Firestore.");
+        }
+
+        const productDoc = productSnap.docs[0];
+        const pricesRef = collection(productDoc.ref, 'prices');
+        const pricesQuery = query(pricesRef, where('active', '==', true), limit(1));
+        const pricesSnap = await getDocs(pricesQuery);
+
+        if (pricesSnap.empty) {
+          throw new Error(`No active prices found for product ${productDoc.id}.`);
+        }
+
+        setPriceId(pricesSnap.docs[0].id);
+      } catch (e: any) {
+        console.error("[BillingPopup] Failed to fetch price ID:", e);
+        toast({
+          title: "Pricing Error",
+          description: "Could not load product information. Please try again later.",
+          variant: "destructive",
+        });
+        setPriceId(null);
+      } finally {
+        setIsPriceLoading(false);
+      }
+    };
+
+    fetchPriceId();
+  }, [isOpen, firestore, toast]);
 
   const handlePurchase = async (productId: string) => {
     console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
@@ -39,34 +84,31 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       console.error("[BillingPopup] User or Firestore not available.");
       return;
     }
+    if (!priceId) {
+      toast({ title: "Pricing Error", description: "Product price could not be loaded. Cannot proceed.", variant: "destructive" });
+      return;
+    }
     
     setIsLoading(productId);
 
     try {
-      // This is the Price ID from your Stripe dashboard for the "AI Credit Pack" product.
-      // Ensure this Price ID exists in your Stripe Products catalog.
-      const priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
-
       const checkoutSessionRef = collection(firestore, 'customers', user.uid, 'checkout_sessions');
       
       console.log(`[BillingPopup] Creating checkout session document at: ${checkoutSessionRef.path}`);
       const docRef = await addDoc(checkoutSessionRef, {
           price: priceId,
-          success_url: window.location.href, // Redirect back to the current page on success
-          cancel_url: window.location.href,  // Redirect back on cancellation
+          success_url: window.location.href,
+          cancel_url: window.location.href,
           metadata: {
-            // Pass any metadata you need to the webhook
             productId: productId,
             userId: user.uid,
           }
       });
       console.log(`[BillingPopup] Document created with ID: ${docRef.id}. Attaching snapshot listener...`);
 
-
-      // Listen for the session ID to be added by the extension's Cloud Function.
       const unsubscribe = onSnapshot(docRef, async (snap) => {
           console.log("[BillingPopup] onSnapshot listener triggered.", snap.data());
-          const { error, sessionId, url } = snap.data() || {};
+          const { error, url } = snap.data() || {};
 
           if (error) {
               console.error(`[BillingPopup] Stripe Checkout Error from extension: ${error.message}`);
@@ -75,22 +117,10 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               unsubscribe();
           }
 
-          // The extension can return either a `sessionId` or a full `url`.
-          if (sessionId || url) { 
-              console.log(`[BillingPopup] Received session info. URL: ${url}, SessionID: ${sessionId}. Redirecting...`);
-              unsubscribe(); // Stop listening once we have the session
-              const stripe = await stripePromise;
-              if (!stripe) {
-                  throw new Error('Stripe.js has not loaded yet.');
-              }
-              
-              if (url) {
-                  // The extension now provides a full URL, which is the recommended way.
-                  window.location.assign(url);
-              } else if (sessionId) {
-                  // Fallback for older extension versions that only provide a session ID.
-                  await stripe.redirectToCheckout({ sessionId });
-              }
+          if (url) { 
+              console.log(`[BillingPopup] Received checkout URL. Redirecting...`);
+              unsubscribe();
+              window.location.assign(url);
           }
       }, (err) => {
         console.error("[BillingPopup] onSnapshot listener failed:", err);
@@ -127,8 +157,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                 <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
                 <p className="text-sm text-muted-foreground">$29.99 CAD</p>
               </div>
-              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
-                {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100' || isPriceLoading}>
+                {isPriceLoading || isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
               </Button>
             </div>
