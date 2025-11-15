@@ -38,11 +38,15 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     }
     
     setIsLoading(productId);
+    console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
 
+    let response: Response | undefined;
     try {
+      console.log("[BillingPopup] Getting user ID token.");
       const idToken = await user.getIdToken();
+      console.log("[BillingPopup] Got user ID token.");
       
-      const response = await fetch('/api/stripe/checkout', {
+      response = await fetch('/api/stripe/checkout', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
@@ -50,19 +54,33 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
           },
           body: JSON.stringify({ productId }),
       });
-
-      const data = await response.json();
+      
+      console.log(`[BillingPopup] API response status: ${response.status}`);
 
       if (!response.ok) {
-        throw new Error(data.error?.message || 'Failed to create checkout session.');
+        // We will now attempt to read the response as text, as it might be an HTML error page.
+        const errorText = await response.text();
+        // Log the raw error text for debugging
+        console.error("[BillingPopup] API responded with an error:", errorText);
+        
+        // Try to parse it as JSON in case the error is structured, but fall back to text.
+        try {
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error?.message || `Server responded with ${response.status}.`);
+        } catch (jsonParseError) {
+            // This will throw if the error response was not JSON, which is what we suspect.
+            throw new Error(`Server responded with ${response.status}. Check console for details.`);
+        }
       }
       
+      const data = await response.json();
       const { firestoreDocPath } = data;
+
       if (!firestoreDocPath) {
           throw new Error('Did not receive Firestore document path from server.');
       }
       
-      // Listen to the document for the Stripe URL
+      console.log(`[BillingPopup] Listening to Firestore doc: ${firestoreDocPath}`);
       const docRef = doc(firestore, firestoreDocPath);
       const unsubscribe = onSnapshot(docRef, async (snap) => {
         const { error, url } = snap.data() || {};
@@ -73,6 +91,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         }
 
         if (url) {
+          console.log("[BillingPopup] Stripe URL received. Redirecting...");
           unsubscribe();
           window.location.assign(url);
         }
