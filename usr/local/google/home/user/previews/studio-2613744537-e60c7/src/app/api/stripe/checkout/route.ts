@@ -2,11 +2,8 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
-import { getAuth } from 'firebase-admin/auth';
-import { adminApp } from '@/firebase/admin';
-
-// Initialize Firebase Admin SDK
-adminApp();
+// Import the initialized adminAuth instance directly instead of the adminApp function
+import { adminAuth } from '@/firebase/admin';
 
 export async function POST(req: Request) {
   const headersList = await headers();
@@ -18,13 +15,14 @@ export async function POST(req: Request) {
       return new NextResponse(JSON.stringify({ error: { message: 'Unauthorized: Missing token.' } }), { status: 401 });
     }
     const idToken = authorization.split('Bearer ')[1];
-    const decodedToken = await getAuth().verifyIdToken(idToken);
+    // Use the imported adminAuth instance to verify the token
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
     const userId = decodedToken.uid;
 
     const { productId } = await req.json();
 
     let priceId;
-    // Use the Price IDs from environment variables
+    // Use the Price ID from environment variables
     if (productId === 'AI_CREDIT_PACK_100') {
       priceId = process.env.STRIPE_AI_CREDIT_PRICE_ID;
     } else {
