@@ -1,13 +1,11 @@
+
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 import Stripe from 'stripe';
-import { adminApp } from '@/firebase/admin';
+// Import the initialized adminDb instance from our corrected admin.ts
+import { adminDb } from '@/firebase/admin';
 import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK if it hasn't been already
-adminApp(); 
-const firestore = admin.firestore();
 
 // This is your Stripe CLI webhook secret for testing your endpoint locally.
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -24,8 +22,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     console.log(`Fulfilling order for userId: ${userId}, productId: ${productId}`);
 
     if (productId === 'AI_CREDIT_PACK_100') {
-        const userContextRef = firestore.doc(`users/${userId}/paperTradingContext/main`);
+        const userContextRef = adminDb.doc(`users/${userId}/paperTradingContext/main`);
         try {
+            // Use the imported admin.firestore instance for FieldValue
             await userContextRef.update({
                 ai_credits: admin.firestore.FieldValue.increment(100)
             });
@@ -42,8 +41,13 @@ export async function POST(req: Request) {
 
     let event: Stripe.Event;
 
+    if (!webhookSecret) {
+        console.error('Stripe webhook secret is not set.');
+        return NextResponse.json({ error: 'Webhook secret not configured.' }, { status: 500 });
+    }
+
     try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret!);
+        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err: any) {
         console.error(`❌ Webhook signature verification failed: ${err.message}`);
         return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
