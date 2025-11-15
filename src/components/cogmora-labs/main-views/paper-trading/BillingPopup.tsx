@@ -77,15 +77,13 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   };
 
   const handleReset = () => {
-    if (userContextDocRef && balance < 5000) {
+    if (balance < 5000) {
       resetAccount();
     } else {
        toast({ title: "Reset Not Allowed", description: "You can only reset your account when your balance is below $5,000.", variant: "destructive" });
     }
     onOpenChange(false);
   }
-
-  const { userContextDocRef } = usePaperTrading();
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -113,7 +111,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                 <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
                 <p className="text-sm text-muted-foreground">Reset balance to $100k and clear history.</p>
               </div>
-              <Button onClick={handleReset} variant="destructive" disabled={balance > 5000}>
+              <Button onClick={handleReset} variant="destructive" disabled={balance >= 5000}>
                 Reset
               </Button>
             </div>
