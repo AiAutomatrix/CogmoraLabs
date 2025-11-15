@@ -1121,7 +1121,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     if (dataLoadedRef.current) {
         setIsLoaded(true);
     }
-  }, [dataLoadedRef.current]);
+  }, [dataLoadedRef]);
 
   const setupWebSocket = useCallback(async (
       wsRef: React.MutableRefObject<WebSocket | null>,

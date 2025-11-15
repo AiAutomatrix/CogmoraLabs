@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BillingPopup } from '@/components/cogmora-labs/main-views/paper-trading/BillingPopup';
 import { Separator } from '@/components/ui/separator';
 
 
@@ -36,7 +35,6 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [isBillingOpen, setIsBillingOpen] = useState(false);
   
   const { handleAiTriggerAnalysis, isLoaded, aiCredits } = usePaperTrading();
 
@@ -294,10 +292,6 @@ const PageContent: React.FC = () => {
                         </Accordion>
                     </div>
                     <div className="p-4 border-t mt-auto space-y-2">
-                        <Button variant="ghost" className="w-full justify-start" onClick={() => {setIsBillingOpen(true); setIsMobileNavOpen(false);}}>
-                           <PlusCircle className="mr-2 h-4 w-4" />
-                           Buy Credits / Reset
-                        </Button>
                         <Button variant="ghost" className="w-full justify-start cursor-default">
                             <Bot className="mr-2 h-4 w-4" />
                             AI Credits: {aiCredits}
@@ -333,10 +327,6 @@ const PageContent: React.FC = () => {
                 <DropdownMenuItem className="cursor-default">
                     <Bot className="mr-2 h-4 w-4" />
                     <span>AI Credits: {aiCredits}</span>
-                </DropdownMenuItem>
-                 <DropdownMenuItem onSelect={() => setIsBillingOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    <span>Buy Credits / Reset</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
@@ -383,7 +373,6 @@ const PageContent: React.FC = () => {
         </p>
       </footer>
     </div>
-    <BillingPopup isOpen={isBillingOpen} onOpenChange={setIsBillingOpen} />
     </>
   );
 }
