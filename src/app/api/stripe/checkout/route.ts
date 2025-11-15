@@ -1,11 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { adminApp } from '@/firebase/admin';
-import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin SDK
-const db = admin.firestore(adminApp());
+import { adminAuth, adminDb } from '@/firebase/admin';
 
 export async function POST(req: Request) {
   const headersList = await headers();
@@ -18,7 +14,7 @@ export async function POST(req: Request) {
       return new NextResponse(JSON.stringify({ error: { message: 'Unauthorized: Missing token.' } }), { status: 401 });
     }
     const idToken = authorization.split('Bearer ')[1];
-    const decodedToken = await admin.auth(adminApp()).verifyIdToken(idToken);
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
     const userId = decodedToken.uid;
 
     const { productId } = await req.json();
@@ -40,7 +36,7 @@ export async function POST(req: Request) {
     console.log(`[API Route] Creating Firestore document for user ${userId} to trigger Stripe Extension.`);
 
     // This now mimics the working Cloud Function. It writes to Firestore and lets the extension handle Stripe.
-    const docRef = await db
+    const docRef = await adminDb
       .collection("customers")
       .doc(userId)
       .collection("checkout_sessions")
