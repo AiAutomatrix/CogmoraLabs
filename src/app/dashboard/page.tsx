@@ -7,7 +7,7 @@ import { PaperTradingProvider, usePaperTrading } from '@/context/PaperTradingCon
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User, Bot, PlusCircle } from 'lucide-react';
+import { Menu, LineChart, Columns, ListFilter, Settings2, SearchCode, NotebookPen, LogOut, User, Bot, CreditCard } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from '@/components/ui/separator';
+import { BillingPopup } from '@/components/cogmora-labs/main-views/paper-trading/BillingPopup';
 
 
 const PageContent: React.FC = () => {
@@ -35,6 +36,7 @@ const PageContent: React.FC = () => {
   const [selectedChartLayout, setSelectedChartLayout] = useState(1);
   const [selectedHeatmapView, setSelectedHeatmapView] = useState('crypto_coins');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isBillingOpen, setIsBillingOpen] = useState(false);
   
   const { handleAiTriggerAnalysis, isLoaded, aiCredits } = usePaperTrading();
 
@@ -296,6 +298,10 @@ const PageContent: React.FC = () => {
                             <Bot className="mr-2 h-4 w-4" />
                             AI Credits: {aiCredits}
                         </Button>
+                         <Button variant="ghost" className="w-full justify-start" onClick={() => setIsBillingOpen(true)}>
+                            <CreditCard className="mr-2 h-4 w-4" />
+                            Billing
+                         </Button>
                          <Separator />
                          <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
                             <LogOut className="mr-2 h-4 w-4" />
@@ -327,6 +333,10 @@ const PageContent: React.FC = () => {
                 <DropdownMenuItem className="cursor-default">
                     <Bot className="mr-2 h-4 w-4" />
                     <span>AI Credits: {aiCredits}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsBillingOpen(true)}>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    <span>Billing</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
@@ -373,6 +383,7 @@ const PageContent: React.FC = () => {
         </p>
       </footer>
     </div>
+    <BillingPopup isOpen={isBillingOpen} onOpenChange={setIsBillingOpen} />
     </>
   );
 }
