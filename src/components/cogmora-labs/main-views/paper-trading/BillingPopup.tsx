@@ -22,8 +22,6 @@ interface BillingPopupProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// Load the Stripe object. This is a promise that resolves to the Stripe object.
-// Use your Stripe publishable key from the .env file.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
@@ -41,15 +39,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
-      // 1. Get the Firebase Auth ID token for the current user.
       const idToken = await user.getIdToken();
       
-      // 2. Call your new backend API route to create a checkout session.
       const response = await fetch('/api/stripe/checkout', {
           method: 'POST',
           headers: {
               'Content-Type': 'application/json',
-              // Pass the token in the Authorization header.
               'Authorization': `Bearer ${idToken}`,
           },
           body: JSON.stringify({ productId }),
@@ -60,10 +55,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         throw new Error(errorData.error.message || 'Failed to create checkout session.');
       }
       
-      // 3. Get the session ID from the backend's response.
       const { sessionId } = await response.json();
 
-      // 4. Get the Stripe object and redirect to checkout.
       const stripe = await stripePromise;
       if (!stripe) {
         throw new Error('Stripe.js has not loaded yet.');
@@ -84,9 +77,15 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   };
 
   const handleReset = () => {
-    resetAccount();
+    if (userContextDocRef && balance < 5000) {
+      resetAccount();
+    } else {
+       toast({ title: "Reset Not Allowed", description: "You can only reset your account when your balance is below $5,000.", variant: "destructive" });
+    }
     onOpenChange(false);
   }
+
+  const { userContextDocRef } = usePaperTrading();
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
