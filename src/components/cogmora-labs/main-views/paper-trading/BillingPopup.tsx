@@ -41,6 +41,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     }
 
     const fetchPriceId = async () => {
+      console.log("[BillingPopup] Fetching price ID...");
       setIsPriceLoading(true);
       try {
         const productsRef = collection(firestore, 'products');
@@ -59,8 +60,11 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         if (pricesSnap.empty) {
           throw new Error(`No active prices found for product ${productDoc.id}.`);
         }
+        
+        const fetchedPriceId = pricesSnap.docs[0].id;
+        setPriceId(fetchedPriceId);
+        console.log(`[BillingPopup] Successfully fetched price ID: ${fetchedPriceId}`);
 
-        setPriceId(pricesSnap.docs[0].id);
       } catch (e: any) {
         console.error("[BillingPopup] Failed to fetch price ID:", e);
         toast({
@@ -92,7 +96,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     setIsLoading(productId);
 
     try {
-      const checkoutSessionRef = collection(firestore, 'customers', user.uid, 'checkout_sessions');
+      // **FIXED**: Changed collection path from 'customers' to 'users'
+      const checkoutSessionRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
       
       console.log(`[BillingPopup] Creating checkout session document at: ${checkoutSessionRef.path}`);
       const docRef = await addDoc(checkoutSessionRef, {
