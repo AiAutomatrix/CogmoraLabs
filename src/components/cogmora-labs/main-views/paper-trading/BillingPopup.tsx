@@ -57,8 +57,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       console.log(`[BillingPopup] API response status: ${response.status}`);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[BillingPopup] API responded with an error:', errorText);
+        const errorBody = await response.text();
+        console.error('[BillingPopup] API responded with an error:', errorBody);
         throw new Error(`Server responded with ${response.status}. Check console for details.`);
       }
       
