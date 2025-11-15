@@ -11,9 +11,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Bot, Loader2, RefreshCw, CreditCard } from 'lucide-react';
+import { Bot, Loader2, CreditCard } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
-import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -30,7 +29,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
@@ -88,18 +86,13 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     }
   };
 
-  const handleReset = () => {
-    resetAccount();
-    onOpenChange(false);
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Account Actions</DialogTitle>
+          <DialogTitle>Buy AI Credits</DialogTitle>
           <DialogDescription>
-            Purchase AI credits or reset your paper trading account.
+            Purchase AI credits to continue using the AI Trading Agent.
           </DialogDescription>
         </DialogHeader>
 
@@ -112,15 +105,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
                 {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
                 Purchase
-              </Button>
-            </div>
-             <div className="p-4 border rounded-lg flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
-                <p className="text-sm text-muted-foreground">Reset balance to $100k and clear history.</p>
-              </div>
-              <Button onClick={handleReset} variant="destructive" disabled={balance > 5000}>
-                Reset
               </Button>
             </div>
         </div>
