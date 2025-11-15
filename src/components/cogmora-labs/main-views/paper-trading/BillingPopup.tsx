@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -12,140 +12,73 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2, RefreshCw } from 'lucide-react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadStripe } from '@stripe/stripe-js';
-import { collection, addDoc, onSnapshot, query, where, getDocs, limit } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
+// Load the Stripe object. This is a promise that resolves to the Stripe object.
+// Use your Stripe publishable key from the .env file.
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
-  const firestore = useFirestore();
   const { toast } = useToast();
   const { resetAccount, balance } = usePaperTrading();
-  
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
-  const [priceId, setPriceId] = useState<string | null>(null);
-  const [isPriceLoading, setIsPriceLoading] = useState(true);
-
-  useEffect(() => {
-    if (!isOpen || !firestore) {
-      console.log("[BillingPopup] useEffect skipped: popup not open or firestore not ready.");
-      return;
-    }
-
-    const fetchPriceId = async () => {
-      console.log("[BillingPopup] Fetching price ID...");
-      setIsPriceLoading(true);
-      try {
-        const productsRef = collection(firestore, 'products');
-        console.log(`[BillingPopup] Querying collection: ${productsRef.path}`);
-        const q = query(productsRef, where('active', '==', true), limit(1));
-        const productSnap = await getDocs(q);
-        console.log(`[BillingPopup] Products query snapshot received. Empty: ${productSnap.empty}`);
-
-        if (productSnap.empty) {
-          throw new Error("No active products found in Firestore. Make sure you've created a product in your Stripe Dashboard and the extension has synced it.");
-        }
-
-        const productDoc = productSnap.docs[0];
-        console.log(`[BillingPopup] Found product doc: ${productDoc.id}`);
-        const pricesRef = collection(productDoc.ref, 'prices');
-        console.log(`[BillingPopup] Querying subcollection: ${pricesRef.path}`);
-        const pricesQuery = query(pricesRef, where('active', '==', true), limit(1));
-        const pricesSnap = await getDocs(pricesQuery);
-        console.log(`[BillingPopup] Prices query snapshot received. Empty: ${pricesSnap.empty}`);
-
-
-        if (pricesSnap.empty) {
-          throw new Error(`No active prices found for product ${productDoc.id}.`);
-        }
-        
-        const fetchedPriceId = pricesSnap.docs[0].id;
-        setPriceId(fetchedPriceId);
-        console.log(`[BillingPopup] SUCCESSFULLY fetched price ID: ${fetchedPriceId}`);
-
-      } catch (e: any) {
-        console.error("[BillingPopup] Failed to fetch price ID:", e);
-        toast({
-          title: "Pricing Error",
-          description: e.message || "Could not load product information. Please try again later.",
-          variant: "destructive",
-        });
-        setPriceId(null);
-      } finally {
-        console.log("[BillingPopup] Price fetching finished.");
-        setIsPriceLoading(false);
-      }
-    };
-
-    fetchPriceId();
-  }, [isOpen, firestore, toast]);
 
   const handlePurchase = async (productId: string) => {
-    console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
-    if (!user || !firestore) {
+    if (!user) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
-      console.error("[BillingPopup] User or Firestore not available.");
-      return;
-    }
-    if (!priceId) {
-      toast({ title: "Pricing Error", description: "Product price could not be loaded. Cannot proceed.", variant: "destructive" });
-      console.error("[BillingPopup] Purchase attempt failed: priceId is null.");
       return;
     }
     
     setIsLoading(productId);
 
     try {
-      // Use the correct path for the user's checkout sessions.
-      const checkoutSessionRef = collection(firestore, 'users', user.uid, 'checkout_sessions');
+      // 1. Get the Firebase Auth ID token for the current user.
+      const idToken = await user.getIdToken();
       
-      console.log(`[BillingPopup] Creating checkout session document at path: ${checkoutSessionRef.path}`);
-      const docRef = await addDoc(checkoutSessionRef, {
-          price: priceId,
-          success_url: window.location.href,
-          cancel_url: window.location.href,
-          metadata: {
-            productId: productId,
-            userId: user.uid,
-          }
-      });
-      console.log(`[BillingPopup] Document created with ID: ${docRef.id}. Attaching snapshot listener...`);
-
-      const unsubscribe = onSnapshot(docRef, async (snap) => {
-          console.log("[BillingPopup] onSnapshot listener triggered.", snap.data());
-          const { error, url } = snap.data() || {};
-
-          if (error) {
-              console.error(`[BillingPopup] Stripe Checkout Error from extension: ${error.message}`);
-              toast({ title: 'Stripe Error', description: error.message, variant: 'destructive' });
-              setIsLoading(null);
-              unsubscribe();
-          }
-
-          if (url) { 
-              console.log(`[BillingPopup] Received checkout URL. Redirecting to Stripe...`);
-              unsubscribe();
-              window.location.assign(url);
-          }
-      }, (err) => {
-        console.error("[BillingPopup] onSnapshot listener failed:", err);
-        toast({ title: 'Listener Error', description: 'Could not listen for checkout session updates.', variant: 'destructive' });
-        setIsLoading(null);
+      // 2. Call your new backend API route to create a checkout session.
+      const response = await fetch('/api/stripe/checkout', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              // Pass the token in the Authorization header.
+              'Authorization': `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ productId }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error.message || 'Failed to create checkout session.');
+      }
+      
+      // 3. Get the session ID from the backend's response.
+      const { sessionId } = await response.json();
+
+      // 4. Get the Stripe object and redirect to checkout.
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error('Stripe.js has not loaded yet.');
+      }
+      
+      const { error } = await stripe.redirectToCheckout({ sessionId });
+      
+      if (error) {
+        throw new Error(error.message);
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      console.error('[BillingPopup] Purchase Error:', errorMessage);
+      console.error('Purchase Error:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
+    } finally {
       setIsLoading(null);
     }
   };
@@ -171,8 +104,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
                 <h3 className="font-semibold flex items-center"><Bot className="mr-2 h-4 w-4" /> Add 100 AI Credits</h3>
                 <p className="text-sm text-muted-foreground">$29.99 CAD</p>
               </div>
-              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isPriceLoading || isLoading === 'AI_CREDIT_PACK_100'}>
-                {isPriceLoading || isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
+                {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
               </Button>
             </div>
