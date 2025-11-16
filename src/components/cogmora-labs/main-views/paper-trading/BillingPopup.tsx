@@ -21,14 +21,12 @@ interface BillingPopupProps {
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// NOTE: The Price ID is hardcoded here for simplicity in this implementation.
-// In a real-world scenario, you might fetch this from a configuration or your backend.
 const AI_CREDIT_PRICE_ID = "price_1SREGsR1GTVMlhwAIHGT4Ofd";
 
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
-  const firestore = useFirestore(); // Get the firestore instance
+  const firestore = useFirestore();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
@@ -44,14 +42,14 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     try {
       const priceId = AI_CREDIT_PRICE_ID;
       
-      console.log(`[BillingPopup] Creating Firestore document in users/${user.uid}/checkout_sessions`);
+      // CRITICAL FIX: Write to the 'customers' collection, which is the default the Stripe Extension watches.
+      console.log(`[BillingPopup] Creating Firestore document in customers/${user.uid}/checkout_sessions`);
 
-      // 1. Directly create the document in Firestore from the client.
       const docRef = await addDoc(
-        collection(firestore, "users", user.uid, "checkout_sessions"),
+        collection(firestore, "customers", user.uid, "checkout_sessions"),
         {
           price: priceId,
-          success_url: window.location.href, // Redirect back to the current page
+          success_url: window.location.href,
           cancel_url: window.location.href,
           metadata: {
               userId: user.uid,
@@ -62,13 +60,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       
       console.log(`[BillingPopup] Document created: ${docRef.path}. Now listening for Stripe URL...`);
 
-      // 2. Listen to the document for the Stripe Extension to add the URL.
       const unsubscribe = onSnapshot(docRef, (snap) => {
         const { error, url } = snap.data() || {};
 
         if (error) {
           unsubscribe();
-          console.error(`[BillingPopup] Stripe Extension Error: ${error.message}`);
+          console.error(`[BillingPopup] Stripe Extension Error:`, error);
           toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
           setIsLoading(null);
           return;
@@ -77,15 +74,27 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         if (url) {
           console.log("[BillingPopup] Stripe URL received. Redirecting...");
           unsubscribe();
-          // Redirect the user to Stripe's checkout page.
           window.location.assign(url);
         }
+      }, (err) => {
+        console.error("[BillingPopup] onSnapshot listener error:", err);
+        toast({ title: "Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
+        setIsLoading(null);
       });
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      console.error('[BillingPopup] Purchase initiation failed:', errorMessage);
-      toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
+      console.error('[BillingPopup] Purchase initiation failed:', err);
+      // Let's log the full error object to see if it's a Firestore permission issue
+      console.error(err);
+      
+      // We are trying to read the body of a 500 error, which isn't JSON.
+      // We need to read it as text.
+      if (err instanceof TypeError && err.message.includes("not valid JSON")) {
+          toast({ title: 'Purchase Error', description: "Server returned a non-JSON error. Check console for details.", variant: 'destructive' });
+      } else {
+          toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
+      }
       setIsLoading(null);
     }
   };

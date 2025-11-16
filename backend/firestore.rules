@@ -5,11 +5,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- STRIPE EXTENSION RULES (Required for checkout) ---
-    // The Stripe extension uses the `users` collection as its `customers` collection.
+    // The Stripe extension uses the `customers` collection as its default.
     
-    // Allow an authenticated user to read their own customer data (which is their user doc).
+    // Allow an authenticated user to read their own customer data.
     // Allow the Stripe backend to create and update this document.
-    match /users/{userId} {
+    match /customers/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
       // Allow user to create and read/write to their own checkout sessions.
@@ -36,9 +36,8 @@ service cloud.firestore {
     }
 
     // --- COGMORA APP-SPECIFIC RULES ---
-    // This rule is now covered by the Stripe rules above, but we keep it for clarity.
-    // It allows a user full read/write access to all other documents and subcollections
-    // under their own user profile document.
+    // Allow a user full read/write access to all other documents and subcollections
+    // under their own user profile document in the 'users' collection.
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
