@@ -1,7 +1,7 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
-import {onRequest, onCall} from "firebase-functions/v2/https";
+import {onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
@@ -85,25 +85,22 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
  */
 export const createCheckoutSession = onCall(async (request) => {
   if (!request.auth) {
-    throw new https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    throw new Error("The function must be called while authenticated.");
   }
-  
   const userId = request.auth.uid;
-  const { productId, successUrl, cancelUrl } = request.data;
-  
+  const {productId, successUrl, cancelUrl} = request.data;
   if (!productId || !successUrl || !cancelUrl) {
-    throw new https.HttpsError("invalid-argument", "Missing required data: productId, successUrl, or cancelUrl.");
+    throw new Error("Missing required data: productId, successUrl, or cancelUrl.");
   }
-
   logger.info(`Creating checkout session for user: ${userId}, productId: ${productId}`);
 
   let priceId;
   // In a real app, you would fetch this from a secure config or database
   if (productId === "AI_CREDIT_PACK_100") {
     // This should be securely stored, e.g., using Firebase environment variables
-    priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
+    priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd";
   } else {
-    throw new https.HttpsError("invalid-argument", `Unknown product ID: ${productId}`);
+    throw new Error(`Unknown product ID: ${productId}`);
   }
 
   try {
@@ -123,11 +120,11 @@ export const createCheckoutSession = onCall(async (request) => {
 
     logger.info(`Successfully created checkout session doc: ${docRef.id} at path: ${docRef.path}`);
     // Return the path so the client knows where to listen
-    return { firestoreDocPath: docRef.path };
+    return {firestoreDocPath: docRef.path};
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
     logger.error("FAILED to create checkout session document.", e);
-    throw new https.HttpsError("internal", `Failed to create checkout session: ${errorMessage}`);
+    throw new Error(`Failed to create checkout session: ${errorMessage}`);
   }
 });
 
