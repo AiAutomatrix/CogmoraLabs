@@ -3,25 +3,20 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import * as admin from 'firebase-admin';
 
-// --- Robust Firebase Admin Initialization ---
-// This pattern ensures that the Firebase Admin app is initialized only once per server instance.
+// --- Robust Firebase Admin Initialization (Singleton Pattern) ---
+// This pattern ensures the Firebase Admin app is initialized only once.
 if (!admin.apps.length) {
   try {
-    // In a Google Cloud environment (like Cloud Run), application default credentials are used.
+    // In a Google Cloud environment (like Cloud Run or Cloud Functions v2), 
+    // application default credentials are used automatically.
     // For local dev, you'd set the GOOGLE_APPLICATION_CREDENTIALS env var.
-    // If a service account key is explicitly provided via env var, use that.
-    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (serviceAccountKey) {
-        admin.initializeApp({
-            credential: admin.credential.cert(JSON.parse(serviceAccountKey))
-        });
-        console.log("Firebase Admin SDK initialized with service account key.");
-    } else {
-        admin.initializeApp();
-        console.log("Firebase Admin SDK initialized with default credentials.");
-    }
+    console.log("Initializing Firebase Admin SDK...");
+    admin.initializeApp();
+    console.log("Firebase Admin SDK initialized successfully.");
   } catch (error: any) {
     console.error("Firebase Admin initialization error:", error);
+    // We don't throw here, as it might have been initialized in a different context.
+    // The check for admin.apps.length should handle most cases.
   }
 }
 
@@ -39,15 +34,18 @@ export async function POST(req: Request) {
   try {
     const authorization = headersList.get('authorization');
     if (!authorization?.startsWith('Bearer ')) {
-      console.error("Stripe Checkout Error: Missing Authorization token.");
-      return new NextResponse(JSON.stringify({ error: { message: 'Unauthorized: Missing token.' } }), { status: 401 });
+      console.error("Stripe Checkout Error: Missing or invalid Authorization token.");
+      return new NextResponse(JSON.stringify({ error: { message: 'Unauthorized: Missing or invalid token.' } }), { status: 401 });
     }
     const idToken = authorization.split('Bearer ')[1];
+    
+    console.log("[API Route] Verifying ID token...");
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const userId = decodedToken.uid;
+    console.log(`[API Route] Token verified for userId: ${userId}`);
 
     const { productId } = await req.json();
-    console.log(`[API Route] Received request for userId: ${userId}, productId: ${productId}`);
+    console.log(`[API Route] Received request for productId: ${productId}`);
 
     let priceId;
     if (productId === 'AI_CREDIT_PACK_100') {
@@ -62,11 +60,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: { message: `Stripe Price ID not found for product: ${productId}` } }, { status: 500 });
     }
 
-    console.log(`[API Route] Creating Firestore document in users/${userId}/checkout_sessions to trigger Stripe Extension.`);
+    console.log(`[API Route] Creating Firestore document in customers/${userId}/checkout_sessions to trigger Stripe Extension.`);
 
-    // Write to the 'checkout_sessions' subcollection within the user's document
+    // This write operation is now performed by the trusted server-side route using the Admin SDK.
     const docRef = await adminDb
-      .collection("users")
+      .collection("customers")
       .doc(userId)
       .collection("checkout_sessions")
       .add({
@@ -81,13 +79,18 @@ export async function POST(req: Request) {
       
     console.log(`[API Route] Successfully created checkout_sessions doc: ${docRef.id} at path: ${docRef.path}`);
     
-    // Return the path to the document so the client knows where to listen.
+    // The client-side will listen to this document path for the checkout URL.
     return NextResponse.json({ firestoreDocPath: docRef.path });
 
   } catch (err: any) {
     console.error('[API Route] Stripe Checkout Error:', err);
+    // Provide a more specific error message if available
+    const errorMessage = err.code === 'auth/id-token-expired' 
+      ? 'Authentication token expired. Please sign in again.'
+      : err.message || 'An unknown server error occurred.';
+      
     return NextResponse.json(
-      { error: { message: err.message || 'An unknown server error occurred.' } },
+      { error: { message: errorMessage } },
       { status: 500 }
     );
   }

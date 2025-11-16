@@ -11,23 +11,23 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Bot, Loader2 } from 'lucide-react';
+import { Bot, Loader2, RefreshCw } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
+import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
-const AI_CREDIT_PRICE_ID = "price_1SREGsR1GTVMlhwAIHGT4Ofd";
-
-
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
@@ -40,67 +40,66 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
-      const priceId = AI_CREDIT_PRICE_ID;
-      
-      // CRITICAL FIX: Write to the 'customers' collection, which is the default the Stripe Extension watches.
-      // Firestore will create this collection and the user document if they don't exist.
-      console.log(`[BillingPopup] Creating Firestore document in customers/${user.uid}/checkout_sessions`);
+        const functions = getFunctions();
+        const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 
-      const docRef = await addDoc(
-        collection(firestore, "customers", user.uid, "checkout_sessions"),
-        {
-          price: priceId,
-          success_url: window.location.href,
-          cancel_url: window.location.href,
-          metadata: {
-              userId: user.uid,
-              productId: productId,
-          }
-        }
-      );
-      
-      console.log(`[BillingPopup] Document created: ${docRef.path}. Now listening for Stripe URL...`);
+        console.log('[BillingPopup] Calling createCheckoutSession Cloud Function...');
+        const result = await createCheckoutSession({
+            productId: productId,
+            successUrl: `${window.location.origin}/dashboard?payment=success`,
+            cancelUrl: `${window.location.origin}/dashboard?payment=cancelled`,
+        });
 
-      const unsubscribe = onSnapshot(docRef, (snap) => {
-        const { error, url } = snap.data() || {};
+        const { firestoreDocPath } = result.data as { firestoreDocPath: string };
+        console.log(`[BillingPopup] Cloud Function success. Listening to Firestore path: ${firestoreDocPath}`);
 
-        if (error) {
-          unsubscribe();
-          console.error(`[BillingPopup] Stripe Extension Error:`, error);
-          toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
-          setIsLoading(null);
-          return;
+        if (!firestoreDocPath) {
+            throw new Error("Cloud Function did not return a valid Firestore path.");
         }
 
-        if (url) {
-          console.log("[BillingPopup] Stripe URL received. Redirecting...");
-          unsubscribe();
-          window.location.assign(url);
-        }
-      }, (err) => {
-        console.error("[BillingPopup] onSnapshot listener error:", err);
-        toast({ title: "Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
-        setIsLoading(null);
-      });
+        const unsubscribe = onSnapshot(doc(firestore, firestoreDocPath), (snap) => {
+            const { error, url } = snap.data() || {};
+
+            if (error) {
+                unsubscribe();
+                console.error(`[BillingPopup] Stripe Extension Error in Firestore doc:`, error);
+                toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
+                setIsLoading(null);
+                return;
+            }
+
+            if (url) {
+                console.log("[BillingPopup] Stripe URL received. Redirecting...");
+                unsubscribe();
+                window.location.assign(url);
+            }
+        }, (err) => {
+            unsubscribe();
+            console.error("[BillingPopup] Firestore onSnapshot listener error:", err);
+            toast({ title: "Real-time Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
+            setIsLoading(null);
+        });
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error('[BillingPopup] Purchase initiation failed:', err);
-      // Let's log the full error object to see if it's a Firestore permission issue
-      console.error(err);
-      
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
       setIsLoading(null);
     }
   };
 
+  const handleReset = () => {
+    resetAccount();
+    onOpenChange(false);
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Buy AI Credits</DialogTitle>
+          <DialogTitle>Account Actions</DialogTitle>
           <DialogDescription>
-            Purchase AI credits to continue using the AI Trading Agent.
+            Purchase AI credits or reset your paper trading account.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,6 +112,15 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
                 {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
+              </Button>
+            </div>
+             <div className="p-4 border rounded-lg flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
+                <p className="text-sm text-muted-foreground">Reset balance to $100k and clear history.</p>
+              </div>
+              <Button onClick={handleReset} variant="destructive" disabled={balance > 5000}>
+                Reset
               </Button>
             </div>
         </div>

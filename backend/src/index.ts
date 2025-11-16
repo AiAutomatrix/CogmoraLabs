@@ -1,7 +1,7 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
-import {onRequest} from "firebase-functions/v2/https";
+import {onRequest, onCall} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
@@ -79,19 +79,32 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 
 /**
  * ===============================================================
- *                        TESTING FUNCTION
+ *                 STRIPE CHECKOUT FUNCTION
  * ===============================================================
- * A temporary HTTP function to test Stripe checkout creation.
+ * Creates a checkout session document in Firestore to trigger the Stripe extension.
  */
-export const createTestCheckout = onRequest(async (request, response) => {
-  const userId = request.query.userId as string;
-  if (!userId) {
-    logger.error("TEST_CHECKOUT: userId query parameter is required.");
-    response.status(400).send("Please provide a userId query parameter.");
-    return;
+export const createCheckoutSession = onCall(async (request) => {
+  if (!request.auth) {
+    throw new https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+  }
+  
+  const userId = request.auth.uid;
+  const { productId, successUrl, cancelUrl } = request.data;
+  
+  if (!productId || !successUrl || !cancelUrl) {
+    throw new https.HttpsError("invalid-argument", "Missing required data: productId, successUrl, or cancelUrl.");
   }
 
-  logger.info(`TEST_CHECKOUT: Attempting to create checkout session for user: ${userId}`);
+  logger.info(`Creating checkout session for user: ${userId}, productId: ${productId}`);
+
+  let priceId;
+  // In a real app, you would fetch this from a secure config or database
+  if (productId === "AI_CREDIT_PACK_100") {
+    // This should be securely stored, e.g., using Firebase environment variables
+    priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; 
+  } else {
+    throw new https.HttpsError("invalid-argument", `Unknown product ID: ${productId}`);
+  }
 
   try {
     const docRef = await db
@@ -99,17 +112,22 @@ export const createTestCheckout = onRequest(async (request, response) => {
       .doc(userId)
       .collection("checkout_sessions")
       .add({
-        price: "price_1SREGsR1GTVMlhwAIHGT4Ofd", // Hardcoded test price ID
-        success_url: "http://localhost:9002/success",
-        cancel_url: "http://localhost:9002/cancel",
+        price: priceId,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          userId: userId,
+          productId: productId,
+        },
       });
 
-    logger.info(`TEST_CHECKOUT: Successfully created document with ID: ${docRef.id}`);
-    response.status(200).send(`Successfully created checkout session doc: ${docRef.id}`);
+    logger.info(`Successfully created checkout session doc: ${docRef.id} at path: ${docRef.path}`);
+    // Return the path so the client knows where to listen
+    return { firestoreDocPath: docRef.path };
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    logger.error("TEST_CHECKOUT: FAILED to create checkout session document.", e);
-    response.status(500).send(`Failed to create checkout session: ${errorMessage}`);
+    logger.error("FAILED to create checkout session document.", e);
+    throw new https.HttpsError("internal", `Failed to create checkout session: ${errorMessage}`);
   }
 });
 

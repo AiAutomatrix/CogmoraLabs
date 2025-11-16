@@ -5,12 +5,11 @@ import { stripe } from '@/lib/stripe';
 import type { Stripe } from 'stripe';
 import * as admin from 'firebase-admin';
 
-// --- Robust Firebase Admin Initialization ---
+// --- Robust Firebase Admin Initialization (Singleton Pattern) ---
 if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!))
-    });
+    console.log("Webhook: Initializing Firebase Admin SDK...");
+    admin.initializeApp();
     console.log("Webhook: Firebase Admin SDK initialized successfully.");
   } catch (error: any) {
     console.error("Webhook: Firebase Admin initialization error:", error);
