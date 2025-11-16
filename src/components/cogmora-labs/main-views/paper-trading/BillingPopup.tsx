@@ -14,15 +14,13 @@ import { Button } from '@/components/ui/button';
 import { Bot, Loader2 } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot, addDoc, collection } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
-// NOTE: This now uses the client-side SDK to write to a collection that the
-// Stripe Firebase Extension listens to. This bypasses the problematic API route.
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -39,42 +37,51 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
-        console.log(`[BillingPopup] Creating Firestore document in customers/${user.uid}/checkout_sessions`);
-        
-        const checkoutSessionRef = await addDoc(collection(firestore, 'customers', user.uid, 'checkout_sessions'), {
-            price: 'price_1SREGsR1GTVMlhwAIHGT4Ofd', // Hardcoded Price ID for "AI Credit Pack"
-            success_url: `${window.location.origin}/dashboard?payment=success`,
-            cancel_url: `${window.location.origin}/dashboard?payment=cancelled`,
-            metadata: {
-                userId: user.uid,
-                productId: productId,
-            }
-        });
-        
-        console.log(`[BillingPopup] Document created. Listening to path: ${checkoutSessionRef.path}`);
+      const idToken = await user.getIdToken();
 
-        const unsubscribe = onSnapshot(checkoutSessionRef, (snap) => {
-            const { error, url } = snap.data() || {};
+      // IMPORTANT: The URL now points to the new function name
+      const response = await fetch("https://handlecheckoutcreation-tzoen76fpa-uc.a.run.app", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
 
-            if (error) {
-                unsubscribe();
-                console.error(`[BillingPopup] Stripe Extension Error:`, error);
-                toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
-                setIsLoading(null);
-                return;
-            }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `Server responded with ${response.status}`);
+      }
+      
+      const { firestoreDocPath } = await response.json();
+      console.log(`[BillingPopup] Cloud Function created doc at path: ${firestoreDocPath}`);
 
-            if (url) {
-                console.log("[BillingPopup] Stripe URL received. Redirecting...");
-                unsubscribe();
-                window.location.assign(url);
-            }
-        }, (err) => {
-            unsubscribe();
-            console.error("[BillingPopup] Firestore onSnapshot listener error:", err);
-            toast({ title: "Real-time Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
-            setIsLoading(null);
-        });
+      const docRef = doc(firestore, firestoreDocPath);
+      
+      const unsubscribe = onSnapshot(docRef, (snap) => {
+          const { error, url, sessionId } = snap.data() || {};
+
+          if (error) {
+              unsubscribe();
+              console.error(`[BillingPopup] Stripe Extension Error:`, error);
+              toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
+              setIsLoading(null);
+              return;
+          }
+
+          if (sessionId || url) {
+              console.log("[BillingPopup] Stripe URL/Session received. Redirecting...");
+              unsubscribe();
+              const redirectUrl = url || `https://checkout.stripe.com/pay/${sessionId}`;
+              window.location.assign(redirectUrl);
+          }
+      }, (err) => {
+          unsubscribe();
+          console.error("[BillingPopup] Firestore onSnapshot listener error:", err);
+          toast({ title: "Real-time Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
+          setIsLoading(null);
+      });
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';

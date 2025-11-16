@@ -88,7 +88,7 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
  * ===============================================================
  * Creates a checkout session document in Firestore to trigger the Stripe extension.
  */
-export const createCheckoutSession = onRequest({cors: true}, async (request, response) => {
+export const handleCheckoutCreation = onRequest({cors: true}, async (request, response) => {
   corsHandler(request, response, async () => {
     // Handle preflight OPTIONS request
     if (request.method === "OPTIONS") {
