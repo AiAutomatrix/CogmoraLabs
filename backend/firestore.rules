@@ -5,20 +5,23 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- STRIPE EXTENSION RULES ---
-    // Allow an authenticated user to read/write their own customer data
-    // and all associated subcollections (like checkout_sessions, subscriptions, etc.).
-    match /customers/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // This is the key change. We can't match on {userId} because the document ID
+    // is the Stripe Customer ID (e.g., cus_...). Instead, we must read the
+    // customer document and check the `uid` field inside it.
+    match /customers/{userId} {
+      allow read, write: if get(/databases/$(database)/documents/customers/$(userId)).data.uid == request.auth.uid;
     }
 
-    // Allow public read-only access to products and prices, so the client can display them.
+    match /customers/{userId}/{document=**} {
+      allow read, write: if get(/databases/$(database)/documents/customers/$(userId)).data.uid == request.auth.uid;
+    }
+    
+    // Public read access for products, which is safe.
     match /products/{productId}/{document=**} {
       allow read: if true;
     }
 
-    // --- COGMORA APP-SPECIFIC RULES ---
-    // Allow a user full read/write access to all other documents and subcollections
-    // under their own user profile document in the 'users' collection.
+    // --- COGMORA APP-SPECIFIC RULES (This rule is correct and remains) ---
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
