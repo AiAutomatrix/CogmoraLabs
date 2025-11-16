@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -11,56 +12,53 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2 } from 'lucide-react';
-import { useUser, useFirestore, useFirebaseApp } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, onSnapshot, addDoc, collection } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
+// NOTE: This now uses the client-side SDK to write to a collection that the
+// Stripe Firebase Extension listens to. This bypasses the problematic API route.
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
   const firestore = useFirestore();
-  const firebaseApp = useFirebaseApp();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
-    if (!user || !firestore || !firebaseApp) {
+    if (!user || !firestore) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
-    
+
     setIsLoading(productId);
     console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
-        const functions = getFunctions(firebaseApp, 'us-central1'); // Explicitly set region
-        const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
-
-        console.log('[BillingPopup] Calling createCheckoutSession Cloud Function...');
+        console.log(`[BillingPopup] Creating Firestore document in customers/${user.uid}/checkout_sessions`);
         
-        // The data passed to a callable function must be an object.
-        const result = await createCheckoutSession({
-            productId: productId,
+        const checkoutSessionRef = await addDoc(collection(firestore, 'customers', user.uid, 'checkout_sessions'), {
+            price: 'price_1SREGsR1GTVMlhwAIHGT4Ofd', // Hardcoded Price ID for "AI Credit Pack"
+            success_url: `${window.location.origin}/dashboard?payment=success`,
+            cancel_url: `${window.location.origin}/dashboard?payment=cancelled`,
+            metadata: {
+                userId: user.uid,
+                productId: productId,
+            }
         });
+        
+        console.log(`[BillingPopup] Document created. Listening to path: ${checkoutSessionRef.path}`);
 
-        const { firestoreDocPath } = result.data as { firestoreDocPath: string };
-        console.log(`[BillingPopup] Cloud Function success. Listening to Firestore path: ${firestoreDocPath}`);
-
-        if (!firestoreDocPath) {
-            throw new Error("Cloud Function did not return a valid Firestore path.");
-        }
-
-        const unsubscribe = onSnapshot(doc(firestore, firestoreDocPath), (snap) => {
+        const unsubscribe = onSnapshot(checkoutSessionRef, (snap) => {
             const { error, url } = snap.data() || {};
 
             if (error) {
                 unsubscribe();
-                console.error(`[BillingPopup] Stripe Extension Error in Firestore doc:`, error);
+                console.error(`[BillingPopup] Stripe Extension Error:`, error);
                 toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
                 setIsLoading(null);
                 return;
@@ -85,6 +83,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       setIsLoading(null);
     }
   };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
