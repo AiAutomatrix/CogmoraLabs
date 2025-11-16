@@ -1,4 +1,3 @@
-
 import * as admin from 'firebase-admin';
 import 'server-only';
 
@@ -13,6 +12,7 @@ function getAdminApp() {
     return admin.apps[0] as admin.app.App;
   }
 
+  // If no app is initialized, create one.
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
   if (serviceAccount) {
