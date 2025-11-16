@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -39,10 +38,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
-        const functions = getFunctions(firebaseApp); 
+        const functions = getFunctions(firebaseApp, 'us-central1'); // Explicitly set region
         const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 
         console.log('[BillingPopup] Calling createCheckoutSession Cloud Function...');
+        
+        // The data passed to a callable function must be an object.
         const result = await createCheckoutSession({
             productId: productId,
         });

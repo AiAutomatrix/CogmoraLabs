@@ -1,15 +1,20 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
-import {onCall} from "firebase-functions/v2/https";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
 
 // Initialize Firebase Admin SDK
-if (!admin.apps.length) {
-  admin.initializeApp();
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+} catch (error) {
+  logger.error("Firebase Admin initialization error", error);
 }
+
 const db = admin.firestore();
 
 // --- TYPE DEFINITIONS ---
@@ -84,14 +89,20 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
  * Creates a checkout session document in Firestore to trigger the Stripe extension.
  */
 export const createCheckoutSession = onCall(async (request) => {
+  logger.info("createCheckoutSession function invoked. Auth:", request.auth);
+
   if (!request.auth) {
-    throw new Error("The function must be called while authenticated.");
+    logger.error("Function called without authentication.");
+    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
   const userId = request.auth.uid;
-  const {productId, successUrl, cancelUrl} = request.data;
-  if (!productId || !successUrl || !cancelUrl) {
-    throw new Error("Missing required data: productId, successUrl, or cancelUrl.");
+  const {productId} = request.data;
+
+  if (!productId) {
+    logger.error("Product ID is missing in the request data.");
+    throw new HttpsError("invalid-argument", "Missing required data: productId.");
   }
+
   logger.info(`Creating checkout session for user: ${userId}, productId: ${productId}`);
 
   let priceId;
@@ -100,7 +111,8 @@ export const createCheckoutSession = onCall(async (request) => {
     // This should be securely stored, e.g., using Firebase environment variables
     priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd";
   } else {
-    throw new Error(`Unknown product ID: ${productId}`);
+    logger.error(`Unknown product ID received: ${productId}`);
+    throw new HttpsError("invalid-argument", `Unknown product ID: ${productId}`);
   }
 
   try {
@@ -110,8 +122,8 @@ export const createCheckoutSession = onCall(async (request) => {
       .collection("checkout_sessions")
       .add({
         price: priceId,
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        success_url: "https://cogmora-labs.web.app/dashboard",
+        cancel_url: "https://cogmora-labs.web.app/dashboard",
         metadata: {
           userId: userId,
           productId: productId,
@@ -119,12 +131,11 @@ export const createCheckoutSession = onCall(async (request) => {
       });
 
     logger.info(`Successfully created checkout session doc: ${docRef.id} at path: ${docRef.path}`);
-    // Return the path so the client knows where to listen
     return {firestoreDocPath: docRef.path};
   } catch (e: unknown) {
     const errorMessage = e instanceof Error ? e.message : String(e);
-    logger.error("FAILED to create checkout session document.", e);
-    throw new Error(`Failed to create checkout session: ${errorMessage}`);
+    logger.error("FAILED to create checkout session document in Firestore.", {error: e});
+    throw new HttpsError("internal", `Failed to create checkout session: ${errorMessage}`);
   }
 });
 
