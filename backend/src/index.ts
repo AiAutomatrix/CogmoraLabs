@@ -543,5 +543,3 @@ export const updateAccountMetrics = onDocumentWritten("/users/{userId}/paperTrad
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
-
-    
