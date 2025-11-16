@@ -88,70 +88,70 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
  * ===============================================================
  * Creates a checkout session document in Firestore to trigger the Stripe extension.
  */
-export const handleCheckoutCreation = onRequest({cors: true}, async (request, response) => {
-  corsHandler(request, response, async () => {
-    // Handle preflight OPTIONS request
-    if (request.method === "OPTIONS") {
-      response.status(204).send();
-      return;
-    }
+export const handleCheckoutCreation = onRequest({cors: false}, (request, response) => {
+    corsHandler(request, response, async () => {
+        // Handle preflight OPTIONS request for CORS
+        if (request.method === "OPTIONS") {
+            response.status(204).send("");
+            return;
+        }
 
-    if (request.method !== "POST") {
-      response.status(405).send("Method Not Allowed");
-      return;
-    }
+        if (request.method !== "POST") {
+            response.status(405).send("Method Not Allowed");
+            return;
+        }
 
-    try {
-      const authorization = request.headers.authorization;
-      if (!authorization?.startsWith("Bearer ")) {
-        logger.error("Unauthorized: Missing or invalid Authorization token.");
-        response.status(401).json({error: {message: "Unauthorized: Missing or invalid token."}});
-        return;
-      }
-      const idToken = authorization.split("Bearer ")[1];
-      const decodedToken = await auth.verifyIdToken(idToken);
-      const userId = decodedToken.uid;
-      logger.info(`Token verified for userId: ${userId}`);
+        try {
+            const authorization = request.headers.authorization;
+            if (!authorization?.startsWith("Bearer ")) {
+                logger.error("Unauthorized: Missing or invalid Authorization token.");
+                response.status(401).json({error: {message: "Unauthorized: Missing or invalid token."}});
+                return;
+            }
+            const idToken = authorization.split("Bearer ")[1];
+            const decodedToken = await auth.verifyIdToken(idToken);
+            const userId = decodedToken.uid;
+            logger.info(`Token verified for userId: ${userId}`);
 
-      const {productId} = request.body;
-      if (!productId) {
-        logger.error("Bad Request: Product ID is missing.");
-        response.status(400).json({error: {message: "Missing required data: productId."}});
-        return;
-      }
-      logger.info(`Creating checkout session for user: ${userId}, productId: ${productId}`);
+            const {productId} = request.body;
+            if (!productId) {
+                logger.error("Bad Request: Product ID is missing.");
+                response.status(400).json({error: {message: "Missing required data: productId."}});
+                return;
+            }
+            logger.info(`Creating checkout session for user: ${userId}, productId: ${productId}`);
 
-      let priceId;
-      if (productId === "AI_CREDIT_PACK_100") {
-        priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; // Use env var in real app
-      } else {
-        logger.error(`Unknown product ID received: ${productId}`);
-        response.status(400).json({error: {message: `Unknown product ID: ${productId}`}});
-        return;
-      }
+            let priceId;
+            if (productId === "AI_CREDIT_PACK_100") {
+                priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; // Use env var in real app
+            } else {
+                logger.error(`Unknown product ID received: ${productId}`);
+                response.status(400).json({error: {message: `Unknown product ID: ${productId}`}});
+                return;
+            }
 
-      const docRef = await db
-        .collection("customers")
-        .doc(userId)
-        .collection("checkout_sessions")
-        .add({
-          price: priceId,
-          success_url: "https://cogmora-labs.web.app/dashboard",
-          cancel_url: "https://cogmora-labs.web.app/dashboard",
-          metadata: {
-            userId: userId,
-            productId: productId,
-          },
-        });
+            const docRef = await db
+                .collection("customers")
+                .doc(userId)
+                .collection("checkout_sessions")
+                .add({
+                    price: priceId,
+                    success_url: "https://cogmora-labs.web.app/dashboard",
+                    cancel_url: "https://cogmora-labs.web.app/dashboard",
+                    metadata: {
+                        userId: userId,
+                        productId: productId,
+                    },
+                });
 
-      logger.info(`Successfully created checkout session doc: ${docRef.id}`);
-      response.json({firestoreDocPath: docRef.path});
-    } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      logger.error("FAILED to create checkout session document in Firestore.", {error: e});
-      response.status(500).json({error: {message: `Failed to create checkout session: ${errorMessage}`}});
-    }
-  });
+            logger.info(`Successfully created checkout session doc: ${docRef.id}`);
+            response.json({firestoreDocPath: docRef.path});
+        } catch (e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            logger.error("FAILED to create checkout session document in Firestore.", {error: e});
+            response.status(500).json({error: {message: `Failed to create checkout session: ${errorMessage}`}});
+        }
+    });
 });
 
 
