@@ -4,7 +4,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- STRIPE EXTENSION RULES (Corrected) ---
+    // --- STRIPE EXTENSION RULES (Official & Corrected) ---
     // This rule allows a user to read/write their own customer document and all subcollections
     // (like checkout_sessions) because the document ID `{uid}` is the user's auth UID.
     match /customers/{uid}/{document=**} {
