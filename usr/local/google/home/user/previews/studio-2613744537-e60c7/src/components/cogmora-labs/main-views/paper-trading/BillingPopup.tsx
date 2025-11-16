@@ -11,10 +11,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Bot, Loader2, RefreshCw } from 'lucide-react';
+import { Bot, Loader2 } from 'lucide-react';
 import { useUser } from '@/firebase';
-import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
+import { doc, onSnapshot, addDoc, collection } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { loadStripe } from '@stripe/stripe-js';
 
 interface BillingPopupProps {
@@ -26,59 +27,73 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
+  const firestore = useFirestore();
   const { toast } = useToast();
-  const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
-    if (!user) {
+    if (!user || !firestore) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
-    
+
     setIsLoading(productId);
+    console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
       const idToken = await user.getIdToken();
-      
-      const response = await fetch('/api/stripe/checkout', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ productId }),
+
+      const response = await fetch("https://createcheckoutsession-tzoen76fpa-uc.a.run.app", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ productId }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error.message || 'Failed to create checkout session.');
+        throw new Error(errorData.error?.message || `Server responded with ${response.status}`);
       }
       
-      const { sessionId } = await response.json();
+      const { firestoreDocPath } = await response.json();
+      console.log(`[BillingPopup] Cloud Function created doc at path: ${firestoreDocPath}`);
 
-      const stripe = await stripePromise;
-      if (!stripe) {
-        throw new Error('Stripe.js has not loaded yet.');
-      }
+      const docRef = doc(firestore, firestoreDocPath);
       
-      const { error } = await stripe.redirectToCheckout({ sessionId });
-      
-      if (error) {
-        throw new Error(error.message);
-      }
+      const unsubscribe = onSnapshot(docRef, (snap) => {
+          const { error, url, sessionId } = snap.data() || {};
+
+          if (error) {
+              unsubscribe();
+              console.error(`[BillingPopup] Stripe Extension Error:`, error);
+              toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
+              setIsLoading(null);
+              return;
+          }
+
+          if (sessionId || url) {
+              console.log("[BillingPopup] Stripe URL/Session received. Redirecting...");
+              unsubscribe();
+              const redirectUrl = url || `https://checkout.stripe.com/pay/${sessionId}`;
+              window.location.assign(redirectUrl);
+          }
+      }, (err) => {
+          unsubscribe();
+          console.error("[BillingPopup] Firestore onSnapshot listener error:", err);
+          toast({ title: "Real-time Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
+          setIsLoading(null);
+      });
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      console.error('Purchase Error:', errorMessage);
+      console.error('[BillingPopup] Purchase initiation failed:', err);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
       setIsLoading(null);
     }
   };
 
-  const handleReset = () => {
-    resetAccount();
-    onOpenChange(false);
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -99,15 +114,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
                 {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
-              </Button>
-            </div>
-             <div className="p-4 border rounded-lg flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
-                <p className="text-sm text-muted-foreground">Reset balance to $100k and clear history.</p>
-              </div>
-              <Button onClick={handleReset} variant="destructive" disabled={balance > 5000}>
-                Reset
               </Button>
             </div>
         </div>

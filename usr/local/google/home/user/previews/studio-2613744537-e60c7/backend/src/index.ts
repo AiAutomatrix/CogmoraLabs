@@ -5,12 +5,17 @@ import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
+import * as cors from "cors";
+
+const corsHandler = cors({origin: true});
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
+const auth = admin.auth();
+
 
 // --- TYPE DEFINITIONS ---
 // Duplicated from frontend/src/types to make the backend self-contained.
@@ -79,38 +84,74 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
 
 /**
  * ===============================================================
- *                        TESTING FUNCTION
+ *                 STRIPE CHECKOUT FUNCTION
  * ===============================================================
- * A temporary HTTP function to test Stripe checkout creation.
+ * Creates a checkout session document in Firestore to trigger the Stripe extension.
  */
-export const createTestCheckout = onRequest(async (request, response) => {
-  const userId = request.query.userId as string;
-  if (!userId) {
-    logger.error("TEST_CHECKOUT: userId query parameter is required.");
-    response.status(400).send("Please provide a userId query parameter.");
-    return;
-  }
+export const createCheckoutSession = onRequest({cors: true}, async (request, response) => {
+  corsHandler(request, response, async () => {
+    // Handle preflight OPTIONS request
+    if (request.method === "OPTIONS") {
+      response.status(204).send();
+      return;
+    }
 
-  logger.info(`TEST_CHECKOUT: Attempting to create checkout session for user: ${userId}`);
+    if (request.method !== "POST") {
+      response.status(405).send("Method Not Allowed");
+      return;
+    }
 
-  try {
-    const docRef = await db
-      .collection("customers")
-      .doc(userId)
-      .collection("checkout_sessions")
-      .add({
-        price: "price_1SREGsR1GTVMlhwAIHGT4Ofd", // Hardcoded test price ID
-        success_url: "http://localhost:9002/success",
-        cancel_url: "http://localhost:9002/cancel",
-      });
-    
-    logger.info(`TEST_CHECKOUT: Successfully created document with ID: ${docRef.id}`);
-    response.status(200).send(`Successfully created checkout session doc: ${docRef.id}`);
-  } catch (e: unknown) {
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    logger.error("TEST_CHECKOUT: FAILED to create checkout session document.", e);
-    response.status(500).send(`Failed to create checkout session: ${errorMessage}`);
-  }
+    try {
+      const authorization = request.headers.authorization;
+      if (!authorization?.startsWith("Bearer ")) {
+        logger.error("Unauthorized: Missing or invalid Authorization token.");
+        response.status(401).json({error: {message: "Unauthorized: Missing or invalid token."}});
+        return;
+      }
+      const idToken = authorization.split("Bearer ")[1];
+      const decodedToken = await auth.verifyIdToken(idToken);
+      const userId = decodedToken.uid;
+      logger.info(`Token verified for userId: ${userId}`);
+
+      const {productId} = request.body;
+      if (!productId) {
+        logger.error("Bad Request: Product ID is missing.");
+        response.status(400).json({error: {message: "Missing required data: productId."}});
+        return;
+      }
+      logger.info(`Creating checkout session for user: ${userId}, productId: ${productId}`);
+
+      let priceId;
+      if (productId === "AI_CREDIT_PACK_100") {
+        priceId = "price_1SREGsR1GTVMlhwAIHGT4Ofd"; // Use env var in real app
+      } else {
+        logger.error(`Unknown product ID received: ${productId}`);
+        response.status(400).json({error: {message: `Unknown product ID: ${productId}`}});
+        return;
+      }
+
+      const docRef = await db
+        .collection("customers")
+        .doc(userId)
+        .collection("checkout_sessions")
+        .add({
+          price: priceId,
+          success_url: "https://cogmora-labs.web.app/dashboard",
+          cancel_url: "https://cogmora-labs.web.app/dashboard",
+          metadata: {
+            userId: userId,
+            productId: productId,
+          },
+        });
+
+      logger.info(`Successfully created checkout session doc: ${docRef.id}`);
+      response.json({firestoreDocPath: docRef.path});
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      logger.error("FAILED to create checkout session document in Firestore.", {error: e});
+      response.status(500).json({error: {message: `Failed to create checkout session: ${errorMessage}`}});
+    }
+  });
 });
 
 
