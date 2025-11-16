@@ -3,8 +3,21 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { stripe } from '@/lib/stripe';
 import type { Stripe } from 'stripe';
-import { adminDb } from '@/firebase/admin';
 import * as admin from 'firebase-admin';
+
+// --- Robust Firebase Admin Initialization ---
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!))
+    });
+    console.log("Webhook: Firebase Admin SDK initialized successfully.");
+  } catch (error: any) {
+    console.error("Webhook: Firebase Admin initialization error:", error);
+  }
+}
+const adminDb = admin.firestore();
+// --- End of Initialization ---
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 

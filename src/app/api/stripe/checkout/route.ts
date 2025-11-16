@@ -1,8 +1,26 @@
 
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { adminAuth, adminDb } from '@/firebase/admin';
-import { onSnapshot, doc } from 'firebase/firestore';
+import * as admin from 'firebase-admin';
+
+// --- Robust Firebase Admin Initialization ---
+// This pattern ensures that the Firebase Admin app is initialized only once per server instance.
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!))
+    });
+    console.log("Firebase Admin SDK initialized successfully.");
+  } catch (error: any) {
+    console.error("Firebase Admin initialization error:", error);
+    // In a real app, you might want to throw an error here or handle it differently.
+  }
+}
+
+const adminAuth = admin.auth();
+const adminDb = admin.firestore();
+// --- End of Initialization ---
+
 
 export async function POST(req: Request) {
   console.log('[API Route] /api/stripe/checkout received a POST request.');
@@ -36,11 +54,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: { message: `Stripe Price ID not found for product: ${productId}` } }, { status: 500 });
     }
 
-    console.log(`[API Route] Creating Firestore document for user ${userId} to trigger Stripe Extension.`);
+    console.log(`[API Route] Creating Firestore document in users/${userId}/checkout_sessions to trigger Stripe Extension.`);
 
-    // CORRECTED PATH: Write to the 'checkout_sessions' subcollection within the 'users' collection.
+    // Write to the 'checkout_sessions' subcollection within the user's document
     const docRef = await adminDb
-      .collection("users") // Using the 'users' collection
+      .collection("users")
       .doc(userId)
       .collection("checkout_sessions")
       .add({
