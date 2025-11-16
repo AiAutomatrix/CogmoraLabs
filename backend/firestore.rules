@@ -4,20 +4,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- STRIPE EXTENSION RULES ---
-    // This is the key change. We can't match on {userId} because the document ID
-    // is the Stripe Customer ID (e.g., cus_...). Instead, we must read the
-    // customer document and check the `uid` field inside it.
-    match /customers/{userId} {
-      allow read, write: if get(/databases/$(database)/documents/customers/$(userId)).data.uid == request.auth.uid;
-    }
-
-    match /customers/{userId}/{document=**} {
-      allow read, write: if get(/databases/$(database)/documents/customers/$(userId)).data.uid == request.auth.uid;
+    // --- STRIPE EXTENSION RULES (Corrected) ---
+    // This rule allows a user to read/write their own customer document and all subcollections
+    // (like checkout_sessions) because the document ID `{uid}` is the user's auth UID.
+    match /customers/{uid}/{document=**} {
+      allow read, write: if request.auth.uid == uid;
     }
     
-    // Public read access for products, which is safe.
-    match /products/{productId}/{document=**} {
+    // Public read access for products, which is safe and standard practice.
+    match /products/{id}/{document=**} {
       allow read: if true;
     }
 
