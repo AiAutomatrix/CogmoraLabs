@@ -11,11 +11,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Bot, Loader2, RefreshCw } from 'lucide-react';
+import { Bot, Loader2 } from 'lucide-react';
 import { useUser, useFirestore, useFirebaseApp } from '@/firebase';
-import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot, addDoc, collection } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface BillingPopupProps {
@@ -26,9 +25,8 @@ interface BillingPopupProps {
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
   const firestore = useFirestore();
-  const firebaseApp = useFirebaseApp(); // Get the firebase app instance
+  const firebaseApp = useFirebaseApp();
   const { toast } = useToast();
-  const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
@@ -41,15 +39,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
-        // Explicitly pass the app instance to getFunctions
         const functions = getFunctions(firebaseApp); 
         const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 
         console.log('[BillingPopup] Calling createCheckoutSession Cloud Function...');
         const result = await createCheckoutSession({
             productId: productId,
-            successUrl: `${window.location.origin}/dashboard?payment=success`,
-            cancelUrl: `${window.location.origin}/dashboard?payment=cancelled`,
         });
 
         const { firestoreDocPath } = result.data as { firestoreDocPath: string };
@@ -90,11 +85,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     }
   };
 
-  const handleReset = () => {
-    resetAccount();
-    onOpenChange(false);
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -114,15 +104,6 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               <Button onClick={() => handlePurchase('AI_CREDIT_PACK_100')} disabled={isLoading === 'AI_CREDIT_PACK_100'}>
                 {isLoading === 'AI_CREDIT_PACK_100' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Purchase
-              </Button>
-            </div>
-             <div className="p-4 border rounded-lg flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold flex items-center"><RefreshCw className="mr-2 h-4 w-4" /> Reset Account</h3>
-                <p className="text-sm text-muted-foreground">Reset balance to $100k and clear history.</p>
-              </div>
-              <Button onClick={handleReset} variant="destructive" disabled={balance > 5000}>
-                Reset
               </Button>
             </div>
         </div>
