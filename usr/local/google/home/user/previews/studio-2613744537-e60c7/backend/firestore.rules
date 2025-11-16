@@ -1,12 +1,22 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /users/{userId} {
-      allow create, read, write: if request.auth != null && request.auth.uid == userId;
+    // --- STRIPE EXTENSION RULES (Official) ---
+    // This allows a user to read and write to their own customer object and any subcollections.
+    // It's the most robust way to ensure access to checkout_sessions, subscriptions, etc.
+    match /customers/{uid}/{document=**} {
+      allow read, write: if request.auth.uid == uid;
+    }
+    
+    // Public read access for products, which is safe and standard practice.
+    match /products/{id}/{document=**} {
+      allow read: if true;
     }
 
+    // --- COGMORA APP-SPECIFIC RULES (This rule is correct and remains) ---
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
