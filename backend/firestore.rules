@@ -12,11 +12,8 @@ service cloud.firestore {
     }
 
     // Allow public read-only access to products and prices, so the client can display them.
-    match /products/{productId} {
+    match /products/{productId}/{document=**} {
       allow read: if true;
-      match /prices/{priceId} {
-        allow read: if true;
-      }
     }
 
     // --- COGMORA APP-SPECIFIC RULES ---
