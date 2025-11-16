@@ -12,10 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Bot, Loader2, RefreshCw } from 'lucide-react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, useFirebaseApp } from '@/firebase';
 import { usePaperTrading } from '@/context/PaperTradingContext';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, addDoc, collection } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface BillingPopupProps {
@@ -26,12 +26,13 @@ interface BillingPopupProps {
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
   const firestore = useFirestore();
+  const firebaseApp = useFirebaseApp(); // Get the firebase app instance
   const { toast } = useToast();
   const { resetAccount, balance } = usePaperTrading();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   const handlePurchase = async (productId: string) => {
-    if (!user || !firestore) {
+    if (!user || !firestore || !firebaseApp) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
@@ -40,7 +41,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
     try {
-        const functions = getFunctions();
+        // Explicitly pass the app instance to getFunctions
+        const functions = getFunctions(firebaseApp); 
         const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 
         console.log('[BillingPopup] Calling createCheckoutSession Cloud Function...');
