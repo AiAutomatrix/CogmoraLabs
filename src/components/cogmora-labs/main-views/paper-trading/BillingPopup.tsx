@@ -14,20 +14,21 @@ import { Button } from '@/components/ui/button';
 import { Bot, Loader2, CreditCard } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { loadStripe } from '@stripe/stripe-js';
-import { doc, onSnapshot } from 'firebase/firestore';
-
+import { collection, addDoc, onSnapshot, doc } from 'firebase/firestore';
 
 interface BillingPopupProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+// NOTE: The Price ID is hardcoded here for simplicity in this implementation.
+// In a real-world scenario, you might fetch this from a configuration or your backend.
+const AI_CREDIT_PRICE_ID = "price_1SREGsR1GTVMlhwAIHGT4Ofd";
+
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
-  const firestore = useFirestore();
+  const firestore = useFirestore(); // Get the firestore instance
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
@@ -38,68 +39,52 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     }
     
     setIsLoading(productId);
-    console.log(`[BillingPopup] handlePurchase started for productId: ${productId}`);
+    console.log(`[BillingPopup] Starting purchase for productId: ${productId}`);
 
-    let response: Response | undefined;
     try {
-      console.log("[BillingPopup] Getting user ID token.");
-      const idToken = await user.getIdToken();
-      console.log("[BillingPopup] Got user ID token.");
+      const priceId = AI_CREDIT_PRICE_ID;
       
-      response = await fetch('/api/stripe/checkout', {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({ productId }),
-      });
-      
-      console.log(`[BillingPopup] API response status: ${response.status}`);
+      console.log(`[BillingPopup] Creating Firestore document in users/${user.uid}/checkout_sessions`);
 
-      if (!response.ok) {
-        // We will now attempt to read the response as text, as it might be an HTML error page.
-        const errorText = await response.text();
-        // Log the raw error text for debugging
-        console.error("[BillingPopup] API responded with an error:", errorText);
-        
-        // Try to parse it as JSON in case the error is structured, but fall back to text.
-        try {
-            const errorJson = JSON.parse(errorText);
-            throw new Error(errorJson.error?.message || `Server responded with ${response.status}.`);
-        } catch (jsonParseError) {
-            // This will throw if the error response was not JSON, which is what we suspect.
-            throw new Error(`Server responded with ${response.status}. Check console for details.`);
+      // 1. Directly create the document in Firestore from the client.
+      const docRef = await addDoc(
+        collection(firestore, "users", user.uid, "checkout_sessions"),
+        {
+          price: priceId,
+          success_url: window.location.href, // Redirect back to the current page
+          cancel_url: window.location.href,
+          metadata: {
+              userId: user.uid,
+              productId: productId,
+          }
         }
-      }
+      );
       
-      const data = await response.json();
-      const { firestoreDocPath } = data;
+      console.log(`[BillingPopup] Document created: ${docRef.path}. Now listening for Stripe URL...`);
 
-      if (!firestoreDocPath) {
-          throw new Error('Did not receive Firestore document path from server.');
-      }
-      
-      console.log(`[BillingPopup] Listening to Firestore doc: ${firestoreDocPath}`);
-      const docRef = doc(firestore, firestoreDocPath);
-      const unsubscribe = onSnapshot(docRef, async (snap) => {
+      // 2. Listen to the document for the Stripe Extension to add the URL.
+      const unsubscribe = onSnapshot(docRef, (snap) => {
         const { error, url } = snap.data() || {};
 
         if (error) {
           unsubscribe();
-          throw new Error(error.message);
+          console.error(`[BillingPopup] Stripe Extension Error: ${error.message}`);
+          toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
+          setIsLoading(null);
+          return;
         }
 
         if (url) {
           console.log("[BillingPopup] Stripe URL received. Redirecting...");
           unsubscribe();
+          // Redirect the user to Stripe's checkout page.
           window.location.assign(url);
         }
       });
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
-      console.error('Purchase Error:', errorMessage);
+      console.error('[BillingPopup] Purchase initiation failed:', errorMessage);
       toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
       setIsLoading(null);
     }

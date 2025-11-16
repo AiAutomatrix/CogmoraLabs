@@ -7,13 +7,21 @@ import * as admin from 'firebase-admin';
 // This pattern ensures that the Firebase Admin app is initialized only once per server instance.
 if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!))
-    });
-    console.log("Firebase Admin SDK initialized successfully.");
+    // In a Google Cloud environment (like Cloud Run), application default credentials are used.
+    // For local dev, you'd set the GOOGLE_APPLICATION_CREDENTIALS env var.
+    // If a service account key is explicitly provided via env var, use that.
+    const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    if (serviceAccountKey) {
+        admin.initializeApp({
+            credential: admin.credential.cert(JSON.parse(serviceAccountKey))
+        });
+        console.log("Firebase Admin SDK initialized with service account key.");
+    } else {
+        admin.initializeApp();
+        console.log("Firebase Admin SDK initialized with default credentials.");
+    }
   } catch (error: any) {
     console.error("Firebase Admin initialization error:", error);
-    // In a real app, you might want to throw an error here or handle it differently.
   }
 }
 
