@@ -43,6 +43,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       const priceId = AI_CREDIT_PRICE_ID;
       
       // CRITICAL FIX: Write to the 'customers' collection, which is the default the Stripe Extension watches.
+      // Firestore will create this collection and the user document if they don't exist.
       console.log(`[BillingPopup] Creating Firestore document in customers/${user.uid}/checkout_sessions`);
 
       const docRef = await addDoc(
@@ -88,13 +89,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
       // Let's log the full error object to see if it's a Firestore permission issue
       console.error(err);
       
-      // We are trying to read the body of a 500 error, which isn't JSON.
-      // We need to read it as text.
-      if (err instanceof TypeError && err.message.includes("not valid JSON")) {
-          toast({ title: 'Purchase Error', description: "Server returned a non-JSON error. Check console for details.", variant: 'destructive' });
-      } else {
-          toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
-      }
+      toast({ title: 'Purchase Error', description: errorMessage, variant: 'destructive' });
       setIsLoading(null);
     }
   };
