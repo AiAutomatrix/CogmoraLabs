@@ -1,3 +1,4 @@
+
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onRequest} from "firebase-functions/v2/https";
@@ -86,6 +87,17 @@ const maxInstances = defineInt("SCHEDULE_MAX_INSTANCES", {default: 10});
  * This is a public function but requires a valid Firebase Auth token for security.
  */
 export const handleCheckoutCreation = onRequest({cors: true}, async (request, response) => {
+  if (request.method === "OPTIONS") {
+    response.set("Access-Control-Allow-Origin", "*");
+    response.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    response.status(204).send();
+    return;
+  }
+  // Set CORS for the actual request as well
+  response.set("Access-Control-Allow-Origin", "*");
+
+
   if (request.method !== "POST") {
     response.status(405).send("Method Not Allowed");
     return;
@@ -125,6 +137,7 @@ export const handleCheckoutCreation = onRequest({cors: true}, async (request, re
       .doc(userId)
       .collection("checkout_sessions")
       .add({
+        mode: "payment", // Specify one-time payment mode
         price: priceId,
         success_url: "https://cogmora-labs.web.app/dashboard",
         cancel_url: "https://cogmora-labs.web.app/dashboard",
@@ -531,3 +544,5 @@ export const updateAccountMetrics = onDocumentWritten("/users/{userId}/paperTrad
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
+
+    
