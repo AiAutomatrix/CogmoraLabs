@@ -4,27 +4,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- STRIPE EXTENSION RULES (Required for checkout) ---
-    // The Stripe extension uses the `customers` collection as its default.
-    
-    // Allow an authenticated user to read their own customer data.
-    // Allow the Stripe backend to create and update this document.
-    match /customers/{userId} {
+    // --- STRIPE EXTENSION RULES ---
+    // Allow an authenticated user to read/write their own customer data
+    // and all associated subcollections.
+    match /customers/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-
-      // Allow user to create and read/write to their own checkout sessions.
-      // The Stripe extension's backend service also writes to this document.
-      match /checkout_sessions/{sessionId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      // Allow user to read their own payment and subscription info.
-      match /subscriptions/{subscriptionId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-      }
-      match /payments/{paymentId} {
-        allow read: if request.auth != null && request.auth.uid == userId;
-      }
     }
 
     // Allow public read-only access to products and prices, so the client can display them.
