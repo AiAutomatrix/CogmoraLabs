@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { adminAuth, adminDb } from '@/firebase/admin';
+import { onSnapshot, doc } from 'firebase/firestore';
 
 export async function POST(req: Request) {
   console.log('[API Route] /api/stripe/checkout received a POST request.');
