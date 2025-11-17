@@ -5,6 +5,7 @@ import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
+import Stripe from 'stripe';
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -13,6 +14,10 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
+// Initialize Stripe with secret key
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: '2024-06-20',
+});
 
 // --- TYPE DEFINITIONS ---
 // Duplicated from frontend/src/types to make the backend self-contained.
@@ -155,6 +160,68 @@ export const handleCheckoutCreation = onRequest({cors: true}, async (request, re
     response.status(500).json({error: {message: `Failed to create checkout session: ${errorMessage}`}});
   }
 });
+
+/**
+ * ===============================================================
+ *                 STRIPE WEBHOOK HANDLER
+ * ===============================================================
+ * Listens for events from Stripe, primarily to fulfill successful purchases.
+ */
+export const stripeWebhook = onRequest(async (request, response) => {
+    const signature = request.headers["stripe-signature"];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!signature || !webhookSecret) {
+        logger.error("Stripe webhook error: Missing signature or secret.");
+        response.status(400).send("Webhook Error: Missing signature or secret.");
+        return;
+    }
+
+    let event: Stripe.Event;
+
+    try {
+        event = stripe.webhooks.constructEvent(request.rawBody, signature, webhookSecret);
+    } catch (err: any) {
+        logger.error(`❌ Webhook signature verification failed: ${err.message}`);
+        response.status(400).send(`Webhook Error: ${err.message}`);
+        return;
+    }
+
+    // Handle the checkout.session.completed event
+    if (event.type === 'checkout.session.completed') {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const userId = session.metadata?.userId;
+        const productId = session.metadata?.productId;
+
+        if (!userId || !productId) {
+            logger.error('Webhook Error: Missing userId or productId in session metadata.', {sessionId: session.id});
+            response.status(400).send("Metadata missing in webhook event.");
+            return;
+        }
+
+        logger.info(`Fulfilling order for userId: ${userId}, productId: ${productId}`);
+
+        if (productId === 'AI_CREDIT_PACK_100') {
+            const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+            try {
+                // Use FieldValue.increment to atomically add credits.
+                await userContextRef.update({
+                    ai_credits: admin.firestore.FieldValue.increment(100)
+                });
+                logger.info(`Successfully added 100 AI credits to user ${userId}`);
+            } catch (error) {
+                logger.error(`Failed to update AI credits for user ${userId}:`, error);
+                // Respond with an error to let Stripe know the webhook failed
+                response.status(500).send("Failed to update user credits in Firestore.");
+                return;
+            }
+        }
+    }
+
+    // Acknowledge receipt of the event
+    response.status(200).json({ received: true });
+});
+
 
 /**
  * ===============================================================
