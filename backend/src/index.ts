@@ -15,7 +15,6 @@ const db = admin.firestore();
 const auth = admin.auth();
 
 // Initialize Stripe with secret key from environment variables
-// The apiVersion is intentionally omitted to allow the library to use its default, resolving type conflicts.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 
@@ -181,9 +180,10 @@ export const stripeWebhook = onRequest(async (request, response) => {
 
   try {
     event = stripe.webhooks.constructEvent(request.rawBody, signature, webhookSecret);
-  } catch (err: any) {
-    logger.error(`❌ Webhook signature verification failed: ${err.message}`);
-    response.status(400).send(`Webhook Error: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error(`❌ Webhook signature verification failed: ${message}`);
+    response.status(400).send(`Webhook Error: ${message}`);
     return;
   }
 
@@ -644,5 +644,3 @@ export const updateAccountMetrics = onDocumentWritten("/users/{userId}/paperTrad
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
-
-    
