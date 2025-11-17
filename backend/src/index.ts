@@ -189,6 +189,7 @@ export const forwardPaymentLink = onDocumentUpdated("/customers/{userId}/checkou
   }
 });
 
+
 /**
  * ===============================================================
  *                 AI CREDIT FULFILLMENT
@@ -196,7 +197,7 @@ export const forwardPaymentLink = onDocumentUpdated("/customers/{userId}/checkou
  * This function triggers when a payment document's status becomes 'succeeded'.
  * It securely grants AI credits to the user.
  */
-export const fulfillAiCreditPurchase = onDocumentWritten("/customers/{userId}/payments/{paymentId}", async (event) => {
+export const grantAiCreditsOnPayment = onDocumentWritten("/customers/{userId}/payments/{paymentId}", async (event) => {
   const change = event.data;
   if (!change || !change.after.exists) {
     return; // Document was deleted, ignore.
