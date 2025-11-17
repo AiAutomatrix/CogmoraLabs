@@ -1,18 +1,34 @@
 
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // --- STRIPE EXTENSION RULE (DEFINITIVE FIX) ---
-    // Allows an authenticated user to read and write to their own customer document
-    // and ANY document in ANY subcollection (like checkout_sessions) beneath it.
-    match /customers/{userId}/{path=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /customers/{uid} {
+      allow read: if request.auth.uid == uid;
+
+      match /checkout_sessions/{id} {
+        allow read, write: if request.auth.uid == uid;
+      }
+      match /subscriptions/{id} {
+        allow read: if request.auth.uid == uid;
+      }
+      match /payments/{id} {
+        allow read: if request.auth.uid == uid;
+      }
     }
-    
-    // --- COGMORA APP-SPECIFIC RULE (This rule is correct and remains) ---
-    // Allows a user to read/write their own user-specific data.
+
+    match /products/{id} {
+      allow read: if true;
+
+      match /prices/{id} {
+        allow read: if true;
+      }
+
+      match /tax_rates/{id} {
+        allow read: if true;
+      }
+    }
+
+    // Keep our existing rule for user-specific app data
     match /users/{userId}/{path=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
