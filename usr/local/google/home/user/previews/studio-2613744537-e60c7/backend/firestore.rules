@@ -4,10 +4,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- STRIPE EXTENSION RULE ---
-    // Allows a user to read and write to their own customer document and ANY subcollection
-    // (like checkout_sessions) by matching the authenticated UID to the document ID.
-    // This is the definitive fix for the onSnapshot permission error.
+    // --- STRIPE EXTENSION RULE (DEFINITIVE FIX) ---
+    // Allows an authenticated user to read and write to their own customer document
+    // and ANY document in ANY subcollection (like checkout_sessions) beneath it.
     match /customers/{userId}/{path=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
