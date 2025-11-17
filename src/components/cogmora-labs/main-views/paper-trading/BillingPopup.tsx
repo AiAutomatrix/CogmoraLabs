@@ -39,6 +39,12 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     try {
       const idToken = await user.getIdToken();
 
+      // --- TEMPORARY DEBUG LOG ---
+      console.log('--- USER AUTH TOKEN (FOR CURL) ---');
+      console.log(idToken);
+      console.log('--- END USER AUTH TOKEN ---');
+      // --- END TEMPORARY DEBUG LOG ---
+
       // IMPORTANT: The URL now points to the new function name
       const response = await fetch("https://handlecheckoutcreation-tzoen76fpa-uc.a.run.app", {
         method: 'POST',
