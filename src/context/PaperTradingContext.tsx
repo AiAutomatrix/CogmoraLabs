@@ -858,7 +858,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
     }
     
-    const AI_COOLDOWN_MS = 100000; // 5 minutes
+    const AI_COOLDOWN_MS = 60000; // 1 minute
     const now = Date.now();
     
     if (lastManualAiRunTimestamp && now - lastManualAiRunTimestamp < AI_COOLDOWN_MS) {

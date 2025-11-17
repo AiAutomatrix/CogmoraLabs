@@ -72,7 +72,7 @@ const CountdownTimer = ({ nextRunTime }: { nextRunTime: number | null | undefine
 };
 
 const AiCooldownTimer = ({ lastRunTimestamp }: { lastRunTimestamp: number | null }) => {
-    const AI_COOLDOWN_MS = 300000; // 5 minutes
+    const AI_COOLDOWN_MS = 60000; // 1 minute
     const [timeLeft, setTimeLeft] = useState(0);
 
     useEffect(() => {
@@ -124,7 +124,7 @@ export default function TradeTriggersDashboard({
   const isWatchlistAutomationActive = automationConfig.updateMode === 'auto-refresh';
   const isAiAutomationActive = !!aiSettings.scheduleInterval;
   
-  const AI_COOLDOWN_MS = 300000;
+  const AI_COOLDOWN_MS = 60000;
   const isAiOnCooldown = lastManualAiRunTimestamp ? (Date.now() - lastManualAiRunTimestamp) < AI_COOLDOWN_MS : false;
 
   const formatPrice = (price?: number) => {
