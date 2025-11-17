@@ -189,44 +189,42 @@ export const forwardPaymentLink = onDocumentUpdated("/customers/{userId}/checkou
   }
 });
 
-
 /**
  * ===============================================================
- *                 AI CREDIT PURCHASE FULFILLMENT
+ *                 AI CREDIT FULFILLMENT
  * ===============================================================
- * This function triggers when a payment document is updated for a customer.
- * If the payment status is 'succeeded', it grants the user AI credits.
+ * This function triggers when a payment document's status becomes 'succeeded'.
+ * It securely grants AI credits to the user.
  */
 export const fulfillAiCreditPurchase = onDocumentWritten("/customers/{userId}/payments/{paymentId}", async (event) => {
   const change = event.data;
-  if (!change) return; // No data change
-
+  if (!change || !change.after.exists) {
+    return; // Document was deleted, ignore.
+  }
   const dataAfter = change.after.data();
   const dataBefore = change.before.data();
 
-  // Fulfill only on a new successful payment. Check status and ensure it wasn't already successful.
+  // Trigger only when status changes to 'succeeded'
   if (dataAfter?.status === "succeeded" && dataBefore?.status !== "succeeded") {
-    const {userId} = event.params;
-    const payment = dataAfter;
+    const userId = event.params.userId;
+    const productId = dataAfter.metadata?.productId;
 
-    // Check if it's the correct product from metadata if available
-    const productId = payment.metadata?.productId;
-    if (productId !== "AI_CREDIT_PACK_100") {
-      logger.info(`Payment ${event.params.paymentId} for user ${userId} was not for AI credits. Skipping fulfillment.`);
+    if (!userId || !productId) {
+      logger.error("Fulfillment Error: Missing userId or productId in payment metadata.", {paymentId: event.params.paymentId});
       return;
     }
 
-    logger.info(`Detected successful payment for AI credits for user: ${userId}. Fulfilling order...`);
-
-    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-    try {
-      await userContextRef.update({
-        ai_credits: admin.firestore.FieldValue.increment(100),
-      });
-      logger.info(`Successfully added 100 AI credits to user ${userId}`);
-    } catch (error) {
-      logger.error(`Failed to update AI credits for user ${userId}:`, error);
-      // We can't do much here except log, as the payment has already gone through.
+    if (productId === "AI_CREDIT_PACK_100") {
+      logger.info(`Fulfilling AI_CREDIT_PACK_100 for user: ${userId}`);
+      const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+      try {
+        await userContextRef.update({
+          ai_credits: admin.firestore.FieldValue.increment(100),
+        });
+        logger.info(`Successfully fulfilled 100 AI credits for user ${userId}.`);
+      } catch (error) {
+        logger.error(`Failed to fulfill AI credits for user ${userId}:`, error);
+      }
     }
   }
 });
