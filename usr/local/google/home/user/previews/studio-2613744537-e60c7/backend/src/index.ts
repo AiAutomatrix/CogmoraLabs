@@ -14,10 +14,10 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const auth = admin.auth();
 
-// Initialize Stripe with secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-06-20',
-});
+// Initialize Stripe with secret key from environment variables
+// The apiVersion is intentionally omitted to allow the library to use its default, resolving type conflicts.
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
 
 // --- TYPE DEFINITIONS ---
 // Duplicated from frontend/src/types to make the backend self-contained.
