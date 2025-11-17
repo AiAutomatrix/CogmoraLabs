@@ -39,7 +39,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     try {
       const idToken = await user.getIdToken();
 
-      // This is the secure call to our backend function
+      // Step 1: Call the secure backend Cloud Function to create the checkout document.
       const response = await fetch("https://handlecheckoutcreation-tzoen76fpa-uc.a.run.app", {
         method: 'POST',
         headers: {
@@ -54,11 +54,14 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         throw new Error(errorData.error?.message || `Server responded with ${response.status}`);
       }
       
-      // The backend function returns the path where it created the document
+      // Step 2: The backend returns the path to the document it created.
       const { firestoreDocPath } = await response.json();
+      if (!firestoreDocPath) {
+        throw new Error("Backend did not return a valid document path.");
+      }
       console.log(`[BillingPopup] Cloud Function created doc at path: ${firestoreDocPath}`);
 
-      // Now we listen to the specific path provided by the backend
+      // Step 3: Listen to the specific document path for the redirect URL.
       const docRef = doc(firestore, firestoreDocPath);
       
       const unsubscribe = onSnapshot(docRef, (snap) => {
@@ -72,7 +75,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
               return;
           }
 
-          // When the Stripe Extension updates the doc with a URL, we redirect
+          // Step 4: When the Stripe Extension populates the URL, redirect the user.
           if (sessionId || url) {
               console.log("[BillingPopup] Stripe URL/Session received. Redirecting...");
               unsubscribe();
