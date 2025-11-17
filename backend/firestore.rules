@@ -4,21 +4,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- STRIPE EXTENSION RULES (Official) ---
-    // This allows a user to read and write to their own customer object and all subcollections
-    // (like checkout_sessions) by matching the authenticated UID to the document ID.
-    match /customers/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // Public read access for products, which is safe and standard practice.
+    // --- STRIPE EXTENSION RULES ---
+    // Public read access for products is safe and standard practice.
     match /products/{id}/{document=**} {
       allow read: if true;
     }
+
+    // This rule allows a user to read and write to their own customer document and ANY subcollection
+    // (like checkout_sessions) by matching the authenticated UID to the document ID.
+    // This is the definitive fix for the onSnapshot permission error.
+    match /customers/{userId}/{path=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
     
-    // --- COGMORA APP-SPECIFIC RULES (This rule is correct and remains) ---
+    // --- COGMORA APP-SPECIFIC RULES ---
     // This rule allows a user to read/write their own user-specific data.
-    match /users/{userId}/{document=**} {
+    match /users/{userId}/{path=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
