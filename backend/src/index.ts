@@ -1,6 +1,6 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
-import {onDocumentWritten, onDocumentCreated} from "firebase-functions/v2/firestore";
+import {onDocumentWritten, onDocumentCreated, onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
@@ -153,6 +153,39 @@ export const handleCheckoutCreation = onRequest({cors: true}, async (request, re
     const errorMessage = e instanceof Error ? e.message : String(e);
     logger.error("FAILED to create checkout session document in Firestore.", {error: e});
     response.status(500).json({error: {message: `Failed to create checkout session: ${errorMessage}`}});
+  }
+});
+
+/**
+ * ===============================================================
+ *                 PAYMENT LINK FORWARDER
+ * ===============================================================
+ * This function triggers when a checkout_session is updated by the Stripe extension.
+ * It copies the checkout URL to the user's main document, which the client can read.
+ */
+export const forwardPaymentLink = onDocumentUpdated("/customers/{userId}/checkout_sessions/{sessionId}", async (event) => {
+  const change = event.data;
+  if (!change) return;
+
+  const dataAfter = change.after.data();
+  const dataBefore = change.before.data();
+  const userId = event.params.userId;
+
+  // Check if the 'url' or 'sessionId' field was just added
+  if (dataAfter && (dataAfter.url || dataAfter.sessionId) && !(dataBefore.url || dataBefore.sessionId)) {
+    const checkoutUrl = dataAfter.url || `https://checkout.stripe.com/pay/${dataAfter.sessionId}`;
+    logger.info(`Forwarding checkout URL for user: ${userId}`);
+
+    try {
+      const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+      await userContextRef.update({
+        activeCheckoutUrl: checkoutUrl,
+        activeCheckoutId: event.params.sessionId, // Store session ID for cleanup
+      });
+      logger.info(`Successfully forwarded URL to user document for user: ${userId}`);
+    } catch (error) {
+      logger.error(`Failed to forward checkout URL for user ${userId}:`, error);
+    }
   }
 });
 

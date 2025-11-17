@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Bot, Loader2 } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { usePaperTrading } from '@/context/PaperTradingContext';
 
 interface BillingPopupProps {
   isOpen: boolean;
@@ -23,12 +24,62 @@ interface BillingPopupProps {
 
 export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange }) => {
   const { user } = useUser();
+  const { balance } = usePaperTrading(); // Assuming balance comes from here
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
+  
+  // Use a ref to store the unsubscribe function
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  // Effect to listen for the checkout URL on the user's main context document
+  useEffect(() => {
+    if (!user || !firestore || !isOpen) return;
+
+    const userContextRef = doc(firestore, `users/${user.uid}/paperTradingContext/main`);
+    
+    // Start listening when the dialog opens
+    const unsubscribe = onSnapshot(userContextRef, (snap) => {
+        const data = snap.data();
+        const checkoutUrl = data?.activeCheckoutUrl;
+
+        if (checkoutUrl) {
+            console.log("[BillingPopup] Active checkout URL found. Redirecting...");
+            // Redirect the user
+            window.location.assign(checkoutUrl);
+            
+            // Clean up the field in Firestore so we don't redirect again on next load
+            updateDoc(userContextRef, {
+                activeCheckoutUrl: null,
+                activeCheckoutId: null,
+            });
+
+            // Stop listening
+            if (unsubscribeRef.current) {
+                unsubscribeRef.current();
+                unsubscribeRef.current = null;
+            }
+        }
+    }, (err) => {
+        console.error("[BillingPopup] Firestore listener error:", err);
+        toast({ title: "Real-time Listener Error", description: "Could not listen for checkout updates.", variant: "destructive"});
+        setIsLoading(null);
+    });
+
+    unsubscribeRef.current = unsubscribe;
+
+    // Cleanup function to unsubscribe when the component unmounts or the dialog closes
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [user, firestore, isOpen, toast]);
+
 
   const handlePurchase = async (productId: string) => {
-    if (!user || !firestore) {
+    if (!user) {
       toast({ title: "Authentication Error", description: "You must be signed in to make a purchase.", variant: "destructive" });
       return;
     }
@@ -39,7 +90,7 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
     try {
       const idToken = await user.getIdToken();
 
-      // Step 1: Call the secure backend Cloud Function to create the checkout document.
+      // Call the secure backend Cloud Function to create the checkout document.
       const response = await fetch("https://handlecheckoutcreation-tzoen76fpa-uc.a.run.app", {
         method: 'POST',
         headers: {
@@ -54,40 +105,8 @@ export const BillingPopup: React.FC<BillingPopupProps> = ({ isOpen, onOpenChange
         throw new Error(errorData.error?.message || `Server responded with ${response.status}`);
       }
       
-      // Step 2: The backend returns the path to the document it created.
-      const { firestoreDocPath } = await response.json();
-      if (!firestoreDocPath) {
-        throw new Error("Backend did not return a valid document path.");
-      }
-      console.log(`[BillingPopup] Cloud Function created doc at path: ${firestoreDocPath}`);
-
-      // Step 3: Listen to the specific document path for the redirect URL.
-      const docRef = doc(firestore, firestoreDocPath);
-      
-      const unsubscribe = onSnapshot(docRef, (snap) => {
-          const { error, url, sessionId } = snap.data() || {};
-
-          if (error) {
-              unsubscribe();
-              console.error(`[BillingPopup] Stripe Extension Error:`, error);
-              toast({ title: "Purchase Error", description: `Stripe Error: ${error.message}`, variant: "destructive" });
-              setIsLoading(null);
-              return;
-          }
-
-          // Step 4: When the Stripe Extension populates the URL, redirect the user.
-          if (sessionId || url) {
-              console.log("[BillingPopup] Stripe URL/Session received. Redirecting...");
-              unsubscribe();
-              const redirectUrl = url || `https://checkout.stripe.com/pay/${sessionId}`;
-              window.location.assign(redirectUrl);
-          }
-      }, (err) => {
-          unsubscribe();
-          console.error("[BillingPopup] Firestore onSnapshot listener error:", err);
-          toast({ title: "Real-time Listener Error", description: "Could not listen for checkout session updates.", variant: "destructive"});
-          setIsLoading(null);
-      });
+      console.log("[BillingPopup] Backend function acknowledged. Now listening for URL...");
+      // The useEffect listener is already active and will handle the redirect.
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred.';
