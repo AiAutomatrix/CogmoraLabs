@@ -15,9 +15,7 @@ const db = admin.firestore();
 const auth = admin.auth();
 
 // Initialize Stripe with secret key from environment variables
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-06-20',
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 
 // --- TYPE DEFINITIONS ---
@@ -645,3 +643,5 @@ export const updateAccountMetrics = onDocumentWritten("/users/{userId}/paperTrad
     logger.error(`Error calculating metrics for user ${userId}:`, error);
   }
 });
+
+    
