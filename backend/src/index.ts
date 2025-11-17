@@ -5,7 +5,6 @@ import {onRequest} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {defineInt} from "firebase-functions/params";
-import Stripe from "stripe";
 
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
@@ -13,9 +12,6 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 const auth = admin.auth();
-
-// Initialize Stripe with secret key from environment variables
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 
 // --- TYPE DEFINITIONS ---
@@ -162,69 +158,6 @@ export const handleCheckoutCreation = onRequest({cors: true}, async (request, re
 
 /**
  * ===============================================================
- *                 STRIPE WEBHOOK HANDLER
- * ===============================================================
- * Listens for events from Stripe, primarily to fulfill successful purchases.
- */
-export const stripeWebhook = onRequest(async (request, response) => {
-  const signature = request.headers["stripe-signature"];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!signature || !webhookSecret) {
-    logger.error("Stripe webhook error: Missing signature or secret.");
-    response.status(400).send("Webhook Error: Missing signature or secret.");
-    return;
-  }
-
-  let event: Stripe.Event;
-
-  try {
-    event = stripe.webhooks.constructEvent(request.rawBody, signature, webhookSecret);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    logger.error(`❌ Webhook signature verification failed: ${message}`);
-    response.status(400).send(`Webhook Error: ${message}`);
-    return;
-  }
-
-  // Handle the checkout.session.completed event
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session;
-    const userId = session.metadata?.userId;
-    const productId = session.metadata?.productId;
-
-    if (!userId || !productId) {
-      logger.error("Webhook Error: Missing userId or productId in session metadata.", {sessionId: session.id});
-      response.status(400).send("Metadata missing in webhook event.");
-      return;
-    }
-
-    logger.info(`Fulfilling order for userId: ${userId}, productId: ${productId}`);
-
-    if (productId === "AI_CREDIT_PACK_100") {
-      const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
-      try {
-        // Use FieldValue.increment to atomically add credits.
-        await userContextRef.update({
-          ai_credits: admin.firestore.FieldValue.increment(100),
-        });
-        logger.info(`Successfully added 100 AI credits to user ${userId}`);
-      } catch (error) {
-        logger.error(`Failed to update AI credits for user ${userId}:`, error);
-        // Respond with an error to let Stripe know the webhook failed
-        response.status(500).send("Failed to update user credits in Firestore.");
-        return;
-      }
-    }
-  }
-
-  // Acknowledge receipt of the event
-  response.status(200).json({received: true});
-});
-
-
-/**
- * ===============================================================
  *                 PAYMENT LINK FORWARDER
  * ===============================================================
  * This function triggers when a checkout_session is updated by the Stripe extension.
@@ -252,6 +185,48 @@ export const forwardPaymentLink = onDocumentUpdated("/customers/{userId}/checkou
       logger.info(`Successfully forwarded URL to user document for user: ${userId}`);
     } catch (error) {
       logger.error(`Failed to forward checkout URL for user ${userId}:`, error);
+    }
+  }
+});
+
+
+/**
+ * ===============================================================
+ *                 AI CREDIT PURCHASE FULFILLMENT
+ * ===============================================================
+ * This function triggers when a payment document is updated for a customer.
+ * If the payment status is 'succeeded', it grants the user AI credits.
+ */
+export const fulfillAiCreditPurchase = onDocumentWritten("/customers/{userId}/payments/{paymentId}", async (event) => {
+  const change = event.data;
+  if (!change) return; // No data change
+
+  const dataAfter = change.after.data();
+  const dataBefore = change.before.data();
+
+  // Fulfill only on a new successful payment. Check status and ensure it wasn't already successful.
+  if (dataAfter?.status === "succeeded" && dataBefore?.status !== "succeeded") {
+    const {userId} = event.params;
+    const payment = dataAfter;
+
+    // Check if it's the correct product from metadata if available
+    const productId = payment.metadata?.productId;
+    if (productId !== "AI_CREDIT_PACK_100") {
+      logger.info(`Payment ${event.params.paymentId} for user ${userId} was not for AI credits. Skipping fulfillment.`);
+      return;
+    }
+
+    logger.info(`Detected successful payment for AI credits for user: ${userId}. Fulfilling order...`);
+
+    const userContextRef = db.doc(`users/${userId}/paperTradingContext/main`);
+    try {
+      await userContextRef.update({
+        ai_credits: admin.firestore.FieldValue.increment(100),
+      });
+      logger.info(`Successfully added 100 AI credits to user ${userId}`);
+    } catch (error) {
+      logger.error(`Failed to update AI credits for user ${userId}:`, error);
+      // We can't do much here except log, as the payment has already gone through.
     }
   }
 });
