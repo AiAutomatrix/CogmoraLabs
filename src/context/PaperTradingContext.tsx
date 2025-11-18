@@ -1,3 +1,4 @@
+
 "use client";
 import React, {
   createContext,
@@ -460,12 +461,12 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     fetchInitialData();
   }, [user]); // Add user as a dependency
 
-  const { equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades, equityData, recentPnlData, allocationData } = useMemo(() => {
+  const accountMetrics = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
     const equityValue = balance + totalUnrealizedPNL;
     
     const closedTrades = tradeHistory.filter((t) => t.status === "closed" && t.pnl != null);
-    const sortedClosedTrades = [...closedTrades].sort((a, b) => (a.closeTimestamp?.toMillis() ?? 0) - (b.closeTimestamp?.toMillis() ?? 0));
+    const sortedClosedTrades = [...closedTrades].sort((a, b) => ((a.closeTimestamp as any)?.toMillis() ?? 0) - ((b.closeTimestamp as any)?.toMillis() ?? 0));
     
     let runningEquity = INITIAL_BALANCE;
     const eqData = sortedClosedTrades.map((trade, index) => {
@@ -473,6 +474,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       return { name: `Trade ${index + 1}`, equity: runningEquity };
     });
     // Add current equity point
+    if (eqData.length === 0) { // If no trades, start with initial balance
+        eqData.push({ name: 'Initial', equity: INITIAL_BALANCE });
+    }
     eqData.push({ name: 'Current', equity: equityValue });
 
     const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
@@ -482,7 +486,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     const rate = totalClosed > 0 ? (won / totalClosed) * 100 : 0;
     
     const recentTrades = sortedClosedTrades.slice(-20);
-    const pnlData = recentTrades.map((trade, index) => ({ name: `Trade ${index}`, pnl: trade.pnl ?? 0 }));
+    const pnlData = recentTrades.map((trade, index) => ({ name: `${index}`, pnl: trade.pnl ?? 0 }));
     
     const allocData = openPositions.map(pos => ({
       name: pos.symbolName,
@@ -501,6 +505,9 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       allocationData: allocData,
     };
   }, [openPositions, balance, tradeHistory]);
+
+  const { equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades, equityData, recentPnlData, allocationData } = accountMetrics;
+
 
   const addAiCredits = useCallback((amount: number) => {
     if (!userContextDocRef) return;
@@ -884,7 +891,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
     }
     
-    const AI_COOLDOWN_MS = 60000;
+    const AI_COOLDOWN_MS = 60000; 
     const now = Date.now();
     
     if (lastManualAiRunTimestamp && now - lastManualAiRunTimestamp < AI_COOLDOWN_MS) {
@@ -918,7 +925,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     setIsAiLoading(true);
 
-    const accountSnapshot = {
+    const currentAccountMetrics = {
         balance,
         equity,
         realizedPnl,
@@ -934,7 +941,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         settings: aiSettings,
         activeTriggers: tradeTriggers,
         openPositions: openPositions,
-        accountMetrics: accountSnapshot,
+        accountMetrics: currentAccountMetrics,
       });
 
       saveDataToFirestore({ lastAiActionPlan: response });
@@ -977,7 +984,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } finally {
         setIsAiLoading(false);
     }
-  }, [aiCredits, watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore, userContextDocRef, equity, realizedPnl, unrealizedPnl, winRate, wonTrades, lostTrades]);
+  }, [aiCredits, watchlist, aiSettings, tradeTriggers, openPositions, balance, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore, userContextDocRef, equity, realizedPnl, unrealizedPnl, winRate, wonTrades, lostTrades]);
 
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     const newConfig: AutomationConfig = { ...config };
@@ -1378,7 +1385,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         lastAiActionPlan,
         isLoaded,
         isAiLoading,
-        equity: equity,
+        equity,
         unrealizedPnl,
         realizedPnl,
         winRate,
