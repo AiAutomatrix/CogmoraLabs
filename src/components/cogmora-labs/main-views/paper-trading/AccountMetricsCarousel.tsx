@@ -104,12 +104,12 @@ export default function AccountMetricsCarousel() {
   };
 
   return (
-    <Carousel opts={{ align: "start" }} className="w-full h-full">
-      <CarouselContent className="-ml-2 h-full">
+    <Carousel opts={{ align: "start" }} className="w-full">
+      <CarouselContent className="-ml-2">
 
         {/* SLIDE 1 — ACCOUNT METRICS */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
-          <div className="p-1 h-full">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
+          <div className="p-1">
             <Card className="h-[460px] flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <div>
@@ -218,8 +218,8 @@ export default function AccountMetricsCarousel() {
         </CarouselItem>
 
         {/* SLIDE 2 — RECENT PNL */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
-          <div className="p-1 h-full">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
+          <div className="p-1">
             <Card className="h-[460px] flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Recent Trade P&L</p>
@@ -258,8 +258,8 @@ export default function AccountMetricsCarousel() {
         </CarouselItem>
 
         {/* SLIDE 3 — ALLOCATION */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
-          <div className="p-1 h-full">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
+          <div className="p-1">
             <Card className="h-[460px] flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Asset Allocation</p>
@@ -317,3 +317,4 @@ export default function AccountMetricsCarousel() {
       <CarouselNext className="hidden md:flex" />
     </Carousel>
   );
+}
