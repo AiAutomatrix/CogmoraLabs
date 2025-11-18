@@ -791,7 +791,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else { // Don't change lastPrice because that is our live data that works. 
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.markPrice ?? undefined;
+            newPrice = futuresData.lastPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 

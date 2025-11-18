@@ -141,8 +141,8 @@ export default function PaperTradingDashboard({
 
   const sortedTradeHistory = useMemo(() => {
     return [...tradeHistory].sort((a, b) => {
-        const timeA = a.closeTimestamp?.toDate?.()?.getTime() || a.openTimestamp;
-        const timeB = b.closeTimestamp?.toDate?.()?.getTime() || b.openTimestamp;
+        const timeA = a.closeTimestamp?.toDate?.().getTime() || a.openTimestamp;
+        const timeB = b.closeTimestamp?.toDate?.().getTime() || b.openTimestamp;
         return timeB - timeA;
     });
 }, [tradeHistory]);
@@ -150,295 +150,297 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="py-4 space-y-6">
+    <div className="space-y-6">
       <AccountMetricsCarousel />
 
-      <Tabs defaultValue="positions" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="positions">Open Positions</TabsTrigger>
-          <TabsTrigger value="triggers">Triggers</TabsTrigger>
-          <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
-          <TabsTrigger value="history">Trade History</TabsTrigger>
-        </TabsList>
-        <TabsContent value="positions">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>Open Positions</CardTitle>
-                    <CardDescription>Your currently active paper trades.</CardDescription>
-                </div>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        disabled={openPositions.length === 0}
-                        className="h-9 w-9 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-                    >
-                        <StopCircle className="h-5 w-5" />
-                        <span className="sr-only">Close All Positions</span>
-                    </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        This will close all of your open positions and log them into
-                        trade history. This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={closeAllPositions}>
-                        Continue
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-                </CardHeader>
-                <CardContent>
-                <div className="overflow-x-auto">
-                    <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead className="px-2 py-2">Symbol</TableHead>
-                        <TableHead className="px-1 py-2 text-center">Type</TableHead>
-                        <TableHead className="hidden sm:table-cell text-right px-1 py-2">Size</TableHead>
-                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Value (USD)
-                        </TableHead>
-                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Entry Price
-                        </TableHead>
-                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Current Price
-                        </TableHead>
-                        <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
-                        <TableHead className="text-center min-w-[120px] px-2 py-2">
-                            Actions
-                        </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {openPositions.length > 0 ? (
-                        openPositions.map((pos) => {
-                            const value =
-                            pos.positionType === "futures"
-                                ? pos.size * pos.averageEntryPrice
-                                : pos.size * pos.currentPrice;
-                            
-                            const hasSl = pos.details?.stopLoss !== undefined;
-                            const hasTp = pos.details?.takeProfit !== undefined;
+      <div className="px-4">
+        <Tabs defaultValue="positions" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="positions">Open Positions</TabsTrigger>
+            <TabsTrigger value="triggers">Triggers</TabsTrigger>
+            <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
+            <TabsTrigger value="history">Trade History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="positions">
+              <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                      <CardTitle>Open Positions</CardTitle>
+                      <CardDescription>Your currently active paper trades.</CardDescription>
+                  </div>
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                      <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={openPositions.length === 0}
+                          className="h-9 w-9 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                      >
+                          <StopCircle className="h-5 w-5" />
+                          <span className="sr-only">Close All Positions</span>
+                      </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                      <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                          This will close all of your open positions and log them into
+                          trade history. This action cannot be undone.
+                          </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={closeAllPositions}>
+                          Continue
+                          </AlertDialogAction>
+                      </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+                  </CardHeader>
+                  <CardContent>
+                  <div className="overflow-x-auto">
+                      <Table>
+                      <TableHeader>
+                          <TableRow>
+                          <TableHead className="px-2 py-2">Symbol</TableHead>
+                          <TableHead className="px-1 py-2 text-center">Type</TableHead>
+                          <TableHead className="hidden sm:table-cell text-right px-1 py-2">Size</TableHead>
+                          <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                              Value (USD)
+                          </TableHead>
+                          <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                              Entry Price
+                          </TableHead>
+                          <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                              Current Price
+                          </TableHead>
+                          <TableHead className="text-right px-2 py-2">Unrealized P&L</TableHead>
+                          <TableHead className="text-center min-w-[120px] px-2 py-2">
+                              Actions
+                          </TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {openPositions.length > 0 ? (
+                          openPositions.map((pos) => {
+                              const value =
+                              pos.positionType === "futures"
+                                  ? pos.size * pos.averageEntryPrice
+                                  : pos.size * pos.currentPrice;
+                              
+                              const hasSl = pos.details?.stopLoss !== undefined;
+                              const hasTp = pos.details?.takeProfit !== undefined;
 
-                            return (
-                            <TableRow key={`${pos.id}-${pos.symbolName}`}>
-                                <TableCell className="font-medium px-2 py-2">
-                                  <Button
-                                    variant="link"
-                                    className="p-0 h-auto text-left font-medium"
-                                    onClick={() => onSymbolSelect(pos.symbol)}
-                                  >
-                                    {pos.symbolName}
-                                  </Button>
-                                </TableCell>
-                                <TableCell className="px-1 py-2 text-center">
-                                {pos.positionType === "futures" ? (
-                                    <Badge
-                                    variant={
-                                        pos.side === "long" ? "default" : "destructive"
-                                    }
-                                    className="capitalize"
-                                    >
-                                    {pos.side} {pos.leverage}x
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="secondary">Spot</Badge>
-                                )}
-                                </TableCell>
-                                <TableCell className="hidden sm:table-cell text-right px-1 py-2">
-                                {formatSize(pos.size)}
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatCurrency(value)}
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatPrice(pos.averageEntryPrice)}
-                                </TableCell>
-                                <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatPrice(pos.currentPrice)}
-                                </TableCell>
-                                <PNLCell pnl={pos.unrealizedPnl} />
-                                <TableCell className="text-center min-w-[120px] px-2 py-2">
-                                  <div className="flex items-center justify-center gap-0">
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenInfo(pos)}>
-                                        <Info className="h-4 w-4 text-blue-400" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
-                                        <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
-                                    </Button>
+                              return (
+                              <TableRow key={`${pos.id}-${pos.symbolName}`}>
+                                  <TableCell className="font-medium px-2 py-2">
                                     <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive"
-                                      onClick={() => closePosition(pos.id)}
+                                      variant="link"
+                                      className="p-0 h-auto text-left font-medium"
+                                      onClick={() => onSymbolSelect(pos.symbol)}
                                     >
-                                        <XCircle className="h-4 w-4" />
+                                      {pos.symbolName}
                                     </Button>
-                                  </div>
-                                </TableCell>
-                            </TableRow>
-                            );
-                        })
-                        ) : (
-                        <TableRow>
-                            <TableCell colSpan={8} className="text-center">
-                            No open positions.
-                            </TableCell>
-                        </TableRow>
-                        )}
-                    </TableBody>
-                    </Table>
-                </div>
-                </CardContent>
-            </Card>
-        </TabsContent>
-        <TabsContent value="triggers">
-            <TradeTriggersDashboard 
-              aiSettings={aiSettings}
-              setAiSettings={setAiSettings}
-              handleAiTriggerAnalysis={handleAiTriggerAnalysis}
-            />
-        </TabsContent>
-        <TabsContent value="watchlist">
-            <Watchlist 
-              onSymbolSelect={onSymbolSelect}
-              selectedChartLayout={selectedChartLayout}
-              setSelectedChartLayout={setSelectedChartLayout}
-              selectedSymbolsForHighlight={selectedSymbolsForHighlight}
-            />
-        </TabsContent>
-        <TabsContent value="history">
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle>Trade History</CardTitle>
-                    <CardDescription>
-                    A log of all your paper trades.
-                    </CardDescription>
-                </div>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                    <Button
-                        variant="destructive"
-                        size="sm"
-                        disabled={tradeHistory.length === 0}
-                    >
-                        <StopCircle className="mr-2 h-4 w-4" />
-                        Clear History
-                    </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete your
-                        entire trade history.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={clearHistory}>
-                        Continue
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-                </CardHeader>
-                <CardContent>
-                <div className="overflow-x-auto">
-                    <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead className="px-2 py-2">Symbol</TableHead>
-                        <TableHead className="px-2 py-2">Side</TableHead>
-                        <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
-                        <TableHead className="text-right px-2 py-2">Size</TableHead>
-                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Entry Price
-                        </TableHead>
-                        <TableHead className="hidden md:table-cell text-right px-2 py-2">
-                            Close Price
-                        </TableHead>
-                        <TableHead className="hidden md:table-cell px-2 py-2">
-                            Date
-                        </TableHead>
-                        <TableHead className="text-right px-2 py-2">P&L</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {sortedTradeHistory.length > 0 ? (
-                        sortedTradeHistory.slice(0, rowsToShow).map((trade) => (
-                            <TableRow key={trade.id} className={trade.status === 'open' ? 'opacity-60' : ''}>
-                            <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
-                            <TableCell
-                                className={`capitalize px-2 py-2 ${
-                                trade.side === "buy" || trade.side === "long"
-                                    ? "text-green-500"
-                                    : "text-red-500"
-                                }`}
-                            >
-                                {trade.side}
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell px-2 py-2">
-                                {trade.positionType === "futures" ? (
-                                <Badge variant="outline">
-                                    Futures {trade.leverage}x
-                                </Badge>
-                                ) : (
-                                <Badge variant="secondary">Spot</Badge>
-                                )}
-                            </TableCell>
-                            <TableCell className="text-right px-2 py-2">
-                                {formatSize(trade.size)}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {formatPrice(trade.entryPrice)}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell text-right px-2 py-2">
-                                {trade.closePrice ? formatPrice(trade.closePrice) : '-'}
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell px-2 py-2">
-                                {formatTimestamp(trade.closeTimestamp ?? trade.openTimestamp)}
-                            </TableCell>
-                            <PNLCell pnl={trade.pnl} />
-                            </TableRow>
-                        ))) : (
-                        <TableRow>
-                            <TableCell
-                            colSpan={8}
-                            className="text-center text-muted-foreground py-8"
-                            >
-                            No trade history yet.
-                            </TableCell>
-                        </TableRow>
-                        )}
-                    </TableBody>
-                    </Table>
-                </div>
-                {tradeHistory.length > rowsToShow && (
-                    <div className="text-center mt-4">
-                    <Button
-                        variant="outline"
-                        onClick={() => setRowsToShow((prev) => prev + 10)}
-                    >
-                        Load More
-                    </Button>
-                    </div>
-                )}
-                </CardContent>
-            </Card>
-        </TabsContent>
-      </Tabs>
+                                  </TableCell>
+                                  <TableCell className="px-1 py-2 text-center">
+                                  {pos.positionType === "futures" ? (
+                                      <Badge
+                                      variant={
+                                          pos.side === "long" ? "default" : "destructive"
+                                      }
+                                      className="capitalize"
+                                      >
+                                      {pos.side} {pos.leverage}x
+                                      </Badge>
+                                  ) : (
+                                      <Badge variant="secondary">Spot</Badge>
+                                  )}
+                                  </TableCell>
+                                  <TableCell className="hidden sm:table-cell text-right px-1 py-2">
+                                  {formatSize(pos.size)}
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                  {formatCurrency(value)}
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                  {formatPrice(pos.averageEntryPrice)}
+                                  </TableCell>
+                                  <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                  {formatPrice(pos.currentPrice)}
+                                  </TableCell>
+                                  <PNLCell pnl={pos.unrealizedPnl} />
+                                  <TableCell className="text-center min-w-[120px] px-2 py-2">
+                                    <div className="flex items-center justify-center gap-0">
+                                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenInfo(pos)}>
+                                          <Info className="h-4 w-4 text-blue-400" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenDetails(pos)}>
+                                          <Settings2 className={`h-4 w-4 ${hasSl || hasTp ? 'text-primary' : 'text-muted-foreground'}`} />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-destructive"
+                                        onClick={() => closePosition(pos.id)}
+                                      >
+                                          <XCircle className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                              </TableRow>
+                              );
+                          })
+                          ) : (
+                          <TableRow>
+                              <TableCell colSpan={8} className="text-center">
+                              No open positions.
+                              </TableCell>
+                          </TableRow>
+                          )}
+                      </TableBody>
+                      </Table>
+                  </div>
+                  </CardContent>
+              </Card>
+          </TabsContent>
+          <TabsContent value="triggers">
+              <TradeTriggersDashboard 
+                aiSettings={aiSettings}
+                setAiSettings={setAiSettings}
+                handleAiTriggerAnalysis={handleAiTriggerAnalysis}
+              />
+          </TabsContent>
+          <TabsContent value="watchlist">
+              <Watchlist 
+                onSymbolSelect={onSymbolSelect}
+                selectedChartLayout={selectedChartLayout}
+                setSelectedChartLayout={setSelectedChartLayout}
+                selectedSymbolsForHighlight={selectedSymbolsForHighlight}
+              />
+          </TabsContent>
+          <TabsContent value="history">
+              <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                      <CardTitle>Trade History</CardTitle>
+                      <CardDescription>
+                      A log of all your paper trades.
+                      </CardDescription>
+                  </div>
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                      <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={tradeHistory.length === 0}
+                      >
+                          <StopCircle className="mr-2 h-4 w-4" />
+                          Clear History
+                      </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                      <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete your
+                          entire trade history.
+                          </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={clearHistory}>
+                          Continue
+                          </AlertDialogAction>
+                      </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+                  </CardHeader>
+                  <CardContent>
+                  <div className="overflow-x-auto">
+                      <Table>
+                      <TableHeader>
+                          <TableRow>
+                          <TableHead className="px-2 py-2">Symbol</TableHead>
+                          <TableHead className="px-2 py-2">Side</TableHead>
+                          <TableHead className="hidden sm:table-cell px-2 py-2">Type</TableHead>
+                          <TableHead className="text-right px-2 py-2">Size</TableHead>
+                          <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                              Entry Price
+                          </TableHead>
+                          <TableHead className="hidden md:table-cell text-right px-2 py-2">
+                              Close Price
+                          </TableHead>
+                          <TableHead className="hidden md:table-cell px-2 py-2">
+                              Date
+                          </TableHead>
+                          <TableHead className="text-right px-2 py-2">P&L</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {sortedTradeHistory.length > 0 ? (
+                          sortedTradeHistory.slice(0, rowsToShow).map((trade) => (
+                              <TableRow key={trade.id} className={trade.status === 'open' ? 'opacity-60' : ''}>
+                              <TableCell className="px-2 py-2">{trade.symbolName}</TableCell>
+                              <TableCell
+                                  className={`capitalize px-2 py-2 ${
+                                  trade.side === "buy" || trade.side === "long"
+                                      ? "text-green-500"
+                                      : "text-red-500"
+                                  }`}
+                              >
+                                  {trade.side}
+                              </TableCell>
+                              <TableCell className="hidden sm:table-cell px-2 py-2">
+                                  {trade.positionType === "futures" ? (
+                                  <Badge variant="outline">
+                                      Futures {trade.leverage}x
+                                  </Badge>
+                                  ) : (
+                                  <Badge variant="secondary">Spot</Badge>
+                                  )}
+                              </TableCell>
+                              <TableCell className="text-right px-2 py-2">
+                                  {formatSize(trade.size)}
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                  {formatPrice(trade.entryPrice)}
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell text-right px-2 py-2">
+                                  {trade.closePrice ? formatPrice(trade.closePrice) : '-'}
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell px-2 py-2">
+                                  {formatTimestamp(trade.closeTimestamp ?? trade.openTimestamp)}
+                              </TableCell>
+                              <PNLCell pnl={trade.pnl} />
+                              </TableRow>
+                          ))) : (
+                          <TableRow>
+                              <TableCell
+                              colSpan={8}
+                              className="text-center text-muted-foreground py-8"
+                              >
+                              No trade history yet.
+                              </TableCell>
+                          </TableRow>
+                          )}
+                      </TableBody>
+                      </Table>
+                  </div>
+                  {tradeHistory.length > rowsToShow && (
+                      <div className="text-center mt-4">
+                      <Button
+                          variant="outline"
+                          onClick={() => setRowsToShow((prev) => prev + 10)}
+                      >
+                          Load More
+                      </Button>
+                      </div>
+                  )}
+                  </CardContent>
+              </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
     {selectedPosition && (
         <PositionDetailsPopup 

@@ -22,7 +22,6 @@ import {
   Pie,
   Cell,
   Tooltip,
-  ResponsiveContainer,
 } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 
@@ -96,9 +95,9 @@ export default function AccountMetricsCarousel() {
       }}
       className="w-full"
     >
-      <CarouselContent>
+      <CarouselContent className="-ml-2">
         {/* Slide 1: Main Performance */}
-        <CarouselItem className="md:basis-1/2 lg:basis-1/3">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
           <div className="p-1">
             <Card className="h-full">
               <CardContent className="flex flex-col justify-between p-4 h-full">
@@ -136,7 +135,7 @@ export default function AccountMetricsCarousel() {
         </CarouselItem>
 
         {/* Slide 2: Recent Trades P&L */}
-        <CarouselItem className="md:basis-1/2 lg:basis-1/3">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
           <div className="p-1">
             <Card className="h-full">
               <CardContent className="flex flex-col p-4 h-full">
@@ -160,7 +159,7 @@ export default function AccountMetricsCarousel() {
         </CarouselItem>
 
         {/* Slide 3: Asset Allocation */}
-        <CarouselItem className="md:basis-1/2 lg:basis-1/3">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
           <div className="p-1">
             <Card className="h-full">
               <CardContent className="flex flex-col p-4 h-full">
