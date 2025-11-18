@@ -22,6 +22,7 @@ import {
   Pie,
   Cell,
   Tooltip,
+  ResponsiveContainer,
 } from 'recharts';
 import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 
@@ -93,14 +94,14 @@ export default function AccountMetricsCarousel() {
       opts={{
         align: "start",
       }}
-      className="w-full"
+      className="w-full h-full"
     >
       <CarouselContent className="-ml-2 h-full">
         {/* Slide 1: Main Performance */}
         <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
           <div className="p-1 h-full">
-            <Card className="h-full">
-              <CardContent className="flex flex-col justify-between p-4 h-full">
+            <Card className="h-full flex flex-col">
+              <CardContent className="flex flex-col justify-between p-4 flex-grow">
                 <div>
                     <p className="text-sm text-muted-foreground">Account Equity</p>
                     <p className="text-3xl font-bold">{formatCurrency(equity)}</p>
@@ -137,11 +138,11 @@ export default function AccountMetricsCarousel() {
         {/* Slide 2: Recent Trades P&L */}
         <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
           <div className="p-1 h-full">
-            <Card className="h-full">
+            <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col p-4 h-full">
                 <p className="text-sm font-semibold">Recent Trade P&L</p>
                 <p className="text-xs text-muted-foreground mb-2">Profit & Loss from the last 20 trades.</p>
-                <div className="flex-grow h-40">
+                <div className="flex-grow">
                   <ChartContainer config={chartConfig} className="w-full h-full">
                     <BarChart data={recentPnlData}>
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }} />
@@ -161,11 +162,11 @@ export default function AccountMetricsCarousel() {
         {/* Slide 3: Asset Allocation */}
         <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
           <div className="p-1 h-full">
-            <Card className="h-full">
+            <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col p-4 h-full">
                 <p className="text-sm font-semibold">Asset Allocation</p>
                 <p className="text-xs text-muted-foreground mb-2">Distribution of your open positions.</p>
-                <div className="flex-grow h-40">
+                <div className="flex-grow">
                    <ChartContainer config={chartConfig} className="w-full h-full">
                     <PieChart>
                       <Tooltip content={<AllocationTooltip />} />
