@@ -150,21 +150,19 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="flex flex-col h-full">
-      <div className="h-48 flex-shrink-0">
-          <AccountMetricsCarousel />
-      </div>
+    <div className="space-y-6">
+      <AccountMetricsCarousel />
 
-      <div className="px-4 flex-grow flex flex-col">
-        <Tabs defaultValue="positions" className="w-full flex flex-col flex-grow">
+      <div className="px-4">
+        <Tabs defaultValue="positions" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
             <TabsTrigger value="history">Trade History</TabsTrigger>
           </TabsList>
-          <TabsContent value="positions" className="flex-grow">
-              <Card className="h-full flex flex-col">
+          <TabsContent value="positions">
+              <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                       <CardTitle>Open Positions</CardTitle>
@@ -199,7 +197,7 @@ export default function PaperTradingDashboard({
                       </AlertDialogContent>
                   </AlertDialog>
                   </CardHeader>
-                  <CardContent className="flex-grow overflow-y-auto">
+                  <CardContent>
                   <div className="overflow-x-auto">
                       <Table>
                       <TableHeader>
@@ -305,14 +303,14 @@ export default function PaperTradingDashboard({
                   </CardContent>
               </Card>
           </TabsContent>
-          <TabsContent value="triggers" className="flex-grow">
+          <TabsContent value="triggers">
               <TradeTriggersDashboard 
                 aiSettings={aiSettings}
                 setAiSettings={setAiSettings}
                 handleAiTriggerAnalysis={handleAiTriggerAnalysis}
               />
           </TabsContent>
-          <TabsContent value="watchlist" className="flex-grow">
+          <TabsContent value="watchlist">
               <Watchlist 
                 onSymbolSelect={onSymbolSelect}
                 selectedChartLayout={selectedChartLayout}
@@ -320,8 +318,8 @@ export default function PaperTradingDashboard({
                 selectedSymbolsForHighlight={selectedSymbolsForHighlight}
               />
           </TabsContent>
-          <TabsContent value="history" className="flex-grow">
-              <Card className="h-full flex flex-col">
+          <TabsContent value="history">
+              <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                       <CardTitle>Trade History</CardTitle>
@@ -357,7 +355,7 @@ export default function PaperTradingDashboard({
                       </AlertDialogContent>
                   </AlertDialog>
                   </CardHeader>
-                  <CardContent className="flex-grow overflow-y-auto">
+                  <CardContent>
                   <div className="overflow-x-auto">
                       <Table>
                       <TableHeader>
