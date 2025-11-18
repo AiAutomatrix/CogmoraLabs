@@ -95,17 +95,17 @@ export default function AccountMetricsCarousel() {
       }}
       className="w-full"
     >
-      <CarouselContent className="-ml-2">
+      <CarouselContent className="-ml-2 h-full">
         {/* Slide 1: Main Performance */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
-          <div className="p-1">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
+          <div className="p-1 h-full">
             <Card className="h-full">
               <CardContent className="flex flex-col justify-between p-4 h-full">
                 <div>
                     <p className="text-sm text-muted-foreground">Account Equity</p>
                     <p className="text-3xl font-bold">{formatCurrency(equity)}</p>
                 </div>
-                <div className="h-24 -mx-4 -mb-4">
+                <div className="h-24 -mx-4">
                   <ChartContainer config={chartConfig} className="w-full h-full">
                     <AreaChart data={equityData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
                       <defs>
@@ -135,8 +135,8 @@ export default function AccountMetricsCarousel() {
         </CarouselItem>
 
         {/* Slide 2: Recent Trades P&L */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
-          <div className="p-1">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
+          <div className="p-1 h-full">
             <Card className="h-full">
               <CardContent className="flex flex-col p-4 h-full">
                 <p className="text-sm font-semibold">Recent Trade P&L</p>
@@ -159,8 +159,8 @@ export default function AccountMetricsCarousel() {
         </CarouselItem>
 
         {/* Slide 3: Asset Allocation */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
-          <div className="p-1">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2 h-full">
+          <div className="p-1 h-full">
             <Card className="h-full">
               <CardContent className="flex flex-col p-4 h-full">
                 <p className="text-sm font-semibold">Asset Allocation</p>
