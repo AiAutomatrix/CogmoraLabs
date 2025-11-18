@@ -141,30 +141,30 @@ export default function PaperTradingDashboard({
 
   const sortedTradeHistory = useMemo(() => {
     return [...tradeHistory].sort((a, b) => {
-        const timeA = a.closeTimestamp?.toDate?.().getTime() || a.openTimestamp;
-        const timeB = b.closeTimestamp?.toDate?.().getTime() || b.openTimestamp;
-        return timeB - timeA;
+        const timeA = (a.closeTimestamp as any)?.toDate?.().getTime() || a.openTimestamp;
+        const timeB = (b.closeTimestamp as any)?.toDate?.().getTime() || b.openTimestamp;
+        return (timeB || 0) - (timeA || 0);
     });
 }, [tradeHistory]);
 
 
   return (
     <>
-    <div className="space-y-6 flex flex-col h-full">
-      <div className="px-0 h-48 flex-shrink-0">
+    <div className="space-y-6">
+      <div className="px-0 h-[170px]">
         <AccountMetricsCarousel />
       </div>
 
-      <div className="px-4 flex-grow flex flex-col">
-        <Tabs defaultValue="positions" className="w-full flex-grow flex flex-col">
+      <div className="px-4">
+        <Tabs defaultValue="positions" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
             <TabsTrigger value="history">Trade History</TabsTrigger>
           </TabsList>
-          <TabsContent value="positions" className="flex-grow mt-2">
-              <Card className="h-full flex flex-col">
+          <TabsContent value="positions" className="mt-4">
+              <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                       <CardTitle>Open Positions</CardTitle>
@@ -199,7 +199,7 @@ export default function PaperTradingDashboard({
                       </AlertDialogContent>
                   </AlertDialog>
                   </CardHeader>
-                  <CardContent className="flex-grow overflow-y-auto">
+                  <CardContent>
                   <div className="overflow-x-auto">
                       <Table>
                       <TableHeader>
@@ -305,14 +305,14 @@ export default function PaperTradingDashboard({
                   </CardContent>
               </Card>
           </TabsContent>
-          <TabsContent value="triggers" className="flex-grow mt-2">
+          <TabsContent value="triggers" className="mt-4">
               <TradeTriggersDashboard 
                 aiSettings={aiSettings}
                 setAiSettings={setAiSettings}
                 handleAiTriggerAnalysis={handleAiTriggerAnalysis}
               />
           </TabsContent>
-          <TabsContent value="watchlist" className="flex-grow mt-2">
+          <TabsContent value="watchlist" className="mt-4">
               <Watchlist 
                 onSymbolSelect={onSymbolSelect}
                 selectedChartLayout={selectedChartLayout}
@@ -320,8 +320,8 @@ export default function PaperTradingDashboard({
                 selectedSymbolsForHighlight={selectedSymbolsForHighlight}
               />
           </TabsContent>
-          <TabsContent value="history" className="flex-grow mt-2">
-              <Card className="h-full flex flex-col">
+          <TabsContent value="history" className="mt-4">
+              <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                   <div>
                       <CardTitle>Trade History</CardTitle>
@@ -357,7 +357,7 @@ export default function PaperTradingDashboard({
                       </AlertDialogContent>
                   </AlertDialog>
                   </CardHeader>
-                  <CardContent className="flex-grow overflow-y-auto">
+                  <CardContent>
                   <div className="overflow-x-auto">
                       <Table>
                       <TableHeader>
