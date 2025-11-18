@@ -1,4 +1,3 @@
-
 "use client";
 import React, {
   createContext,
@@ -88,6 +87,14 @@ interface PaperTradingContextType {
   isLoaded: boolean;
   isAiLoading: boolean;
   equity: number;
+  unrealizedPnl: number;
+  realizedPnl: number;
+  winRate: number;
+  wonTrades: number;
+  lostTrades: number;
+  equityData: { name: string; equity: number }[];
+  recentPnlData: { name: string; pnl: number }[];
+  allocationData: { name: string; value: number }[];
   aiCredits: number;
   lastManualAiRunTimestamp: number | null;
   toggleWatchlist: (symbol: string, symbolName: string, type: 'spot' | 'futures', contractOrData?: KucoinFuturesContract | KucoinTicker) => void;
@@ -453,28 +460,47 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     fetchInitialData();
   }, [user]); // Add user as a dependency
 
-  const accountMetrics = useMemo(() => {
+  const { equity, unrealizedPnl, realizedPnl, winRate, wonTrades, lostTrades, equityData, recentPnlData, allocationData } = useMemo(() => {
     const totalUnrealizedPNL = openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0);
     const equityValue = balance + totalUnrealizedPNL;
-    const closedTrades = tradeHistory.filter((t) => t.status === "closed");
-    const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
+    
+    const closedTrades = tradeHistory.filter((t) => t.status === "closed" && t.pnl != null);
+    const sortedClosedTrades = [...closedTrades].sort((a, b) => (a.closeTimestamp?.toMillis() ?? 0) - (b.closeTimestamp?.toMillis() ?? 0));
+    
+    let runningEquity = INITIAL_BALANCE;
+    const eqData = sortedClosedTrades.map((trade, index) => {
+      runningEquity += trade.pnl ?? 0;
+      return { name: `Trade ${index + 1}`, equity: runningEquity };
+    });
+    // Add current equity point
+    eqData.push({ name: 'Current', equity: equityValue });
 
-    const wonTrades = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
-    const lostTrades = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl <= 0).length;
-    const totalClosedTrades = wonTrades + lostTrades;
-    const winRate = totalClosedTrades > 0 ? (wonTrades / totalClosedTrades) * 100 : 0;
+    const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
+    const won = closedTrades.filter(t => t.pnl! > 0).length;
+    const lost = closedTrades.filter(t => t.pnl! <= 0).length;
+    const totalClosed = won + lost;
+    const rate = totalClosed > 0 ? (won / totalClosed) * 100 : 0;
+    
+    const recentTrades = sortedClosedTrades.slice(-20);
+    const pnlData = recentTrades.map((trade, index) => ({ name: `Trade ${index}`, pnl: trade.pnl ?? 0 }));
+    
+    const allocData = openPositions.map(pos => ({
+      name: pos.symbolName,
+      value: pos.size * pos.currentPrice,
+    }));
 
     return {
       equity: equityValue,
-      realizedPnl: totalRealizedPNL,
       unrealizedPnl: totalUnrealizedPNL,
-      winRate,
-      wonTrades,
-      lostTrades,
+      realizedPnl: totalRealizedPNL,
+      winRate: rate,
+      wonTrades: won,
+      lostTrades: lost,
+      equityData: eqData,
+      recentPnlData: pnlData,
+      allocationData: allocData,
     };
   }, [openPositions, balance, tradeHistory]);
-
-  const equity = accountMetrics.equity;
 
   const addAiCredits = useCallback((amount: number) => {
     if (!userContextDocRef) return;
@@ -758,7 +784,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
             priceChgPct = spotData.changeRate ?? undefined;
         } else { // Don't change lastPrice because that is our live data that works. 
             const futuresData = data as FuturesSnapshotData;
-            newPrice = futuresData.lastPrice ?? undefined;
+            newPrice = futuresData.markPrice ?? undefined;
             priceChgPct = futuresData.priceChgPct ?? undefined;
         }
 
@@ -858,7 +884,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         return;
     }
     
-    const AI_COOLDOWN_MS = 60000; // 1 minute
+    const AI_COOLDOWN_MS = 60000;
     const now = Date.now();
     
     if (lastManualAiRunTimestamp && now - lastManualAiRunTimestamp < AI_COOLDOWN_MS) {
@@ -892,15 +918,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
 
     setIsAiLoading(true);
 
-    const { equity, realizedPnl, unrealizedPnl, winRate, wonTrades, lostTrades } = accountMetrics;
-    const currentAccountMetrics = {
-      balance,
-      equity,
-      realizedPnl: realizedPnl,
-      unrealizedPnl: unrealizedPnl,
-      winRate,
-      wonTrades,
-      lostTrades,
+    const accountSnapshot = {
+        balance,
+        equity,
+        realizedPnl,
+        unrealizedPnl,
+        winRate,
+        wonTrades,
+        lostTrades,
     };
 
     try {
@@ -909,7 +934,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         settings: aiSettings,
         activeTriggers: tradeTriggers,
         openPositions: openPositions,
-        accountMetrics: currentAccountMetrics
+        accountMetrics: accountSnapshot,
       });
 
       saveDataToFirestore({ lastAiActionPlan: response });
@@ -952,7 +977,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
     } finally {
         setIsAiLoading(false);
     }
-  }, [aiCredits, watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore, userContextDocRef]);
+  }, [aiCredits, watchlist, aiSettings, tradeTriggers, openPositions, balance, accountMetrics, lastManualAiRunTimestamp, toast, addTradeTrigger, updateTradeTrigger, removeTradeTrigger, logAiAction, updatePositionSlTp, saveDataToFirestore, userContextDocRef, equity, realizedPnl, unrealizedPnl, winRate, wonTrades, lostTrades]);
 
   const setAutomationConfig = useCallback((config: AutomationConfig) => {
     const newConfig: AutomationConfig = { ...config };
@@ -1354,6 +1379,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
         isLoaded,
         isAiLoading,
         equity: equity,
+        unrealizedPnl,
+        realizedPnl,
+        winRate,
+        wonTrades,
+        lostTrades,
+        equityData,
+        recentPnlData,
+        allocationData,
         lastManualAiRunTimestamp,
         buy,
         futuresBuy,

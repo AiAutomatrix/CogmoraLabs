@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useMemo, useState } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -38,6 +37,7 @@ import TradeTriggersDashboard from "./TradeTriggersDashboard";
 import { PositionDetailsPopup } from "./PositionDetailsPopup";
 import type { OpenPosition, PaperTrade } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
+import AccountMetricsCarousel from "./AccountMetricsCarousel";
 
 interface PaperTradingDashboardProps {
   onSymbolSelect: (symbol: string) => void;
@@ -55,7 +55,6 @@ export default function PaperTradingDashboard({
   handleAiTriggerAnalysis,
 }: PaperTradingDashboardProps) {
   const {
-    balance,
     openPositions,
     tradeHistory,
     closePosition,
@@ -63,28 +62,12 @@ export default function PaperTradingDashboard({
     clearHistory,
     aiSettings,
     setAiSettings,
-    equity,
   } = usePaperTrading();
   const [rowsToShow, setRowsToShow] = useState(10);
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
   const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
 
-  const totalUnrealizedPNL = useMemo(
-    () => openPositions.reduce((acc, pos) => acc + (pos.unrealizedPnl || 0), 0),
-    [openPositions]
-  );
-
-  const { realizedPnl, winRate, wonTrades, lostTrades } = useMemo(() => {
-    const closedTrades = tradeHistory.filter((t) => t.status === "closed");
-    const totalRealizedPNL = closedTrades.reduce((acc, trade) => acc + (trade.pnl ?? 0), 0);
-    const won = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl > 0).length;
-    const lost = closedTrades.filter(t => t.pnl !== null && t.pnl !== undefined && t.pnl <= 0).length;
-    const totalClosed = won + lost;
-    const rate = totalClosed > 0 ? (won / totalClosed) * 100 : 0;
-    return { realizedPnl: totalRealizedPNL, winRate: rate, wonTrades: won, lostTrades: lost };
-  }, [tradeHistory]);
-    
   const handleOpenDetails = (position: OpenPosition) => {
     setSelectedPosition(position);
     setIsDetailsPopupOpen(true);
@@ -168,58 +151,7 @@ export default function PaperTradingDashboard({
   return (
     <>
     <div className="py-4 space-y-6">
-      {/* Account Metrics */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Account Metrics</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Equity</p>
-            <p className="text-lg md:text-xl font-bold">
-              {formatCurrency(equity)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Available Cash</p>
-            <p className="text-lg md:text-xl font-bold">
-              {formatCurrency(balance)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Unrealized P&L</p>
-            <p
-              className={`text-lg md:text-xl font-bold ${
-                totalUnrealizedPNL >= 0 ? "text-green-500" : "text-red-500"
-              }`}
-            >
-              {formatCurrency(totalUnrealizedPNL)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Realized P&L</p>
-            <p
-              className={`text-lg md:text-xl font-bold ${
-                realizedPnl >= 0 ? "text-green-500" : "text-red-500"
-              }`}
-            >
-              {formatCurrency(realizedPnl)}
-            </p>
-          </div>
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Win Rate</p>
-            <p className="text-lg md:text-xl font-bold">
-              {winRate.toFixed(2)}%
-            </p>
-          </div>
-          <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">Won / Lost</p>
-            <p className="text-lg md:text-xl font-bold">
-              <span className="text-green-500">{wonTrades}</span> / <span className="text-red-500">{lostTrades}</span>
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <AccountMetricsCarousel />
 
       <Tabs defaultValue="positions" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
@@ -525,12 +457,3 @@ export default function PaperTradingDashboard({
     </>
   );
 }
-
-    
-
-    
-
-
-
-
-    
