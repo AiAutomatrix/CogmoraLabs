@@ -23,16 +23,24 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
-  XAxis,
-  YAxis,
-  CartesianGrid,
 } from 'recharts';
-import { ChartTooltipContent } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 const formatPercent = (value: number) => `${value.toFixed(2)}%`;
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+const chartConfig = {
+  equity: {
+    label: "Equity",
+    color: "hsl(var(--primary))",
+  },
+  pnl: {
+    label: "P&L",
+  }
+} satisfies ChartConfig;
+
 
 export default function AccountMetricsCarousel() {
   const {
@@ -99,7 +107,7 @@ export default function AccountMetricsCarousel() {
                     <p className="text-3xl font-bold">{formatCurrency(equity)}</p>
                 </div>
                 <div className="h-24 -mx-4 -mb-4">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ChartContainer config={chartConfig} className="w-full h-full">
                     <AreaChart data={equityData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorEquity" x1="0" y1="0" x2="0" y2="1">
@@ -113,7 +121,7 @@ export default function AccountMetricsCarousel() {
                       />
                       <Area type="monotone" dataKey="equity" stroke="hsl(var(--primary))" fill="url(#colorEquity)" strokeWidth={2} />
                     </AreaChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                 </div>
                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mt-2">
                     <div className="flex justify-between"><span className="text-muted-foreground">Available Cash</span><span>{formatCurrency(balance)}</span></div>
@@ -135,7 +143,7 @@ export default function AccountMetricsCarousel() {
                 <p className="text-sm font-semibold">Recent Trade P&L</p>
                 <p className="text-xs text-muted-foreground mb-2">Profit & Loss from the last 20 trades.</p>
                 <div className="flex-grow h-40">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ChartContainer config={chartConfig} className="w-full h-full">
                     <BarChart data={recentPnlData}>
                       <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }} />
                       <Bar dataKey="pnl">
@@ -144,7 +152,7 @@ export default function AccountMetricsCarousel() {
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                 </div>
               </CardContent>
             </Card>
@@ -159,7 +167,7 @@ export default function AccountMetricsCarousel() {
                 <p className="text-sm font-semibold">Asset Allocation</p>
                 <p className="text-xs text-muted-foreground mb-2">Distribution of your open positions.</p>
                 <div className="flex-grow h-40">
-                  <ResponsiveContainer width="100%" height="100%">
+                   <ChartContainer config={chartConfig} className="w-full h-full">
                     <PieChart>
                       <Tooltip content={<AllocationTooltip />} />
                       <Pie
@@ -177,7 +185,7 @@ export default function AccountMetricsCarousel() {
                         ))}
                       </Pie>
                     </PieChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                 </div>
                 <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs mt-2 overflow-y-auto">
                     {allocationData.map((entry, index) => (
