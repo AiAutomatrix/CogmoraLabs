@@ -71,25 +71,6 @@ export default function PaperTradingDashboard({
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
 
-  useEffect(() => {
-    if (!carouselApi) {
-      return
-    }
-  }, [carouselApi])
-
-
-  const handleTabChange = (value: string) => {
-    if (!carouselApi) return;
-    if (value === 'history') {
-      carouselApi.scrollTo(2); // Scroll to "Recent Trade P&L"
-    } else if (value === 'positions') {
-      carouselApi.scrollTo(0); // Scroll to main metrics
-    } else if (value === 'triggers') {
-      carouselApi.scrollTo(1); // Scroll to "Asset Allocation"
-    }
-  };
-
-
   const handleOpenDetails = (position: OpenPosition) => {
     setSelectedPosition(position);
     setIsDetailsPopupOpen(true);
@@ -172,18 +153,18 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="h-full flex flex-col p-0 m-0">
+    <div className="flex flex-col p-0 m-0">
       <div className="pt-2">
         <AccountMetricsCarousel setApi={setCarouselApi} />
       </div>
 
       <div className="flex-grow min-h-0">
-        <Tabs defaultValue="positions" className="w-full h-full flex flex-col" onValueChange={handleTabChange}>
+        <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-4 px-0">
-            <TabsTrigger value="positions">Open Positions</TabsTrigger>
-            <TabsTrigger value="triggers">Triggers</TabsTrigger>
+            <TabsTrigger value="positions" onClick={() => { if (carouselApi) carouselApi.scrollTo(0); }}>Open Positions</TabsTrigger>
+            <TabsTrigger value="triggers" onClick={() => { if (carouselApi) carouselApi.scrollTo(1); }}>Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
-            <TabsTrigger value="history">Trade History</TabsTrigger>
+            <TabsTrigger value="history" onClick={() => { if (carouselApi) carouselApi.scrollTo(2); }}>Trade History</TabsTrigger>
           </TabsList>
           <TabsContent value="positions" className="flex-grow overflow-y-auto">
               <Card>
