@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import {
   Card,
@@ -39,7 +39,6 @@ import { PositionDetailsPopup } from "./PositionDetailsPopup";
 import type { OpenPosition, PaperTrade } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
 import AccountMetricsCarousel from "./AccountMetricsCarousel";
-import type { CarouselApi } from "@/components/ui/carousel";
 
 interface PaperTradingDashboardProps {
   onSymbolSelect: (symbol: string) => void;
@@ -69,7 +68,6 @@ export default function PaperTradingDashboard({
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
   const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
-  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
 
   const handleOpenDetails = (position: OpenPosition) => {
     setSelectedPosition(position);
@@ -155,16 +153,16 @@ export default function PaperTradingDashboard({
     <>
     <div className="flex flex-col m-0 p-0">
       <div className="pt-2">
-        <AccountMetricsCarousel setApi={setCarouselApi} />
+        <AccountMetricsCarousel />
       </div>
 
       <div className="flex-grow min-h-0">
         <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-4 px-0">
-            <TabsTrigger value="positions" onClick={() => carouselApi?.scrollTo(0)}>Open Positions</TabsTrigger>
-            <TabsTrigger value="triggers" onClick={() => carouselApi?.scrollTo(1)}>Triggers</TabsTrigger>
+            <TabsTrigger value="positions">Open Positions</TabsTrigger>
+            <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
-            <TabsTrigger value="history" onClick={() => carouselApi?.scrollTo(2)}>Trade History</TabsTrigger>
+            <TabsTrigger value="history">Trade History</TabsTrigger>
           </TabsList>
           <TabsContent value="positions" className="flex-grow overflow-y-auto">
               <Card>

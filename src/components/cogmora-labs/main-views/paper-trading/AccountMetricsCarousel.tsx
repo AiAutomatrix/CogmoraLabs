@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useEffect, useState } from "react";
 import {
@@ -6,7 +7,6 @@ import {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
-  type CarouselApi,
 } from "@/components/ui/carousel";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -56,11 +56,8 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-interface AccountMetricsCarouselProps {
-  setApi?: (api: CarouselApi) => void;
-}
 
-export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouselProps) {
+export default function AccountMetricsCarousel() {
   const {
     balance,
     equity,
@@ -110,13 +107,12 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
   };
 
   return (
-    <Carousel setApi={setApi} opts={{ align: "start" }} className="w-full">
+    <Carousel opts={{ align: "start" }} className="w-full">
       <CarouselContent className="-ml-1 h-[460px]">
 
         {/* SLIDE 1 — ACCOUNT METRICS */}
         <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
-          <div className="h-full">
-            <Card className="h-full flex flex-col">
+          <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Account Equity</p>
@@ -220,13 +216,11 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                 </div>
               </CardContent>
             </Card>
-          </div>
         </CarouselItem>
 
         {/* SLIDE 2 — ALLOCATION */}
         <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
-          <div className="h-full">
-            <Card className="h-full flex flex-col">
+          <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Asset Allocation</p>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -274,13 +268,11 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                 </div>
               </CardContent>
             </Card>
-          </div>
         </CarouselItem>
 
         {/* SLIDE 3 — RECENT PNL */}
         <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
-          <div className="h-full">
-            <Card className="h-full flex flex-col">
+          <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Recent Trade P&L</p>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -296,8 +288,8 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                           <stop offset="100%" stopColor="#3b82f6" />
                         </linearGradient>
                          <linearGradient id="gradientLoss" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor="#ef4444" />
-                           <stop offset="100%" stopColor="#eab308" />
+                           <stop offset="0%" stopColor="#eab308" />
+                           <stop offset="100%" stopColor="#ef4444" />
                         </linearGradient>
                       </defs>
                       <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }}/>
@@ -314,7 +306,6 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                 </div>
               </CardContent>
             </Card>
-          </div>
         </CarouselItem>
       </CarouselContent>
 
