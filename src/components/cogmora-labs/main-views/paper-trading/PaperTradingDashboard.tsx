@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -68,7 +69,7 @@ export default function PaperTradingDashboard({
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
   const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
-  const [carouselApi, setCarouselApi] = useState<CarouselApi | undefined>();
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
 
   const handleTabChange = (value: string) => {
     if (!carouselApi) return;
@@ -163,13 +164,13 @@ export default function PaperTradingDashboard({
   return (
     <>
     <div className="h-full flex flex-col p-0 m-0">
-       <div className="py-2">
+      <div className="py-2">
         <AccountMetricsCarousel setApi={setCarouselApi} />
       </div>
 
       <div className="flex-grow min-h-0">
         <Tabs defaultValue="positions" className="w-full h-full flex flex-col" onValueChange={handleTabChange}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-4 px-4">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
