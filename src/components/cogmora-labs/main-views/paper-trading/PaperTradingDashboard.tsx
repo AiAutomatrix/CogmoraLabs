@@ -153,7 +153,7 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="flex flex-col p-0 m-0">
+    <div className="flex flex-col m-0 p-0">
       <div className="pt-2">
         <AccountMetricsCarousel setApi={setCarouselApi} />
       </div>
@@ -161,10 +161,10 @@ export default function PaperTradingDashboard({
       <div className="flex-grow min-h-0">
         <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-4 px-0">
-            <TabsTrigger value="positions" onClick={() => { if (carouselApi) carouselApi.scrollTo(0); }}>Open Positions</TabsTrigger>
-            <TabsTrigger value="triggers" onClick={() => { if (carouselApi) carouselApi.scrollTo(1); }}>Triggers</TabsTrigger>
+            <TabsTrigger value="positions" onClick={() => carouselApi?.scrollTo(0)}>Open Positions</TabsTrigger>
+            <TabsTrigger value="triggers" onClick={() => carouselApi?.scrollTo(1)}>Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
-            <TabsTrigger value="history" onClick={() => { if (carouselApi) carouselApi.scrollTo(2); }}>Trade History</TabsTrigger>
+            <TabsTrigger value="history" onClick={() => carouselApi?.scrollTo(2)}>Trade History</TabsTrigger>
           </TabsList>
           <TabsContent value="positions" className="flex-grow overflow-y-auto">
               <Card>
@@ -464,9 +464,3 @@ export default function PaperTradingDashboard({
     </>
   );
 }
-
-    
-
-    
-
-    
