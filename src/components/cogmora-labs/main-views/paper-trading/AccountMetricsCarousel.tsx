@@ -24,6 +24,7 @@ import {
 
 import {
   ChartContainer,
+  ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
@@ -110,11 +111,11 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
 
   return (
     <Carousel setApi={setApi} opts={{ align: "start" }} className="w-full">
-      <CarouselContent className="h-full">
+      <CarouselContent className="-ml-1 h-[460px]">
 
         {/* SLIDE 1 — ACCOUNT METRICS */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 h-full">
-          <div className="p-1 h-full">
+        <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
+          <div className="h-full">
             <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <div>
@@ -151,7 +152,7 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                         </linearGradient>
                       </defs>
 
-                      <Tooltip
+                      <ChartTooltip
                         content={
                           <ChartTooltipContent
                             indicator="line"
@@ -223,8 +224,8 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
         </CarouselItem>
 
         {/* SLIDE 2 — ALLOCATION */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 h-full">
-          <div className="p-1 h-full">
+        <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
+          <div className="h-full">
             <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Asset Allocation</p>
@@ -235,7 +236,7 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                 <div className="flex-grow min-h-0">
                   <ChartContainer config={chartConfig} className="w-full h-full">
                     <PieChart>
-                      <Tooltip content={<AllocationTooltip />} />
+                      <ChartTooltip content={<AllocationTooltip />} />
                       <Pie
                         data={allocationData}
                         cx="50%"
@@ -277,13 +278,13 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
         </CarouselItem>
 
         {/* SLIDE 3 — RECENT PNL */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 h-full">
-          <div className="p-1 h-full">
+        <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
+          <div className="h-full">
             <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Recent Trade P&L</p>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Profit &amp; Loss from the last 20 trades.
+                  Profit & Loss from the last 20 trades.
                 </p>
 
                 <div className="flex-grow min-h-0">
@@ -291,15 +292,15 @@ export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouse
                     <BarChart data={recentPnlData}>
                       <defs>
                         <linearGradient id="gradientWin" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#22c55e" />
+                          <stop offset="0%" stopColor="#22c55e" />
+                          <stop offset="100%" stopColor="#3b82f6" />
                         </linearGradient>
                          <linearGradient id="gradientLoss" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor="#eab308" />
-                           <stop offset="100%" stopColor="#ef4444" />
+                           <stop offset="0%" stopColor="#ef4444" />
+                           <stop offset="100%" stopColor="#eab308" />
                         </linearGradient>
                       </defs>
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }}/>
+                      <ChartTooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }}/>
                       <Bar dataKey="pnl">
                         {recentPnlData.map((entry, index) => (
                           <Cell

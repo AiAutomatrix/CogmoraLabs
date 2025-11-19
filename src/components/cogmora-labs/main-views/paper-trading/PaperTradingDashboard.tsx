@@ -162,8 +162,8 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="h-full flex flex-col">
-      <div className="py-2">
+    <div className="h-full flex flex-col p-0 m-0">
+       <div className="py-2">
         <AccountMetricsCarousel setApi={setCarouselApi} />
       </div>
 
