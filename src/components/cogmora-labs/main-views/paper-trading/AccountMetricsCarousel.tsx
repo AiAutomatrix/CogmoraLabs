@@ -1,11 +1,12 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Carousel,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
+  type CarouselApi,
 } from "@/components/ui/carousel";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -54,7 +55,11 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export default function AccountMetricsCarousel() {
+interface AccountMetricsCarouselProps {
+  setApi?: (api: CarouselApi) => void;
+}
+
+export default function AccountMetricsCarousel({ setApi }: AccountMetricsCarouselProps) {
   const {
     balance,
     equity,
@@ -104,13 +109,13 @@ export default function AccountMetricsCarousel() {
   };
 
   return (
-    <Carousel opts={{ align: "start" }} className="w-full">
-      <CarouselContent className="-ml-2">
+    <Carousel setApi={setApi} opts={{ align: "start" }} className="w-full">
+      <CarouselContent className="h-full">
 
         {/* SLIDE 1 — ACCOUNT METRICS */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
-          <div className="p-1">
-            <Card className="h-[460px] flex flex-col">
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 h-full">
+          <div className="p-1 h-full">
+            <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Account Equity</p>
@@ -217,50 +222,10 @@ export default function AccountMetricsCarousel() {
           </div>
         </CarouselItem>
 
-        {/* SLIDE 2 — RECENT PNL */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
-          <div className="p-1">
-            <Card className="h-[460px] flex flex-col">
-              <CardContent className="flex flex-col h-full flex-grow p-4">
-                <p className="text-sm font-semibold">Recent Trade P&L</p>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Profit &amp; Loss from the last 20 trades.
-                </p>
-
-                <div className="flex-grow min-h-0">
-                  <ChartContainer config={chartConfig} className="w-full h-full">
-                    <BarChart data={recentPnlData}>
-                      <defs>
-                        <linearGradient id="gradientWin" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#22c55e" />
-                        </linearGradient>
-                         <linearGradient id="gradientLoss" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#eab308" />
-                          <stop offset="100%" stopColor="#ef4444" />
-                        </linearGradient>
-                      </defs>
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }}/>
-                      <Bar dataKey="pnl">
-                        {recentPnlData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.pnl >= 0 ? "url(#gradientWin)" : "url(#gradientLoss)"}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ChartContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </CarouselItem>
-
-        {/* SLIDE 3 — ALLOCATION */}
-        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 pl-2">
-          <div className="p-1">
-            <Card className="h-[460px] flex flex-col">
+        {/* SLIDE 2 — ALLOCATION */}
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 h-full">
+          <div className="p-1 h-full">
+            <Card className="h-full flex flex-col">
               <CardContent className="flex flex-col h-full flex-grow p-4">
                 <p className="text-sm font-semibold">Asset Allocation</p>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -311,6 +276,45 @@ export default function AccountMetricsCarousel() {
           </div>
         </CarouselItem>
 
+        {/* SLIDE 3 — RECENT PNL */}
+        <CarouselItem className="basis-full md:basis-1/2 lg:basis-1/3 h-full">
+          <div className="p-1 h-full">
+            <Card className="h-full flex flex-col">
+              <CardContent className="flex flex-col h-full flex-grow p-4">
+                <p className="text-sm font-semibold">Recent Trade P&L</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Profit &amp; Loss from the last 20 trades.
+                </p>
+
+                <div className="flex-grow min-h-0">
+                  <ChartContainer config={chartConfig} className="w-full h-full">
+                    <BarChart data={recentPnlData}>
+                      <defs>
+                        <linearGradient id="gradientWin" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#3b82f6" />
+                          <stop offset="100%" stopColor="#22c55e" />
+                        </linearGradient>
+                         <linearGradient id="gradientLoss" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="0%" stopColor="#eab308" />
+                           <stop offset="100%" stopColor="#ef4444" />
+                        </linearGradient>
+                      </defs>
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsla(var(--muted), 0.5)' }}/>
+                      <Bar dataKey="pnl">
+                        {recentPnlData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.pnl >= 0 ? "url(#gradientWin)" : "url(#gradientLoss)"}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ChartContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </CarouselItem>
       </CarouselContent>
 
       <CarouselPrevious className="hidden md:flex" />

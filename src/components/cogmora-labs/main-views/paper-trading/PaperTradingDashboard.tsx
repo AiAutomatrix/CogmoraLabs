@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { usePaperTrading } from "@/context/PaperTradingContext";
 import {
   Card,
@@ -38,6 +38,7 @@ import { PositionDetailsPopup } from "./PositionDetailsPopup";
 import type { OpenPosition, PaperTrade } from "@/types";
 import { PositionInfoPopup } from "./PositionInfoPopup";
 import AccountMetricsCarousel from "./AccountMetricsCarousel";
+import type { CarouselApi } from "@/components/ui/carousel";
 
 interface PaperTradingDashboardProps {
   onSymbolSelect: (symbol: string) => void;
@@ -67,6 +68,17 @@ export default function PaperTradingDashboard({
   const [isDetailsPopupOpen, setIsDetailsPopupOpen] = useState(false);
   const [isInfoPopupOpen, setIsInfoPopupOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
+  const [carouselApi, setCarouselApi] = useState<CarouselApi | undefined>();
+
+  const handleTabChange = (value: string) => {
+    if (!carouselApi) return;
+    if (value === 'history') {
+      carouselApi.scrollTo(2); // Scroll to "Recent Trade P&L"
+    } else if (value === 'positions') {
+      carouselApi.scrollTo(0); // Scroll to main metrics
+    }
+  };
+
 
   const handleOpenDetails = (position: OpenPosition) => {
     setSelectedPosition(position);
@@ -141,8 +153,8 @@ export default function PaperTradingDashboard({
 
   const sortedTradeHistory = useMemo(() => {
     return [...tradeHistory].sort((a, b) => {
-        const timeA = a.closeTimestamp?.toDate?.().getTime() || a.openTimestamp;
-        const timeB = b.closeTimestamp?.toDate?.().getTime() || b.openTimestamp;
+        const timeA = (a.closeTimestamp as any)?.toMillis?.() || (typeof a.closeTimestamp === 'number' ? a.closeTimestamp : a.openTimestamp);
+        const timeB = (b.closeTimestamp as any)?.toMillis?.() || (typeof b.closeTimestamp === 'number' ? b.closeTimestamp : b.openTimestamp);
         return timeB - timeA;
     });
 }, [tradeHistory]);
@@ -150,11 +162,13 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="flex flex-col h-full">
-      <AccountMetricsCarousel />
+    <div className="h-full flex flex-col">
+      <div className="py-2">
+        <AccountMetricsCarousel setApi={setCarouselApi} />
+      </div>
 
       <div className="flex-grow min-h-0">
-        <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
+        <Tabs defaultValue="positions" className="w-full h-full flex flex-col" onValueChange={handleTabChange}>
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
