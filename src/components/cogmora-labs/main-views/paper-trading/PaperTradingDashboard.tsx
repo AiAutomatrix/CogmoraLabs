@@ -152,12 +152,12 @@ export default function PaperTradingDashboard({
   return (
     <>
     <div className="flex flex-col m-0 p-0">
-      <div className="pt-2">
+      <div>
         <AccountMetricsCarousel />
       </div>
 
       <div className="flex-grow min-h-0">
-        <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
+        <Tabs defaultValue="positions" className="w-full h-full flex flex-col p-0 m-0">
           <TabsList className="grid w-full grid-cols-4 px-0">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
