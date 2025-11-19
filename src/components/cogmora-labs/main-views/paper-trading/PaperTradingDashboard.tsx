@@ -155,7 +155,7 @@ export default function PaperTradingDashboard({
   const sortedTradeHistory = useMemo(() => {
     return [...tradeHistory].sort((a, b) => {
         const timeA = (a.closeTimestamp as any)?.toMillis?.() || (typeof a.closeTimestamp === 'number' ? a.closeTimestamp : a.openTimestamp);
-        const timeB = (b.closeTimestamp as any)?.toMillis?.() || (typeof b.closeTimestamp === 'number' ? b.closeTimestamp : b.openTimestamp);
+        const timeB = (b.closeTimestamp as any)?.toMillis?.() || (typeof b.closeTimestamp === 'number' ? b.closeTimestamp : a.openTimestamp);
         return timeB - timeA;
     });
 }, [tradeHistory]);
@@ -164,13 +164,13 @@ export default function PaperTradingDashboard({
   return (
     <>
     <div className="h-full flex flex-col p-0 m-0">
-      <div className="py-2">
+      <div className="pt-2">
         <AccountMetricsCarousel setApi={setCarouselApi} />
       </div>
 
       <div className="flex-grow min-h-0">
         <Tabs defaultValue="positions" className="w-full h-full flex flex-col" onValueChange={handleTabChange}>
-          <TabsList className="grid w-full grid-cols-4 px-4">
+          <TabsList className="grid w-full grid-cols-4 px-0">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
@@ -474,3 +474,5 @@ export default function PaperTradingDashboard({
     </>
   );
 }
+
+    
