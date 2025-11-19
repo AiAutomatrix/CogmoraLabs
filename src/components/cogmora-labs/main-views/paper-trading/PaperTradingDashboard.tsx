@@ -150,18 +150,18 @@ export default function PaperTradingDashboard({
 
   return (
     <>
-    <div className="space-y-6">
+    <div className="flex flex-col h-full">
       <AccountMetricsCarousel />
 
-      <div className="px-4">
-        <Tabs defaultValue="positions" className="w-full">
+      <div className="flex-grow min-h-0">
+        <Tabs defaultValue="positions" className="w-full h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="positions">Open Positions</TabsTrigger>
             <TabsTrigger value="triggers">Triggers</TabsTrigger>
             <TabsTrigger value="watchlist">Watchlist</TabsTrigger>
             <TabsTrigger value="history">Trade History</TabsTrigger>
           </TabsList>
-          <TabsContent value="positions">
+          <TabsContent value="positions" className="flex-grow overflow-y-auto">
               <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                   <div>
@@ -303,14 +303,14 @@ export default function PaperTradingDashboard({
                   </CardContent>
               </Card>
           </TabsContent>
-          <TabsContent value="triggers">
+          <TabsContent value="triggers" className="flex-grow overflow-y-auto">
               <TradeTriggersDashboard 
                 aiSettings={aiSettings}
                 setAiSettings={setAiSettings}
                 handleAiTriggerAnalysis={handleAiTriggerAnalysis}
               />
           </TabsContent>
-          <TabsContent value="watchlist">
+          <TabsContent value="watchlist" className="flex-grow overflow-y-auto">
               <Watchlist 
                 onSymbolSelect={onSymbolSelect}
                 selectedChartLayout={selectedChartLayout}
@@ -318,7 +318,7 @@ export default function PaperTradingDashboard({
                 selectedSymbolsForHighlight={selectedSymbolsForHighlight}
               />
           </TabsContent>
-          <TabsContent value="history">
+          <TabsContent value="history" className="flex-grow overflow-y-auto">
               <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                   <div>
