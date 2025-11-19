@@ -84,6 +84,8 @@ export default function PaperTradingDashboard({
       carouselApi.scrollTo(2); // Scroll to "Recent Trade P&L"
     } else if (value === 'positions') {
       carouselApi.scrollTo(0); // Scroll to main metrics
+    } else if (value === 'triggers') {
+      carouselApi.scrollTo(1); // Scroll to "Asset Allocation"
     }
   };
 
@@ -481,6 +483,8 @@ export default function PaperTradingDashboard({
     </>
   );
 }
+
+    
 
     
 
