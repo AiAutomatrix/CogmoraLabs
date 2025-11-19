@@ -71,6 +71,13 @@ export default function PaperTradingDashboard({
   const [selectedPosition, setSelectedPosition] = useState<OpenPosition | null>(null);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
 
+  useEffect(() => {
+    if (!carouselApi) {
+      return
+    }
+  }, [carouselApi])
+
+
   const handleTabChange = (value: string) => {
     if (!carouselApi) return;
     if (value === 'history') {
@@ -474,5 +481,7 @@ export default function PaperTradingDashboard({
     </>
   );
 }
+
+    
 
     
