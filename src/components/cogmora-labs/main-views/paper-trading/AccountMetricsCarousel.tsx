@@ -7,6 +7,7 @@ import {
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
+  type CarouselApi,
 } from "@/components/ui/carousel";
 import { Card, CardContent } from "@/components/ui/card";
 import { usePaperTrading } from "@/context/PaperTradingContext";
@@ -19,7 +20,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Tooltip,
 } from "recharts";
 
 import {
@@ -107,8 +107,11 @@ export default function AccountMetricsCarousel() {
   };
 
   return (
-    <Carousel opts={{ align: "start" }} className="w-full">
-      <CarouselContent className="-ml-1 h-[460px]">
+    <Carousel
+      opts={{ align: "start" }}
+      className="w-full"
+    >
+      <CarouselContent className="-ml-1 h-[250px]">
 
         {/* SLIDE 1 — ACCOUNT METRICS */}
         <CarouselItem className="pl-1 basis-full md:basis-1/2 lg:basis-1/3 h-full">
@@ -284,8 +287,8 @@ export default function AccountMetricsCarousel() {
                     <BarChart data={recentPnlData}>
                       <defs>
                         <linearGradient id="gradientWin" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#22c55e" />
-                          <stop offset="100%" stopColor="#3b82f6" />
+                          <stop offset="0%" stopColor="hsl(var(--chart-2))" />
+                          <stop offset="100%" stopColor="hsl(var(--chart-1))" />
                         </linearGradient>
                          <linearGradient id="gradientLoss" x1="0" y1="0" x2="0" y2="1">
                            <stop offset="0%" stopColor="#eab308" />
