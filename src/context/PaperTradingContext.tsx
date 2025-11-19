@@ -119,7 +119,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   futuresSell: (
@@ -128,7 +128,7 @@ interface PaperTradingContextType {
     entryPrice: number,
     leverage: number,
     stopLoss?: number,
-    takeProfit?: number,
+    takeProfit?: string,
     triggeredBy?: string
   ) => void;
   closePosition: (positionId: string) => void;
@@ -1095,7 +1095,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
                         currentPrice: isSpot ? parseFloat((item as KucoinTicker).last) : (item as KucoinFuturesContract).markPrice,
                         priceChgPct: isSpot ? parseFloat((item as KucoinTicker).changeRate) : (item as KucoinFuturesContract).priceChgPct,
                         high: isSpot ? parseFloat((item as KucoinTicker).high) : (item as KucoinFuturesContract).highPrice,
-                        low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinFuturesContract).lowPrice,
+                        low: isSpot ? parseFloat((item as KucoinTicker).low) : (item as KucoinTicker).lowPrice,
                         order: orderIndex++,
                     };
 
@@ -1168,11 +1168,28 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       subscriptions: string[],
       topicBuilder: (symbol: string) => string
   ) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          const newSubs = new Set(subscriptions);
+          const currentSubs = subscribedSymbolsRef.current;
+          const toAdd = [...newSubs].filter(s => !currentSubs.has(s));
+          const toRemove = [...currentSubs].filter(s => !newSubs.has(s));
+  
+          toAdd.forEach(symbol => {
+              wsRef.current?.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: topicBuilder(symbol), response: true }));
+              currentSubs.add(symbol);
+          });
+          toRemove.forEach(symbol => {
+              wsRef.current?.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: topicBuilder(symbol), response: true }));
+              currentSubs.delete(symbol);
+          });
+          return;
+      }
+      
+      if (wsRef.current) return;
+  
       if (subscriptions.length === 0) {
           if (wsRef.current) {
-              wsRef.current.onclose = null;
-              wsRef.current.close();
-              wsRef.current = null;
+              wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null;
           }
           if (pingRef.current) clearInterval(pingRef.current);
           if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
@@ -1180,25 +1197,7 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
           statusSetter('disconnected');
           return;
       }
-  
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          const newSubs = new Set(subscriptions);
-          const toAdd = [...newSubs].filter(s => !subscribedSymbolsRef.current.has(s));
-          const toRemove = [...subscribedSymbolsRef.current].filter(s => !newSubs.has(s));
-  
-          toAdd.forEach(symbol => {
-              wsRef.current?.send(JSON.stringify({ id: Date.now(), type: "subscribe", topic: topicBuilder(symbol), response: true }));
-              subscribedSymbolsRef.current.add(symbol);
-          });
-          toRemove.forEach(symbol => {
-              wsRef.current?.send(JSON.stringify({ id: Date.now(), type: "unsubscribe", topic: topicBuilder(symbol), response: true }));
-              subscribedSymbolsRef.current.delete(symbol);
-          });
-          return;
-      }
-      
-      if (wsRef.current) return;
-  
+
       statusSetter("fetching_token");
       try {
           const tokenData = await tokenFetcher();
@@ -1235,13 +1234,15 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
               if (pingRef.current) clearInterval(pingRef.current);
               statusSetter(isError ? "error" : "disconnected");
   
-              if (subscriptions.length > 0) {
-                  reconnectAttemptsRef.current++;
-                  const delay = Math.min(1000 * (2 ** reconnectAttemptsRef.current), 30000);
-                  reconnectTimeoutRef.current = setTimeout(() => 
-                    setupWebSocket(wsRef, statusSetter, pingRef, reconnectTimeoutRef, reconnectAttemptsRef, subscribedSymbolsRef, tokenFetcher, urlBuilder, onMessageHandler, subscriptions, topicBuilder), 
-                  delay);
-              }
+              if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+  
+              reconnectAttemptsRef.current++;
+              const delay = Math.min(1000 * (2 ** reconnectAttemptsRef.current), 30000);
+              reconnectTimeoutRef.current = setTimeout(() => {
+                  if (subscriptions.length > 0) {
+                     setupWebSocket(wsRef, statusSetter, pingRef, reconnectTimeoutRef, reconnectAttemptsRef, subscribedSymbolsRef, tokenFetcher, urlBuilder, onMessageHandler, subscriptions, topicBuilder);
+                  }
+              }, delay);
           };
   
           ws.onclose = () => handleCloseOrError(false);
@@ -1250,6 +1251,14 @@ export const PaperTradingProvider: React.FC<{ children: ReactNode }> = ({
       } catch (error) {
           statusSetter("error");
           console.error("WebSocket setup error:", error);
+          const delay = Math.min(1000 * (2 ** reconnectAttemptsRef.current), 30000);
+          reconnectAttemptsRef.current++;
+           if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+           reconnectTimeoutRef.current = setTimeout(() => {
+              if (subscriptions.length > 0) {
+                 setupWebSocket(wsRef, statusSetter, pingRef, reconnectTimeoutRef, reconnectAttemptsRef, subscribedSymbolsRef, tokenFetcher, urlBuilder, onMessageHandler, subscriptions, topicBuilder);
+              }
+           }, delay);
       }
   }, []);
 
@@ -1435,3 +1444,5 @@ export const usePaperTrading = (): PaperTradingContextType => {
   }
   return context;
 };
+
+    
